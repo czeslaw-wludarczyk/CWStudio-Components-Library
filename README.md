@@ -1,6 +1,6 @@
 <div align="center">
 
-# CWStudio Component Library
+# CWStudio Components Library
 
 **Nowoczesne komponenty VCL w stylu Windows 11 / WinUI 3 dla Delphi**
 
