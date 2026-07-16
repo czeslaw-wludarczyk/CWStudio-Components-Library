@@ -453,7 +453,7 @@ If you find CWStudio useful and would like to support the ongoing development of
 
 ## 📄 License
 
-The library is released under the **MIT** license — you may use, modify, and redistribute it in any project, commercial or non-commercial, provided that the copyright notice and attribution are preserved (see the [⚖️ Attribution](#️-attribution) section and the [`LICENSE`](LICENSE) file). Please refer to [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) for the licenses of the third-party dependencies.
+The library is released under the **MIT** license — you may use, modify, and redistribute it in any project, commercial or non-commercial, provided that the copyright notice and attribution are preserved (see the [⚖️ Attribution](#️-attribution) section and the [`LICENSE`](LICENSE) file).
 
 <br>
 
