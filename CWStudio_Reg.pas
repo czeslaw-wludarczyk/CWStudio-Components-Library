@@ -30,6 +30,7 @@ implementation
 uses
   System.SysUtils,
   System.Classes,
+  Vcl.Controls,
   Vcl.Graphics,
   Vcl.DBGrids,
   ToolsAPI,
@@ -42,6 +43,7 @@ uses
   { runtime units with components — the DT package requires CWStudio_ComponentsRT }
   CWSCornerPanel,
   CWSSettingsPanel,
+  CWSOptionsPanel,
   CWSButton,
   CWSStoreButton,
   CWSMenuButton,
@@ -100,13 +102,71 @@ begin
   Result := [paDialog, paReadOnly];
 end;
 
+type
+  { Component editor for TCWSOptionsPanel. "Add section" creates a
+    TCWSOptionsSection owned by the form (so it streams to the DFM), parents it
+    to the panel and selects it — you can then drop controls straight onto it.
+    "Expand"/"Collapse" toggles the preview at design time. }
+  TCWSOptionsPanelEditor = class(TComponentEditor)
+  public
+    procedure ExecuteVerb(Index: Integer); override;
+    function GetVerb(Index: Integer): string; override;
+    function GetVerbCount: Integer; override;
+  end;
+
+procedure TCWSOptionsPanelEditor.ExecuteVerb(Index: Integer);
+var
+  Panel: TCWSOptionsPanel;
+  Sec: TCWSOptionsSection;
+begin
+  Panel := Component as TCWSOptionsPanel;
+  case Index of
+    0:
+      begin
+        Sec := TCWSOptionsSection.Create(Designer.Root);
+        Sec.Name := Designer.UniqueName(TCWSOptionsSection.ClassName);
+        Sec.Parent := Panel;
+        Panel.Expanded := True;
+        Designer.SelectComponent(Sec);
+        Designer.Modified;
+      end;
+    1:
+      begin
+        Panel.Expanded := not Panel.Expanded;
+        Designer.Modified;
+      end;
+  end;
+end;
+
+function TCWSOptionsPanelEditor.GetVerb(Index: Integer): string;
+begin
+  case Index of
+    0: Result := 'Add section';
+    1: if (Component as TCWSOptionsPanel).Expanded then
+         Result := 'Collapse'
+       else
+         Result := 'Expand';
+  else
+    Result := '';
+  end;
+end;
+
+function TCWSOptionsPanelEditor.GetVerbCount: Integer;
+begin
+  Result := 2;
+end;
+
 { ──────────────────────────────────────────────────────────────────────────
     Register components on the palette
   ────────────────────────────────────────────────────────────────────────── }
 procedure Register;
 begin
   RegisterComponents('CWStudio_Panels',
-    [TCWSCornerPanel, TCWSSettingsPanel]);
+    [TCWSCornerPanel, TCWSSettingsPanel, TCWSOptionsPanel]);
+  { Sections are created through the panel's editor / AddSection, not dropped
+    from the palette, but must be registered so they stream to/from the DFM. }
+  RegisterNoIcon([TCWSOptionsSection]);
+  RegisterComponentEditor(TCWSOptionsPanel, TCWSOptionsPanelEditor);
   RegisterComponents('CWStudio_Buttons',
     [TCWSButton, TCWSStoreButton, TCWSMenuButton, TCWSRadioButton, TCWSCheckBox, TCWSSwitch]);
   RegisterComponents('CWStudio_Edits',

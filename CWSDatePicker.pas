@@ -201,8 +201,16 @@
       { Calendar appearance - day cells }
       FTodayBorderColor: TColor;
       FSelectedDayColor: TColor;
+      FSelectedDayBorderColor: TColor;
       FSelectedDayTextColor: TColor;
       FHoverColor: TColor;
+      FHoverTextColor: TColor;
+      FOtherMonthTextColor: TColor;
+      FOtherMonthHoverTextColor: TColor;
+      FTodayTextColor: TColor;
+      FTodayHoverTextColor: TColor;
+      FLinkTextColor: TColor;
+      FLinkHoverTextColor: TColor;
       FDayShape: TCWSDayShape;
 
       FOnChange: TNotifyEvent;
@@ -230,8 +238,16 @@
       procedure SetTextHint(const Value: string);
       procedure SetTodayBorderColor(const Value: TColor);
       procedure SetSelectedDayColor(const Value: TColor);
+      procedure SetSelectedDayBorderColor(const Value: TColor);
       procedure SetSelectedDayTextColor(const Value: TColor);
       procedure SetHoverColor(const Value: TColor);
+      procedure SetHoverTextColor(const Value: TColor);
+      procedure SetOtherMonthTextColor(const Value: TColor);
+      procedure SetOtherMonthHoverTextColor(const Value: TColor);
+      procedure SetTodayTextColor(const Value: TColor);
+      procedure SetTodayHoverTextColor(const Value: TColor);
+      procedure SetLinkTextColor(const Value: TColor);
+      procedure SetLinkHoverTextColor(const Value: TColor);
       procedure SetDayShape(const Value: TCWSDayShape);
 
       function GetCurrentBgColor: TColor;
@@ -317,8 +333,16 @@
       { Calendar cell appearance }
       property TodayBorderColor: TColor read FTodayBorderColor write SetTodayBorderColor default $D47800;
       property SelectedDayColor: TColor read FSelectedDayColor write SetSelectedDayColor default $D47800;
+      property SelectedDayBorderColor: TColor read FSelectedDayBorderColor write SetSelectedDayBorderColor default $D47800;
       property SelectedDayTextColor: TColor read FSelectedDayTextColor write SetSelectedDayTextColor default clWhite;
       property HoverColor: TColor read FHoverColor write SetHoverColor default $E8E8E8;
+      property HoverTextColor: TColor read FHoverTextColor write SetHoverTextColor default $202020;
+      property OtherMonthTextColor: TColor read FOtherMonthTextColor write SetOtherMonthTextColor default $A0A0A0;
+      property OtherMonthHoverTextColor: TColor read FOtherMonthHoverTextColor write SetOtherMonthHoverTextColor default $A0A0A0;
+      property TodayTextColor: TColor read FTodayTextColor write SetTodayTextColor default $D47800;
+      property TodayHoverTextColor: TColor read FTodayHoverTextColor write SetTodayHoverTextColor default $D47800;
+      property LinkTextColor: TColor read FLinkTextColor write SetLinkTextColor default $202020;
+      property LinkHoverTextColor: TColor read FLinkHoverTextColor write SetLinkHoverTextColor default $D47800;
       property DayShape: TCWSDayShape read FDayShape write SetDayShape default dsRoundRect;
 
       property Align;
@@ -926,8 +950,11 @@
     HR: TRect;
   begin
     HR := GetHeaderRect;
+    { Bottom must stop above the "Today" bar (FBodyH - 28), otherwise the last
+      row of years is drawn overlapping the bar and gets clipped. Match the
+      month/day grids which end at FBodyH - 32. }
     Result := Rect(ScalePx(8), HR.Bottom + ScalePx(4),
-      FBodyW - ScalePx(8), FBodyH - ScalePx(8));
+      FBodyW - ScalePx(8), FBodyH - ScalePx(32));
   end;
 
   function TCWSCalendarDropdown.GetYearCellRect(Index: Integer): TRect;
@@ -1331,18 +1358,18 @@
 
         // Hover colors — change text color, no background
         if FHoveredBtn = 3 then
-          MonthColor := FDatePicker.FAccentColor
+          MonthColor := FDatePicker.FLinkHoverTextColor
         else
-          MonthColor := FDatePicker.FTextColor;
+          MonthColor := FDatePicker.FLinkTextColor;
 
         if FHoveredBtn = 2 then
-          YearColor := FDatePicker.FAccentColor
+          YearColor := FDatePicker.FLinkHoverTextColor
         else
-          YearColor := FDatePicker.FTextColor;
+          YearColor := FDatePicker.FLinkTextColor;
 
         // Prev arrow
         if FHoveredBtn = 0 then
-          ArrowColor := FDatePicker.FAccentColor
+          ArrowColor := FDatePicker.FLinkHoverTextColor
         else
           ArrowColor := FDatePicker.FTextColor;
         Pen := TGPPen.Create(MakeGPColor(ArrowColor), ScalePx(2));
@@ -1355,7 +1382,7 @@
 
         // Next arrow
         if FHoveredBtn = 1 then
-          ArrowColor := FDatePicker.FAccentColor
+          ArrowColor := FDatePicker.FLinkHoverTextColor
         else
           ArrowColor := FDatePicker.FTextColor;
         Pen := TGPPen.Create(MakeGPColor(ArrowColor), ScalePx(2));
@@ -1448,9 +1475,16 @@
 
             if Brush <> nil then begin G.FillPath(Brush, Path); Brush.Free; end;
 
-            if IsToday and not IsSelected then
+            { Today ring has priority so TodayBorderColor stays visible even when
+              today is also the selected day (drawn on top of the selected fill). }
+            if IsToday then
             begin
               Pen := TGPPen.Create(MakeGPColor(FDatePicker.FTodayBorderColor), ScalePx(1));
+              try G.DrawPath(Pen, Path); finally Pen.Free; end;
+            end
+            else if IsSelected then
+            begin
+              Pen := TGPPen.Create(MakeGPColor(FDatePicker.FSelectedDayBorderColor), ScalePx(1));
               try G.DrawPath(Pen, Path); finally Pen.Free; end;
             end;
           finally Path.Free;
@@ -1459,9 +1493,21 @@
           if IsSelected then
             Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FSelectedDayTextColor))
           else if not IsCurrentMonth then
-            Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FDisabledTextColor))
+          begin
+            if i = FHoveredDayIdx then
+              Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FOtherMonthHoverTextColor))
+            else
+              Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FOtherMonthTextColor));
+          end
           else if IsToday then
-            Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FTodayBorderColor))
+          begin
+            if i = FHoveredDayIdx then
+              Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FTodayHoverTextColor))
+            else
+              Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FTodayTextColor));
+          end
+          else if i = FHoveredDayIdx then
+            Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FHoverTextColor))
           else
             Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FTextColor));
 
@@ -1528,9 +1574,9 @@
 
         // Year clickable in the header (switches to years view), hover = 2
         if FHoveredBtn = 2 then
-          YearColor := FDatePicker.FAccentColor
+          YearColor := FDatePicker.FLinkHoverTextColor
         else
-          YearColor := FDatePicker.FTextColor;
+          YearColor := FDatePicker.FLinkTextColor;
 
         Brush := TGPSolidBrush.Create(MakeGPColor(YearColor));
         try
@@ -1541,7 +1587,7 @@
         end;
 
         // Year navigation arrows
-        if FHoveredBtn = 0 then ArrowColor := FDatePicker.FAccentColor else ArrowColor := FDatePicker.FTextColor;
+        if FHoveredBtn = 0 then ArrowColor := FDatePicker.FLinkHoverTextColor else ArrowColor := FDatePicker.FTextColor;
         Pen := TGPPen.Create(MakeGPColor(ArrowColor), ScalePx(2));
         Pen.SetLineCap(LineCapRound, LineCapRound, DashCapRound);
         G.DrawLine(Pen, MakePoint(Single(BtnPrev.Left + ScalePx(10)), Single(BtnPrev.Bottom - ScalePx(12))),
@@ -1550,7 +1596,7 @@
           MakePoint(Single(BtnPrev.Left + ScalePx(20)), Single(BtnPrev.Bottom - ScalePx(12))));
         Pen.Free;
 
-        if FHoveredBtn = 1 then ArrowColor := FDatePicker.FAccentColor else ArrowColor := FDatePicker.FTextColor;
+        if FHoveredBtn = 1 then ArrowColor := FDatePicker.FLinkHoverTextColor else ArrowColor := FDatePicker.FTextColor;
         Pen := TGPPen.Create(MakeGPColor(ArrowColor), ScalePx(2));
         Pen.SetLineCap(LineCapRound, LineCapRound, DashCapRound);
         G.DrawLine(Pen, MakePoint(Single(BtnNext.Left + ScalePx(10)), Single(BtnNext.Top + ScalePx(12))),
@@ -1584,9 +1630,16 @@
 
             if Brush <> nil then begin G.FillPath(Brush, Path); Brush.Free; end;
 
-            if IsCurrentMonth and not IsSelectedMonth then
+            { Current-month ring has priority so TodayBorderColor stays visible
+              even when the current month is also the selected one. }
+            if IsCurrentMonth then
             begin
               Pen := TGPPen.Create(MakeGPColor(FDatePicker.FTodayBorderColor), ScalePx(1));
+              try G.DrawPath(Pen, Path); finally Pen.Free; end;
+            end
+            else if IsSelectedMonth then
+            begin
+              Pen := TGPPen.Create(MakeGPColor(FDatePicker.FSelectedDayBorderColor), ScalePx(1));
               try G.DrawPath(Pen, Path); finally Pen.Free; end;
             end;
           finally Path.Free;
@@ -1598,7 +1651,14 @@
           if IsSelectedMonth then
             Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FSelectedDayTextColor))
           else if IsCurrentMonth then
-            Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FTodayBorderColor))
+          begin
+            if i = FHoveredMonthIdx then
+              Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FTodayHoverTextColor))
+            else
+              Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FTodayTextColor));
+          end
+          else if i = FHoveredMonthIdx then
+            Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FHoverTextColor))
           else
             Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FTextColor));
 
@@ -1668,9 +1728,9 @@
 
     // Text
     if FHoveredBtn = 4 then
-      TextColor := FDatePicker.FAccentColor
+      TextColor := FDatePicker.FLinkHoverTextColor
     else
-      TextColor := FDatePicker.FTextColor;
+      TextColor := FDatePicker.FLinkTextColor;
 
     FmtCenter := TGPStringFormat.Create;
     FmtCenter.SetLineAlignment(StringAlignmentCenter);
@@ -1743,7 +1803,7 @@
         BtnNext := GetNextBtnRect;
 
         var ArrColor: TColor;
-        if FHoveredBtn = 0 then ArrColor := FDatePicker.FAccentColor else ArrColor := FDatePicker.FTextColor;
+        if FHoveredBtn = 0 then ArrColor := FDatePicker.FLinkHoverTextColor else ArrColor := FDatePicker.FTextColor;
         Pen := TGPPen.Create(MakeGPColor(ArrColor), ScalePx(2));
         Pen.SetLineCap(LineCapRound, LineCapRound, DashCapRound);
         G.DrawLine(Pen, MakePoint(Single(BtnPrev.Left + ScalePx(10)), Single(BtnPrev.Bottom - ScalePx(12))),
@@ -1752,7 +1812,7 @@
           MakePoint(Single(BtnPrev.Left + ScalePx(20)), Single(BtnPrev.Bottom - ScalePx(12))));
         Pen.Free;
 
-        if FHoveredBtn = 1 then ArrColor := FDatePicker.FAccentColor else ArrColor := FDatePicker.FTextColor;
+        if FHoveredBtn = 1 then ArrColor := FDatePicker.FLinkHoverTextColor else ArrColor := FDatePicker.FTextColor;
         Pen := TGPPen.Create(MakeGPColor(ArrColor), ScalePx(2));
         Pen.SetLineCap(LineCapRound, LineCapRound, DashCapRound);
         G.DrawLine(Pen, MakePoint(Single(BtnNext.Left + ScalePx(10)), Single(BtnNext.Top + ScalePx(12))),
@@ -1785,9 +1845,16 @@
 
             if Brush <> nil then begin G.FillPath(Brush, Path); Brush.Free; end;
 
-            if IsCurrentYear and not IsSelectedYear then
+            { Current-year ring has priority so TodayBorderColor stays visible
+              even when the current year is also the selected one. }
+            if IsCurrentYear then
             begin
               Pen := TGPPen.Create(MakeGPColor(FDatePicker.FTodayBorderColor), ScalePx(1));
+              try G.DrawPath(Pen, Path); finally Pen.Free; end;
+            end
+            else if IsSelectedYear then
+            begin
+              Pen := TGPPen.Create(MakeGPColor(FDatePicker.FSelectedDayBorderColor), ScalePx(1));
               try G.DrawPath(Pen, Path); finally Pen.Free; end;
             end;
           finally Path.Free;
@@ -1796,7 +1863,14 @@
           if IsSelectedYear then
             Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FSelectedDayTextColor))
           else if IsCurrentYear then
-            Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FTodayBorderColor))
+          begin
+            if i = FHoveredYearIdx then
+              Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FTodayHoverTextColor))
+            else
+              Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FTodayTextColor));
+          end
+          else if i = FHoveredYearIdx then
+            Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FHoverTextColor))
           else
             Brush := TGPSolidBrush.Create(MakeGPColor(FDatePicker.FTextColor));
 
@@ -2262,8 +2336,16 @@
 
     FTodayBorderColor := $D47800;
     FSelectedDayColor := $D47800;
+    FSelectedDayBorderColor := $D47800;
     FSelectedDayTextColor := clWhite;
     FHoverColor := $E8E8E8;
+    FHoverTextColor := $202020;
+    FOtherMonthTextColor := $A0A0A0;
+    FOtherMonthHoverTextColor := $A0A0A0;
+    FTodayTextColor := $D47800;
+    FTodayHoverTextColor := $D47800;
+    FLinkTextColor := $202020;
+    FLinkHoverTextColor := $D47800;
     FDayShape := dsRoundRect;
 
     FEditInternalMarginL := 1;
@@ -3057,6 +3139,54 @@
   procedure TCWSDatePicker.SetHoverColor(const Value: TColor);
   begin
     FHoverColor := Value;
+    if FDroppedDown then FDropdown.Invalidate;
+  end;
+
+  procedure TCWSDatePicker.SetSelectedDayBorderColor(const Value: TColor);
+  begin
+    FSelectedDayBorderColor := Value;
+    if FDroppedDown then FDropdown.Invalidate;
+  end;
+
+  procedure TCWSDatePicker.SetHoverTextColor(const Value: TColor);
+  begin
+    FHoverTextColor := Value;
+    if FDroppedDown then FDropdown.Invalidate;
+  end;
+
+  procedure TCWSDatePicker.SetOtherMonthTextColor(const Value: TColor);
+  begin
+    FOtherMonthTextColor := Value;
+    if FDroppedDown then FDropdown.Invalidate;
+  end;
+
+  procedure TCWSDatePicker.SetOtherMonthHoverTextColor(const Value: TColor);
+  begin
+    FOtherMonthHoverTextColor := Value;
+    if FDroppedDown then FDropdown.Invalidate;
+  end;
+
+  procedure TCWSDatePicker.SetTodayTextColor(const Value: TColor);
+  begin
+    FTodayTextColor := Value;
+    if FDroppedDown then FDropdown.Invalidate;
+  end;
+
+  procedure TCWSDatePicker.SetTodayHoverTextColor(const Value: TColor);
+  begin
+    FTodayHoverTextColor := Value;
+    if FDroppedDown then FDropdown.Invalidate;
+  end;
+
+  procedure TCWSDatePicker.SetLinkTextColor(const Value: TColor);
+  begin
+    FLinkTextColor := Value;
+    if FDroppedDown then FDropdown.Invalidate;
+  end;
+
+  procedure TCWSDatePicker.SetLinkHoverTextColor(const Value: TColor);
+  begin
+    FLinkHoverTextColor := Value;
     if FDroppedDown then FDropdown.Invalidate;
   end;
 

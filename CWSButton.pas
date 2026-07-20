@@ -265,7 +265,13 @@ type
 constructor TCWSButton.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  ParentColor := False;
+  { Background follows the parent so the control's own erase colour matches its
+    surroundings. This keeps the rounded corners (the area outside the shape)
+    blended with the parent instead of a grey clBtnFace, and — crucially — means
+    that when the control is resized (especially an interactive resize at design
+    time), the briefly exposed background is the parent colour rather than a grey
+    rectangle showing through around the inner shape. }
+  ParentColor := True;
   DoubleBuffered := True;
 
   // Do NOT touch Self.Font — leave ParentFont = True (the TCustomControl default).
@@ -358,7 +364,6 @@ begin
   FMouseLayer.OnClick      := MouseClick;
   FMouseLayer.OnContextPopup := ChildContextPopup;
 
-  Self.Color := clBtnFace;
   UpdateColor;
 end;
 
@@ -914,6 +919,16 @@ var
   OfsX, OfsY: Integer;
 begin
   inherited;
+
+  { Force the alClient background shape to re-fill and repaint on every resize so
+    it never trails the control's new bounds and briefly exposes the background
+    (visible as the container showing through during an interactive resize). }
+  if Assigned(FbckShape) then
+  begin
+    FbckShape.BoundsRect := ClientRect;
+    FbckShape.Invalidate;
+  end;
+
   if not Assigned(FIconBox) or not Assigned(FLabelCaption) then
     Exit;
 

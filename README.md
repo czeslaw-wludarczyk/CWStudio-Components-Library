@@ -1,12 +1,12 @@
 <div align="center">
 
-# CWStudio Components Library
+# CWStudio Component Library
 
 **Nowoczesne komponenty VCL w stylu Windows 11 / WinUI 3 dla Delphi**
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.6.2](https://img.shields.io/badge/version-1.6.2-blue.svg)](#)
+[![Version: 1.6.4](https://img.shields.io/badge/version-1.6.4-blue.svg)](#)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](#licencja--license)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#wymagania--requirements)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#)
@@ -40,6 +40,7 @@ CWStudio to zestaw nowoczesnych, wysokiej jakości komponentów VCL dla środowi
 | **`TCWSCornerPanel`** | Panel z konfigurowalnymi, zaokrąglonymi narożnikami i kolorową ramką. |
 | **`TCWSSettingsPanel`** | Klikalny panel-kontener w stylu „karty" z zaokrąglonym tłem rysowanym bezpośrednio przez GDI+ (`FillColor`, `BorderColor`, `CornerRadius`) oraz zdarzeniami hover / click. |
 | **`TCWSScrollBox`** | Scrollowalny kontener z pływającymi (overlay) paskami przewijania w stylu Fluent — pionowym i poziomym — które nakładają się na treść (nie rezerwują miejsca), pogrubiają się przy najechaniu i nie powodują migotania (treść przesuwana jedną operacją `SetWindowPos`). Kierunki przewijania wybiera `ScrollStyle` (`none` / `horizontal` / `vertical` / `both`). Konfigurowalne kolory, szerokości i przezroczystość suwaka, krok kółka oraz ramka; kontrolki dodawane w czasie działania trafiają na `ContentPanel`. |
+| **`TCWSOptionsPanel`** | Rozwijana „karta" ustawień w stylu Windows 11 / WinUI 3 (*Expander*) z nagłówkiem (ikona + tytuł + podtytuł + chevron). Zwinięta jest pojedynczym zaokrąglonym prostokątem; po rozwinięciu nagłówek zachowuje zaokrąglone górne narożniki, a pod nim układają się jedna lub więcej sekcji `TCWSOptionsSection` (zwykłe panele przyjmujące dowolne kontrolki — checkboxy, przyciski itp.). Sekcje dodaje się w czasie działania (`AddSection`) lub w IDE przez edytor komponentu („Add section"). Dwa style glifu (`ChevronStyle`: `csVertical` — chevron rozwijania; `csRight` — strzałka nawigacji w stylu wiersza Ustawień), tryb nierozwijalny (`Expandable = False`), niezależne czcionki tytułu i podtytułu (`TitleFont` / `SubtitleFont`), podświetlenie nagłówka przy najechaniu (`HoverColor`), zaokrąglanie każdego narożnika z osobna, przełączane krawędzie ramki, ikona z `TCustomImageList` oraz zdarzenie `OnExpandedChanged`. Rysowanie GDI+, DPI-aware. |
 
 ### Przyciski
 
@@ -60,7 +61,7 @@ CWStudio to zestaw nowoczesnych, wysokiej jakości komponentów VCL dla środowi
 | **`TCWSEditMask`** | Pole edycji z **maską wejścia** (jak `Vcl.TMaskEdit`) — wszystkie właściwości i zdarzenia `TCWSEdit` plus `EditMask`, `EditText` oraz walidacja maski (`IsValid`, `ValidateEdit`, zdarzenie `OnValidationError`, `ValidateOnExit`). W Object Inspectorze przycisk „…" otwiera ten sam edytor maski („Input Mask Editor") co VCL. Bez natywnego okna błędu — niezgodność z maską zgłasza zdarzenie. |
 | **`TCWSComboBox`** | ComboBox z dropdownem renderowanym przez GDI+, własnym scrollbarem i pełną obsługą klawiatury. Tryby `csDropDown` / `csDropDownList`. |
 | **`TCWSMemo`** | Wielowierszowe pole tekstowe z dyskretnymi, zanikającymi paskami przewijania w stylu Fluent (pionowy **i** poziomy) oraz właściwością `ScrollBars` (`both` / `vertical` / `horizontal` / `none`) jak w `Vcl.Memo`. |
-| **`TCWSDatePicker`** | Picker daty z popupem kalendarza WinUI 3. Nazwy miesięcy i dni tygodnia pobierane z bieżącej lokalizacji systemu. |
+| **`TCWSDatePicker`** | Picker daty z rozwijanym kalendarzem w stylu Windows 11 / WinUI 3 — warstwowe okno z miękkim „fluentowym" cieniem (alfa per-piksel), renderowanie GDI+, DPI-aware. Trzy widoki nawigacji: **dni → miesiące → lata (dekada)** — kliknięcie nagłówka miesiąca/roku wchodzi głębiej, kółko myszy przewija. Wbudowane pole z **maską daty** (`DateFormat`, `EditMask`); nazwy miesięcy i dni tygodnia pobierane z bieżącej lokalizacji systemu. Kształt komórki dnia (`DayShape`: `dsRoundRect` / `dsCircle` / `dsRectangle`) i rozbudowana personalizacja kolorów **per stan**: wybrany dzień (`SelectedDayColor` / `SelectedDayBorderColor` / `SelectedDayTextColor`), hover (`HoverColor` / `HoverTextColor`), dzień dzisiejszy (`TodayBorderColor` — pierścień + kwadrat na pasku „Today", `TodayTextColor` / `TodayHoverTextColor`), dni sąsiednich miesięcy (`OtherMonthTextColor` / `OtherMonthHoverTextColor`) oraz linki nagłówka i strzałki nawigacji (`LinkTextColor` / `LinkHoverTextColor`). Konfigurowalny cień i zaokrąglenie dropdownu, pasek „Today", zdarzenia `OnChange` / `OnDropDown` / `OnCloseUp`. |
 
 ### Listy i siatki
 
@@ -262,6 +263,7 @@ CWStudio is a library of modern, high-quality VCL components for Delphi, designe
 | **`TCWSCornerPanel`** | Panel with configurable rounded corners and colored border. |
 | **`TCWSSettingsPanel`** | Clickable "card"-style container panel with a GDI+ rounded background (`FillColor`, `BorderColor`, `CornerRadius`) and hover / click events. |
 | **`TCWSScrollBox`** | Scrollable container with floating Fluent-style **overlay** scrollbars — vertical and horizontal — that sit on top of the content (reserve no space), thicken on hover, and never flicker (content moved atomically with a single `SetWindowPos`). Scroll directions are chosen via `ScrollStyle` (`none` / `horizontal` / `vertical` / `both`). Configurable thumb colors, widths and opacity, wheel step, and border; controls added at runtime go onto `ContentPanel`. |
+| **`TCWSOptionsPanel`** | Collapsible Windows 11 / WinUI 3 settings "card" (*Expander*) with a header (icon + title + subtitle + chevron). Collapsed it is a single rounded rectangle; expanded, the header keeps its rounded top corners while one or more `TCWSOptionsSection` sub-panels — plain panels that host arbitrary child controls (checkboxes, buttons, …) — stack underneath. Sections are added at runtime (`AddSection`) or in the IDE via the component editor's "Add section" verb. Two glyph styles (`ChevronStyle`: `csVertical` — expander chevron; `csRight` — Settings-row navigation arrow), a non-collapsible mode (`Expandable = False`), independent title and subtitle fonts (`TitleFont` / `SubtitleFont`), header hover highlight (`HoverColor`), per-corner rounding, individually switchable border edges, an icon from a `TCustomImageList`, and an `OnExpandedChanged` event. GDI+ rendering, DPI-aware. |
 
 ### Buttons
 
@@ -282,7 +284,7 @@ CWStudio is a library of modern, high-quality VCL components for Delphi, designe
 | **`TCWSEditMask`** | Edit box with an **input mask** (like `Vcl.TMaskEdit`) — every property and event of `TCWSEdit` plus `EditMask`, `EditText` and mask validation (`IsValid`, `ValidateEdit`, the `OnValidationError` event, `ValidateOnExit`). The `…` button in the Object Inspector opens the same "Input Mask Editor" dialog as the VCL. No native error message box — mask mismatches are surfaced through the event instead. |
 | **`TCWSComboBox`** | ComboBox with a GDI+-rendered dropdown, its own scrollbar, full keyboard navigation. Modes: `csDropDown` / `csDropDownList`. |
 | **`TCWSMemo`** | Multi-line text area with subtle auto-hiding Fluent-style scrollbars (vertical **and** horizontal) and a `ScrollBars` property (`both` / `vertical` / `horizontal` / `none`) like `Vcl.Memo`. |
-| **`TCWSDatePicker`** | Date picker with a WinUI 3 calendar popup. Month and weekday names taken dynamically from the system locale. |
+| **`TCWSDatePicker`** | Date picker with a drop-down Windows 11 / WinUI 3 calendar — a layered window with a soft "fluent" shadow (per-pixel alpha), GDI+ rendering, DPI-aware. Three navigation views: **days → months → years (decade)** — clicking the month/year header drills in, the mouse wheel scrolls. A built-in edit with a **date mask** (`DateFormat`, `EditMask`); month and weekday names taken dynamically from the system locale. Day-cell shape (`DayShape`: `dsRoundRect` / `dsCircle` / `dsRectangle`) and extensive **per-state** color customization: selected day (`SelectedDayColor` / `SelectedDayBorderColor` / `SelectedDayTextColor`), hover (`HoverColor` / `HoverTextColor`), today (`TodayBorderColor` — the ring + the "Today" bar square, `TodayTextColor` / `TodayHoverTextColor`), adjacent-month days (`OtherMonthTextColor` / `OtherMonthHoverTextColor`), plus the header links and navigation arrows (`LinkTextColor` / `LinkHoverTextColor`). Configurable dropdown shadow and corner radius, a "Today" bar, and `OnChange` / `OnDropDown` / `OnCloseUp` events. |
 
 ### Lists & grids
 
@@ -453,7 +455,7 @@ If you find CWStudio useful and would like to support the ongoing development of
 
 ## 📄 License
 
-The library is released under the **MIT** license — you may use, modify, and redistribute it in any project, commercial or non-commercial, provided that the copyright notice and attribution are preserved (see the [⚖️ Attribution](#️-attribution) section and the [`LICENSE`](LICENSE) file).
+The library is released under the **MIT** license — you may use, modify, and redistribute it in any project, commercial or non-commercial, provided that the copyright notice and attribution are preserved (see the [⚖️ Attribution](#️-attribution) section and the [`LICENSE`](LICENSE) file). Please refer to [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) for the licenses of the third-party dependencies.
 
 <br>
 
