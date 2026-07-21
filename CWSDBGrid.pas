@@ -366,6 +366,10 @@ type
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    { When a scrollbar is visible the inner grid is inset, so the scrollbar strip
+      belongs to this outer window. Forward the wheel to the inner grid so
+      hovering the scrollbar still scrolls the data. }
+    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
     procedure ChangeScale(M, D: Integer; isDpiChange: Boolean); override;
 
     { Hooks called from the internal grid }
@@ -2165,6 +2169,19 @@ begin
     UpdateScrollbarMetrics;
   end;
   Invalidate;
+end;
+
+function TCWSDBGrid.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
+  MousePos: TPoint): Boolean;
+begin
+  { The scrollbar strip is part of this outer window (the inner grid is inset),
+    so the wheel is dispatched here when the cursor is over it. Delegate to the
+    inner grid, which scrolls the data and fires OnMouseWheel exactly as it does
+    when hovered directly. }
+  if (FGrid <> nil) and FGrid.HandleAllocated then
+    Result := FGrid.DoMouseWheel(Shift, WheelDelta, MousePos)
+  else
+    Result := inherited DoMouseWheel(Shift, WheelDelta, MousePos);
 end;
 
 { *** Lifecycle *** }

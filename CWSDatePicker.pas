@@ -2439,7 +2439,12 @@
   begin
     inherited;
     if FInternalEdit <> nil then
+    begin
       FInternalEdit.Font.Assign(Font);
+      // Font.Assign nadpisuje Font.Color kolorem VCL-owego Font (domyslnie
+      // ciemny clWindowText). Przywracamy wlasciwy TextColor.
+      SyncEditAppearance;
+    end;
     AdjustHeight;
     Invalidate;
   end;
@@ -2448,7 +2453,10 @@
   begin
     inherited;
     if FInternalEdit <> nil then
+    begin
       FInternalEdit.Font.Assign(Font);
+      SyncEditAppearance;
+    end;
     AdjustHeight;
     Invalidate;
   end;
@@ -2459,6 +2467,7 @@
     FBuffer.SetSize(0, 0);
     AdjustHeight;
     UpdateEditPosition;
+    SyncEditAppearance;
     Invalidate;
   end;
 
@@ -2466,7 +2475,10 @@
   begin
     inherited;
     if FInternalEdit <> nil then
+    begin
       FInternalEdit.Font.Assign(Font);
+      SyncEditAppearance;
+    end;
     AdjustHeight;
   end;
 
@@ -3005,6 +3017,7 @@
     inherited;
     AdjustHeight;
     UpdateEditPosition;
+    SyncEditAppearance;
     Invalidate;
   end;
 

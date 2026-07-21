@@ -262,6 +262,10 @@ type
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    { When the scrollbar is visible the inner list box is narrower, so the
+      scrollbar strip belongs to this outer window. Forward the wheel to the
+      inner list so hovering the scrollbar still scrolls the list. }
+    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
     procedure ChangeScale(M, D: Integer); override;
 
     { ADDED: Intercepting system drag-drop messages }
@@ -1811,6 +1815,35 @@ begin
     UpdateListBoxPosition;
   end;
   Invalidate;
+end;
+
+function TCWSListBox.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
+  MousePos: TPoint): Boolean;
+var
+  NewTop, Total, Visible: Integer;
+  Handled: Boolean;
+begin
+  { Give the user's OnMouseWheel first say (mirrors the inner list box path). }
+  Handled := False;
+  if Assigned(FOnMouseWheel) then
+    FOnMouseWheel(Self, Shift, WheelDelta, MousePos, Handled);
+  if Handled then
+    Exit(True);
+
+  if FListBox.HandleAllocated then
+  begin
+    Total   := FListBox.GetTotalItems;
+    Visible := FListBox.GetVisibleItems;
+    NewTop  := FListBox.GetTopIndex;
+    if WheelDelta > 0 then
+      NewTop := Max(0, NewTop - 3)
+    else
+      NewTop := Min(Max(0, Total - Visible), NewTop + 3);
+    FListBox.SetTopIndex(NewTop);
+    UpdateListBoxPosition;
+    Invalidate;
+  end;
+  Result := True;
 end;
 
 { ADDED: Forwarding the drag acceptance from the inner control }

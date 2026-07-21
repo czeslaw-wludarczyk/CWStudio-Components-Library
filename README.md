@@ -6,10 +6,10 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.6.4](https://img.shields.io/badge/version-1.6.4-blue.svg)](#)
-[![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](#licencja--license)
-[![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#wymagania--requirements)
-[![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#)
+[![Version: 1.6.4](https://img.shields.io/badge/version-1.6.4-blue.svg)](CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
+[![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
+[![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
 [![Donate: PayPal](https://img.shields.io/badge/donate-PayPal-00457C.svg?logo=paypal)](https://paypal.me/czeslaw80)
 
 </div>
@@ -213,6 +213,12 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ---
 
+## 🗓️ Historia wersji
+
+Pełna historia zmian znajduje się w osobnym pliku [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
 ## ❤️ Wsparcie autora
 
 Jeśli komponenty CWStudio okazały się przydatne i chcesz wesprzeć dalszy rozwój biblioteki — postaw mi wirtualną kawę lub przekaż darowiznę. Każde wsparcie pomaga utrzymać i rozbudowywać projekt:
@@ -231,7 +237,7 @@ Jeśli komponenty CWStudio okazały się przydatne i chcesz wesprzeć dalszy roz
 
 ## 📄 Licencja
 
-Biblioteka jest udostępniona na licencji **MIT** — możesz jej używać, modyfikować i rozpowszechniać w dowolnych projektach komercyjnych lub niekomercyjnych. Warunkiem jest zachowanie informacji o autorstwie i treści licencji (zobacz sekcję [⚖️ Wymagane przypisanie autorstwa](#️-wymagane-przypisanie-autorstwa) oraz plik [`LICENSE`](LICENSE)). Szczegółowe informacje o licencjach zależności znajdują się w pliku [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
+Biblioteka jest udostępniona na licencji **MIT** — możesz jej używać, modyfikować i rozpowszechniać w dowolnych projektach komercyjnych lub niekomercyjnych. Warunkiem jest zachowanie informacji o autorstwie i treści licencji (zobacz sekcję [⚖️ Wymagane przypisanie autorstwa](#️-wymagane-przypisanie-autorstwa) oraz plik [`LICENSE`](LICENSE)).
 
 <br>
 
@@ -437,6 +443,12 @@ When using these components, please include appropriate attribution in your appl
 
 ---
 
+## 🗓️ Version history
+
+The full change history is kept in a separate [`CHANGELOG.md`](CHANGELOG.md) file.
+
+---
+
 ## ❤️ Support the author
 
 If you find CWStudio useful and would like to support the ongoing development of the library, you can buy me a coffee or make a donation. Every contribution helps keep the project alive and growing:
@@ -455,7 +467,7 @@ If you find CWStudio useful and would like to support the ongoing development of
 
 ## 📄 License
 
-The library is released under the **MIT** license — you may use, modify, and redistribute it in any project, commercial or non-commercial, provided that the copyright notice and attribution are preserved (see the [⚖️ Attribution](#️-attribution) section and the [`LICENSE`](LICENSE) file). Please refer to [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) for the licenses of the third-party dependencies.
+The library is released under the **MIT** license — you may use, modify, and redistribute it in any project, commercial or non-commercial, provided that the copyright notice and attribution are preserved (see the [⚖️ Attribution](#️-attribution) section and the [`LICENSE`](LICENSE) file).
 
 <br>
 

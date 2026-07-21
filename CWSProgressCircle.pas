@@ -1,4 +1,4 @@
-//////////////////////////////////////////////////////////////////////////
+﻿//////////////////////////////////////////////////////////////////////////
 //
 //   CWStudio Component Library
 //   Created by Czesław Włudarczyk 2026 CWStudio
@@ -358,53 +358,21 @@ begin
 end;
 
 procedure TCWSProgressCircle.Paint;
-const
-  DEG2RAD = Pi / 180;
-  SCALE = 4;
-
-  procedure DrawPolyArc(ACanvas: TCanvas; ACX, ACY, ARadius: Double;
-    AStartDeg, ASweepDeg, ALineW: Integer; AColor: TColor; ARound: Boolean);
-  var
-    N, i: Integer;
-    Pts: array of TPoint;
-    Angle: Double;
-    Pen: HPEN;
-    OldPen: HPEN;
-    LB: TLogBrush;
-  begin
-    if Abs(ASweepDeg) < 1 then
-      Exit;
-    N := Max(3, Abs(ASweepDeg));
-    SetLength(Pts, N + 1);
-    for i := 0 to N do
-    begin
-      Angle := (AStartDeg + ASweepDeg * i / N) * DEG2RAD;
-      Pts[i].X := Round(ACX + ARadius * Sin(Angle));
-      Pts[i].Y := Round(ACY - ARadius * Cos(Angle));
-    end;
-    LB.lbStyle := BS_SOLID;
-    LB.lbColor := ColorToRGB(AColor);
-    LB.lbHatch := 0;
-    Pen := ExtCreatePen(
-      PS_GEOMETRIC or PS_SOLID or PS_JOIN_ROUND or
-      IfThen(ARound, PS_ENDCAP_ROUND, PS_ENDCAP_FLAT),
-      ALineW, LB, 0, nil);
-    OldPen := SelectObject(ACanvas.Handle, Pen);
-    ACanvas.Brush.Style := bsClear;
-    Polyline(ACanvas.Handle, Pts[0], N + 1);
-    SelectObject(ACanvas.Handle, OldPen);
-    DeleteObject(Pen);
-  end;
-
 var
   W, H: Integer;
-  Bmp: Vcl.Graphics.TBitmap;
-  BackBmp: Vcl.Graphics.TBitmap;
-  CX, CY, R: Double;
-  // FLineWidth is in logical pixels (96 DPI).
-  // The bitmap is SCALE times larger, and CurrentPPI accounts for Windows scaling.
-  ActualLineW: Integer;
   GFX: TGPGraphics;
+  // Arc geometry ----------------------------------------------------------
+  // FLineWidth is in logical pixels (96 DPI); CurrentPPI accounts for the
+  // current Windows scaling. GDI+ anti-aliases the arcs directly against the
+  // real parent background already present on the Canvas, so we do NOT copy
+  // any pixels from our own Canvas (that "background theft" caused ghost
+  // arcs when the control was partially clipped / scrolled).
+  ActualLineW: Single;
+  Diam: Single;
+  RectX, RectY: Single;
+  TrackPen, ProgPen: TGPPen;
+  Sweep: Single;
+  // Text ------------------------------------------------------------------
   GPFont: TGPFont;
   GPFamily: TGPFontFamily;
   GPFormat: TGPStringFormat;
@@ -434,66 +402,63 @@ begin
 
   NormPct := NormalizedPercent;
 
-  // ── Render arcs at 4× ─────────────────────────────────────────────────────
-  Bmp := Vcl.Graphics.TBitmap.Create;
-  try
-    Bmp.PixelFormat := pf24bit;
-    Bmp.Width := W * SCALE;
-    Bmp.Height := H * SCALE;
-
-    // Background: as a TGraphicControl we are painted right after the parent,
-    // so our Canvas already holds whatever the parent drew behind us (e.g. the
-    // settings-panel fill / hover colour). Grab those pixels and use them as
-    // the bitmap background so the corners outside the ring blend with the
-    // parent and the arcs are anti-aliased against the real background.
-    BackBmp := Vcl.Graphics.TBitmap.Create;
-    try
-      BackBmp.PixelFormat := pf24bit;
-      BackBmp.SetSize(W, H);
-      BitBlt(BackBmp.Canvas.Handle, 0, 0, W, H, Canvas.Handle, 0, 0, SRCCOPY);
-
-      SetStretchBltMode(Bmp.Canvas.Handle, COLORONCOLOR);
-      StretchBlt(Bmp.Canvas.Handle, 0, 0, Bmp.Width, Bmp.Height,
-        BackBmp.Canvas.Handle, 0, 0, W, H, SRCCOPY);
-    finally
-      BackBmp.Free;
-    end;
-
-    CX := Bmp.Width / 2;
-    CY := Bmp.Height / 2;
-
-    // FLineWidth in screen pixels. The bitmap is SCALE× larger,
-    // so we multiply only by SCALE. No scaling relative to size
-    // of the control — 6px always means 6px on screen after downsampling.
-    ActualLineW := Max(1, Round(FLineWidth * (Self.CurrentPPI / 96) * SCALE));
-
-    R := (Min(Bmp.Width, Bmp.Height) / 2) - (ActualLineW / 2) - SCALE;
-
-    DrawPolyArc(Bmp.Canvas, CX, CY, R,
-      Round(FStartAngle), 360, ActualLineW, FTrackColor, False);
-
-    if NormPct > 0 then
-      DrawPolyArc(Bmp.Canvas, CX, CY, R,
-        Round(FStartAngle), Round(NormPct / 100 * 360),
-        ActualLineW, FProgressColor, FRoundCaps);
-
-    SetStretchBltMode(Canvas.Handle, HALFTONE);
-    SetBrushOrgEx(Canvas.Handle, 0, 0, nil);
-    StretchBlt(Canvas.Handle, 0, 0, W, H,
-      Bmp.Canvas.Handle, 0, 0, Bmp.Width, Bmp.Height, SRCCOPY);
-  finally
-    Bmp.Free;
-  end;
-
-  if not FShowText then
-    Exit;
-
-  // ── Text via GDI+ ─────────────────────────────────────────────────────────
   GFX := TGPGraphics.Create(Canvas.Handle);
   try
     GFX.SetSmoothingMode(SmoothingModeAntiAlias);
-    GFX.SetTextRenderingHint(TextRenderingHintAntiAlias);
     GFX.SetPixelOffsetMode(PixelOffsetModeHighQuality);
+
+    // ── Arcs (drawn straight onto the Canvas, no back-buffer) ────────────
+    ActualLineW := Max(1, Round(FLineWidth * (Self.CurrentPPI / 96)));
+
+    // Centred, circular stroke path. GDI+ strokes are centred on the path,
+    // so we inset the bounding box by half the line width (plus 1px margin).
+    Diam := Min(W, H) - ActualLineW - 2;
+    if Diam < 1 then
+      Diam := 1;
+    RectX := (W - Diam) / 2;
+    RectY := (H - Diam) / 2;
+
+    // GDI+ measures angles from 3 o'clock; this control measures from 12
+    // o'clock, hence the -90 offset. Sweep is clockwise in both.
+
+    // Track: full ring.
+    TrackPen := TGPPen.Create(ColorToARGB(FTrackColor), ActualLineW);
+    try
+      TrackPen.SetStartCap(LineCapFlat);
+      TrackPen.SetEndCap(LineCapFlat);
+      GFX.DrawArc(TrackPen, RectX, RectY, Diam, Diam, FStartAngle - 90, 360);
+    finally
+      TrackPen.Free;
+    end;
+
+    // Progress arc.
+    if NormPct > 0 then
+    begin
+      Sweep := NormPct / 100 * 360;
+      ProgPen := TGPPen.Create(ColorToARGB(FProgressColor), ActualLineW);
+      try
+        if FRoundCaps then
+        begin
+          ProgPen.SetStartCap(LineCapRound);
+          ProgPen.SetEndCap(LineCapRound);
+        end
+        else
+        begin
+          ProgPen.SetStartCap(LineCapFlat);
+          ProgPen.SetEndCap(LineCapFlat);
+        end;
+        GFX.DrawArc(ProgPen, RectX, RectY, Diam, Diam,
+          FStartAngle - 90, Sweep);
+      finally
+        ProgPen.Free;
+      end;
+    end;
+
+    if not FShowText then
+      Exit;
+
+    // ── Text via GDI+ ────────────────────────────────────────────────────
+    GFX.SetTextRenderingHint(TextRenderingHintAntiAlias);
 
     GPFamily := TGPFontFamily.Create(Font.Name);
     // TextSize = 0 → automatic size based on the circle diameter.

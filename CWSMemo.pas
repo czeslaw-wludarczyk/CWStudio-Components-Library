@@ -229,6 +229,10 @@ type
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    { When the scrollbar is visible the inner memo is narrower, so the scrollbar
+      strip belongs to this outer window. Forward the wheel to the inner memo so
+      hovering the scrollbar still scrolls the text. }
+    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
     procedure ChangeScale(M, D: Integer); override;
   public
     constructor Create(AOwner: TComponent); override;
@@ -1686,6 +1690,30 @@ begin
     UpdateScrollbarMetrics;
   end;
   Invalidate;
+end;
+
+function TCWSMemo.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
+  MousePos: TPoint): Boolean;
+var
+  Handled: Boolean;
+begin
+  { Give the user's OnMouseWheel first say (mirrors the inner memo path). }
+  Handled := False;
+  if Assigned(FOnMouseWheel) then
+    FOnMouseWheel(Self, Shift, WheelDelta, MousePos, Handled);
+  if Handled then
+    Exit(True);
+
+  if FMemo.HandleAllocated then
+  begin
+    if WheelDelta > 0 then
+      FMemo.Perform(EM_LINESCROLL, 0, -3)
+    else
+      FMemo.Perform(EM_LINESCROLL, 0, 3);
+    UpdateScrollbarMetrics;
+    Invalidate;
+  end;
+  Result := True;
 end;
 
 { *** Lifecycle *** }
