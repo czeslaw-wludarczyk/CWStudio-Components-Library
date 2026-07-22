@@ -1,6 +1,6 @@
 ﻿//////////////////////////////////////////////////////////////////////////
 //
-//   CWStudio Component Library
+//   CWStudio Components Library
 //   Created by Czesław Włudarczyk 2026 CWStudio
 //
 //   LICENSE: MIT
@@ -241,7 +241,7 @@ begin
   SplashBitmap := LoadSplashBitmap;
   AboutBoxIndex := AboutSvc.AddPluginInfo(
     CWStudioCaption,
-    'CWStudio Component Library ' + CWStudioVersionFull + sLineBreak +
+    'CWStudio Components Library ' + CWStudioVersionFull + sLineBreak +
     'Modern Windows 11 / WinUI 3 style VCL components for Delphi.' + sLineBreak +
     CWStudioCopyright,
     SplashBitmap.Handle,

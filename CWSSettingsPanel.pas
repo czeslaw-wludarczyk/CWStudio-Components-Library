@@ -1,6 +1,6 @@
 //////////////////////////////////////////////////////////////////////////
 //
-//   CWStudio Component Library
+//   CWStudio Components Library
 //   Created by Czesław Włudarczyk 2026 CWStudio
 //
 //   LICENSE: MIT
