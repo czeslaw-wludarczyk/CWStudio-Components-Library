@@ -29,10 +29,10 @@ uses
   Winapi.Windows, Winapi.Messages,
   System.SysUtils, System.Classes, System.UITypes, System.Math,
   Vcl.Controls, Vcl.StdCtrls, Vcl.Graphics, Vcl.ExtCtrls,
-  CWSShape;
+  CWSShape, CWSActions;
 
 type
-  TCWSSwitch = class(TCustomControl)
+  TCWSSwitch = class(TCustomControl, ICWSActionClient)
   private
     FTrack: TCWSShape;        { pill-shaped track (border + fill)             }
     FKnob: TCWSShape;         { sliding / stretching knob                     }
@@ -108,7 +108,22 @@ type
     procedure ChildMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure ChildMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure ChildMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+
+    { ICWSActionClient — links Action.Caption/Checked/OnExecute to Caption /
+      Checked / OnClick (no image list on a switch). }
+    function  CWSActionCaption: string;
+    procedure CWSSetActionCaption(const Value: string);
+    function  CWSActionOnClick: TNotifyEvent;
+    procedure CWSSetActionOnClick(Value: TNotifyEvent);
+    function  CWSActionCheckedSupported: Boolean;
+    function  CWSActionChecked: Boolean;
+    procedure CWSSetActionChecked(Value: Boolean);
+    function  CWSActionImageIndexSupported: Boolean;
+    function  CWSActionImageIndex: Integer;
+    procedure CWSSetActionImageIndex(Value: Integer);
   protected
+    function  GetActionLinkClass: TControlActionLinkClass; override;
+    procedure ActionChange(Sender: TObject; CheckDefaults: Boolean); override;
     function  CanAutoSize(var NewWidth, NewHeight: Integer): Boolean; override;
     procedure Resize; override;
     procedure Loaded; override;
@@ -124,6 +139,7 @@ type
     procedure Click; reintroduce;
     procedure Toggle;
   published
+    property Action;
     property Caption: string read FCaption write SetCaption;
     property Checked: Boolean read FChecked write SetChecked default False;
     property Animated: Boolean read FAnimated write SetAnimated default True;
@@ -655,8 +671,70 @@ end;
 
 procedure TCWSSwitch.Click;
 begin
-  if Assigned(FOnClick) then
-    FOnClick(Self);
+  { VCL-identical dispatch: user OnClick wins, otherwise the linked action runs. }
+  CWSDispatchClick(Self, Self, Action, ActionLink);
+end;
+
+{ --- Action linking (see CWSActions) --- }
+
+function TCWSSwitch.GetActionLinkClass: TControlActionLinkClass;
+begin
+  Result := TCWSControlActionLink;
+end;
+
+procedure TCWSSwitch.ActionChange(Sender: TObject; CheckDefaults: Boolean);
+begin
+  CWSActionChange(Self, Self, Sender, CheckDefaults);
+end;
+
+function TCWSSwitch.CWSActionCaption: string;
+begin
+  Result := FCaption;
+end;
+
+procedure TCWSSwitch.CWSSetActionCaption(const Value: string);
+begin
+  Caption := Value;
+end;
+
+function TCWSSwitch.CWSActionOnClick: TNotifyEvent;
+begin
+  Result := FOnClick;
+end;
+
+procedure TCWSSwitch.CWSSetActionOnClick(Value: TNotifyEvent);
+begin
+  FOnClick := Value;
+end;
+
+function TCWSSwitch.CWSActionCheckedSupported: Boolean;
+begin
+  Result := True;
+end;
+
+function TCWSSwitch.CWSActionChecked: Boolean;
+begin
+  Result := FChecked;
+end;
+
+procedure TCWSSwitch.CWSSetActionChecked(Value: Boolean);
+begin
+  Checked := Value;
+end;
+
+function TCWSSwitch.CWSActionImageIndexSupported: Boolean;
+begin
+  Result := False;
+end;
+
+function TCWSSwitch.CWSActionImageIndex: Integer;
+begin
+  Result := -1;
+end;
+
+procedure TCWSSwitch.CWSSetActionImageIndex(Value: Integer);
+begin
+  { A switch has no image list. }
 end;
 
 procedure TCWSSwitch.Toggle;

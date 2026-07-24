@@ -26,14 +26,14 @@ interface
 uses
   System.SysUtils, System.Classes, Vcl.Controls, Vcl.StdCtrls, Vcl.Graphics,
   Vcl.ExtCtrls, Vcl.ImgList, CWSShape, Windows, Messages,
-  Vcl.Menus, System.UITypes;
+  Vcl.Menus, System.UITypes, CWSActions;
 
 type
   TCWSIconMode = (icmGlyph, icmImageList);
   TCWSIconPosition = (ipLeft, ipRight, ipTop, ipBottom);
   TCWSButtonStyle = (bsNeutral, bsPrimary, bsCustom);
 
-  TCWSButton = class(TCustomControl)
+  TCWSButton = class(TCustomControl, ICWSActionClient)
   private
     FIconBox: TPaintBox;
     FLabelCaption: TLabel;
@@ -153,7 +153,22 @@ type
     function  CurrentIconColor: TColor;
     procedure CalcIconSize(out AWidth, AHeight: Integer);
 
+    { ICWSActionClient — links Action.Caption/OnExecute/ImageIndex to the
+      control's own Caption / OnClick / ImageIndex (VCL TButton has no Checked). }
+    function  CWSActionCaption: string;
+    procedure CWSSetActionCaption(const Value: string);
+    function  CWSActionOnClick: TNotifyEvent;
+    procedure CWSSetActionOnClick(Value: TNotifyEvent);
+    function  CWSActionCheckedSupported: Boolean;
+    function  CWSActionChecked: Boolean;
+    procedure CWSSetActionChecked(Value: Boolean);
+    function  CWSActionImageIndexSupported: Boolean;
+    function  CWSActionImageIndex: Integer;
+    procedure CWSSetActionImageIndex(Value: Integer);
+
   protected
+    function  GetActionLinkClass: TControlActionLinkClass; override;
+    procedure ActionChange(Sender: TObject; CheckDefaults: Boolean); override;
     procedure Resize; override;
     procedure Loaded; override;
     procedure ChangeScale(M, D: Integer; isDpiChange: Boolean); override;
@@ -176,6 +191,7 @@ type
     procedure DblClick; override;
 
   published
+    property Action;
     property Width;
     property Height;
     property Anchors;
@@ -775,7 +791,72 @@ end;
 
 procedure TCWSButton.Click;
 begin
-  if Assigned(FOnClick) then FOnClick(Self);
+  { VCL-identical dispatch: user OnClick wins, otherwise the linked action runs. }
+  CWSDispatchClick(Self, Self, Action, ActionLink);
+end;
+
+{ --- Action linking (see CWSActions) --- }
+
+function TCWSButton.GetActionLinkClass: TControlActionLinkClass;
+begin
+  Result := TCWSControlActionLink;
+end;
+
+procedure TCWSButton.ActionChange(Sender: TObject; CheckDefaults: Boolean);
+begin
+  CWSActionChange(Self, Self, Sender, CheckDefaults);
+end;
+
+function TCWSButton.CWSActionCaption: string;
+begin
+  Result := FCaptionText;
+end;
+
+procedure TCWSButton.CWSSetActionCaption(const Value: string);
+begin
+  Caption := Value;
+end;
+
+function TCWSButton.CWSActionOnClick: TNotifyEvent;
+begin
+  Result := FOnClick;
+end;
+
+procedure TCWSButton.CWSSetActionOnClick(Value: TNotifyEvent);
+begin
+  FOnClick := Value;
+end;
+
+function TCWSButton.CWSActionCheckedSupported: Boolean;
+begin
+  Result := False;
+end;
+
+function TCWSButton.CWSActionChecked: Boolean;
+begin
+  Result := False;
+end;
+
+procedure TCWSButton.CWSSetActionChecked(Value: Boolean);
+begin
+  { A push button has no checked state. }
+end;
+
+function TCWSButton.CWSActionImageIndexSupported: Boolean;
+begin
+  Result := True;
+end;
+
+function TCWSButton.CWSActionImageIndex: Integer;
+begin
+  Result := FImageIndex;
+end;
+
+procedure TCWSButton.CWSSetActionImageIndex(Value: Integer);
+begin
+  { An action's image index only makes sense in image-list mode. }
+  if FIconMode = icmImageList then
+    ImageIndex := Value;
 end;
 
 procedure TCWSButton.ChildMouseEnter(Sender: TObject);
@@ -857,7 +938,7 @@ end;
 procedure TCWSButton.MouseClick(Sender: TObject);
 begin
   if not Enabled then Exit;
-  if Assigned(FOnClick) then FOnClick(Self);
+  Click;
 end;
 
 procedure TCWSButton.UpdateColor;

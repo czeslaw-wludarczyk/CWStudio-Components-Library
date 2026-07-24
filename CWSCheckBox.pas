@@ -29,7 +29,7 @@ uses
   Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI, Winapi.GDIPOBJ,
   System.SysUtils, System.Classes, System.UITypes, System.Math,
   Vcl.Controls, Vcl.StdCtrls, Vcl.Graphics, Vcl.ExtCtrls,
-  CWSShape;
+  CWSShape, CWSActions;
 
 type
   { Anti-aliased check-mark glyph, drawn with GDI+ inside its own bounds.
@@ -49,7 +49,7 @@ type
     property Progress: Single read FProgress write SetProgress;
   end;
 
-  TCWSCheckBox = class(TCustomControl)
+  TCWSCheckBox = class(TCustomControl, ICWSActionClient)
   private
     FBox: TCWSShape;          { rounded square indicator (border + fill)      }
     FCheck: TCWSCheckGlyph;   { check mark, visible only when Checked         }
@@ -122,7 +122,22 @@ type
     procedure ChildMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure ChildMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure ChildMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+
+    { ICWSActionClient — links Action.Caption/Checked/OnExecute to Caption /
+      Checked / OnClick (no image list on a check box). }
+    function  CWSActionCaption: string;
+    procedure CWSSetActionCaption(const Value: string);
+    function  CWSActionOnClick: TNotifyEvent;
+    procedure CWSSetActionOnClick(Value: TNotifyEvent);
+    function  CWSActionCheckedSupported: Boolean;
+    function  CWSActionChecked: Boolean;
+    procedure CWSSetActionChecked(Value: Boolean);
+    function  CWSActionImageIndexSupported: Boolean;
+    function  CWSActionImageIndex: Integer;
+    procedure CWSSetActionImageIndex(Value: Integer);
   protected
+    function  GetActionLinkClass: TControlActionLinkClass; override;
+    procedure ActionChange(Sender: TObject; CheckDefaults: Boolean); override;
     function  CanAutoSize(var NewWidth, NewHeight: Integer): Boolean; override;
     procedure Resize; override;
     procedure Loaded; override;
@@ -138,6 +153,7 @@ type
     procedure Click; reintroduce;
     procedure Toggle;
   published
+    property Action;
     property Caption: string read FCaption write SetCaption;
     property Checked: Boolean read FChecked write SetChecked default False;
     property Animated: Boolean read FAnimated write SetAnimated default True;
@@ -722,8 +738,70 @@ end;
 
 procedure TCWSCheckBox.Click;
 begin
-  if Assigned(FOnClick) then
-    FOnClick(Self);
+  { VCL-identical dispatch: user OnClick wins, otherwise the linked action runs. }
+  CWSDispatchClick(Self, Self, Action, ActionLink);
+end;
+
+{ --- Action linking (see CWSActions) --- }
+
+function TCWSCheckBox.GetActionLinkClass: TControlActionLinkClass;
+begin
+  Result := TCWSControlActionLink;
+end;
+
+procedure TCWSCheckBox.ActionChange(Sender: TObject; CheckDefaults: Boolean);
+begin
+  CWSActionChange(Self, Self, Sender, CheckDefaults);
+end;
+
+function TCWSCheckBox.CWSActionCaption: string;
+begin
+  Result := FCaption;
+end;
+
+procedure TCWSCheckBox.CWSSetActionCaption(const Value: string);
+begin
+  Caption := Value;
+end;
+
+function TCWSCheckBox.CWSActionOnClick: TNotifyEvent;
+begin
+  Result := FOnClick;
+end;
+
+procedure TCWSCheckBox.CWSSetActionOnClick(Value: TNotifyEvent);
+begin
+  FOnClick := Value;
+end;
+
+function TCWSCheckBox.CWSActionCheckedSupported: Boolean;
+begin
+  Result := True;
+end;
+
+function TCWSCheckBox.CWSActionChecked: Boolean;
+begin
+  Result := FChecked;
+end;
+
+procedure TCWSCheckBox.CWSSetActionChecked(Value: Boolean);
+begin
+  Checked := Value;
+end;
+
+function TCWSCheckBox.CWSActionImageIndexSupported: Boolean;
+begin
+  Result := False;
+end;
+
+function TCWSCheckBox.CWSActionImageIndex: Integer;
+begin
+  Result := -1;
+end;
+
+procedure TCWSCheckBox.CWSSetActionImageIndex(Value: Integer);
+begin
+  { A check box has no image list. }
 end;
 
 procedure TCWSCheckBox.Toggle;

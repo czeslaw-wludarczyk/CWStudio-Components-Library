@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.6.5](https://img.shields.io/badge/version-1.6.5-blue.svg)](CHANGELOG.md)
+[![Version: 1.6.6](https://img.shields.io/badge/version-1.6.6-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -52,6 +52,8 @@ CWStudio to zestaw nowoczesnych, wysokiej jakości komponentów VCL dla środowi
 | **`TCWSRadioButton`** | Przycisk radiowy w stylu Windows 11 — okrągły wskaźnik (pierścień + kropka) rysowany przez `TCWSShape`, antyaliasing w każdym DPI. Kolory wskaźnika i tekstu osobno dla stanów Normal / Checked / Disabled, `RadioSize`, `TextSpacing`, `AutoSize`. |
 | **`TCWSCheckBox`** | Pole wyboru w stylu Windows 11 — kwadratowy, zaokrąglony wskaźnik (`TCWSShape`) z antyaliasowanym znacznikiem GDI+. Niezależne od siebie (bez `GroupIndex`). `BoxSize`, `CornerRadius`, kolory per stan, `TextSpacing`, `AutoSize`. |
 | **`TCWSSwitch`** | Przełącznik (toggle) w stylu Windows 11 — torowa „pigułka" i okrągła gałka (`TCWSShape`) z charakterystyczną animacją przesuwania (gałka rozciąga się w pigułkę w połowie drogi). Klik lub Spacja przełącza `Checked`; identyczny zestaw zdarzeń co `TCWSCheckBox` / `TCWSRadioButton`. |
+
+> 🎯 **Obsługa akcji (`Action`)** — `TCWSButton`, `TCWSCheckBox`, `TCWSRadioButton` i `TCWSSwitch` mają właściwość `Action`, która wiąże je z `TAction` z `TActionList` — dokładnie jak standardowe kontrolki VCL. Akcja steruje `Caption`, `Enabled`, `Visible`, `Hint` (oraz `Checked` w kontrolkach przełączanych), a kliknięcie wykonuje `OnExecute`. Ręczne ustawienie właściwości odłącza ją od akcji (semantyka linkowania po wartości, jak w VCL).
 
 ### Pola wprowadzania danych
 
@@ -281,6 +283,8 @@ CWStudio is a library of modern, high-quality VCL components for Delphi, designe
 | **`TCWSRadioButton`** | Windows 11 style radio button — circular indicator (ring + dot) drawn with `TCWSShape`, anti-aliased at any DPI. Indicator and caption colors per state (Normal / Checked / Disabled), `RadioSize`, `TextSpacing`, `AutoSize`. |
 | **`TCWSCheckBox`** | Windows 11 style check box — rounded square indicator (`TCWSShape`) with an anti-aliased GDI+ check mark. Independent of one another (no `GroupIndex`). `BoxSize`, `CornerRadius`, per-state colors, `TextSpacing`, `AutoSize`. |
 | **`TCWSSwitch`** | Windows 11 style toggle switch — pill-shaped track and round knob (`TCWSShape`) with the recognisable sliding animation (the knob stretches into a pill mid-travel). A click or Space toggles `Checked`; same event surface as `TCWSCheckBox` / `TCWSRadioButton`. |
+
+> 🎯 **Action support (`Action`)** — `TCWSButton`, `TCWSCheckBox`, `TCWSRadioButton` and `TCWSSwitch` expose an `Action` property that links them to a `TAction` in a `TActionList`, exactly like the stock VCL controls. The action drives `Caption`, `Enabled`, `Visible`, `Hint` (and `Checked` on the toggle controls), and a click executes `OnExecute`. Setting a property by hand unlinks it from the action (value-linking semantics, as in the VCL).
 
 ### Input controls
 

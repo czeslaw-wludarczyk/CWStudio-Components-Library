@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.6.6] — 2026-07
+
+- New: `Action` (`TActionList`) support on `TCWSButton`, `TCWSCheckBox`, `TCWSRadioButton` and `TCWSSwitch` — the action drives `Caption`, `Enabled`, `Visible`, `Hint` (and `Checked` on the toggle controls) and a click executes `OnExecute`, mirroring the stock VCL controls (value-linking semantics).
+- New shared `CWSActions` unit (`ICWSActionClient`, `TCWSControlActionLink`, action-change / click-dispatch helpers).
+
 ## [1.6.5] — 2026-07
 
 - Fix: mouse wheel now scrolls when the cursor is over the scrollbar strip in `TCWSListBox`, `TCWSMemo` and `TCWSDBGrid`.
