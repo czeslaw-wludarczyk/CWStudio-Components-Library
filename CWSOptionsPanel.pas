@@ -52,6 +52,12 @@ type
                    point down when expanded (navigation / Settings-row style). }
   TCWSChevronStyle = (csVertical, csRight);
 
+  { How the header icon is supplied:
+      icmImageList — draw glyph FImageIndex from the assigned Images list.
+      icmGlyph     — draw the IconGlyph text with an icon font (Segoe MDL2 /
+                     Fluent Icons), exactly like TCWSButton. }
+  TCWSIconMode = (icmImageList, icmGlyph);
+
   { ─────────────────────────────────────────────────────────────────────────
       TCWSOptionsSection — a square-cornered sub-panel that accepts controls.
     ───────────────────────────────────────────────────────────────────────── }
@@ -128,12 +134,19 @@ type
     FHoverColor: TColor;
     FImages: TCustomImageList;
     FImageIndex: Integer;
+    FIconMode: TCWSIconMode;
+    FIconGlyph: string;
+    FIconFontName: string;
+    FIconFontSize: Integer;
+    FIconColor: TColor;
+    FTitleSpacing: Integer;
     FHeaderHovered: Boolean;
     FLayouting: Boolean;
     FRoundTopLeft: Boolean;
     FRoundTopRight: Boolean;
     FRoundBottomLeft: Boolean;
     FRoundBottomRight: Boolean;
+    FRoundLastSection: Boolean;
     FOnExpandedChanged: TNotifyEvent;
 
     procedure SetExpanded(const Value: Boolean);
@@ -163,10 +176,17 @@ type
     procedure SetHoverColor(const Value: TColor);
     procedure SetImages(const Value: TCustomImageList);
     procedure SetImageIndex(const Value: Integer);
+    procedure SetIconMode(const Value: TCWSIconMode);
+    procedure SetIconGlyph(const Value: string);
+    procedure SetIconFontName(const Value: string);
+    procedure SetIconFontSize(const Value: Integer);
+    procedure SetIconColor(const Value: TColor);
+    procedure SetTitleSpacing(const Value: Integer);
     procedure SetRoundTopLeft(const Value: Boolean);
     procedure SetRoundTopRight(const Value: Boolean);
     procedure SetRoundBottomLeft(const Value: Boolean);
     procedure SetRoundBottomRight(const Value: Boolean);
+    procedure SetRoundLastSection(const Value: Boolean);
     procedure HeaderFontChanged(Sender: TObject);
 
     function Scale(V: Integer): Integer;
@@ -186,6 +206,12 @@ type
     function GetParentBgColor: TColor;
     function PointInHeader(X, Y: Integer): Boolean;
     procedure DrawHeader;
+    { Invalidate the whole card — the header AND every hosted section. Shape/border
+      properties (CornerRadius, BorderColor, the RoundBottom* flags, …) affect the
+      rounded bottom the LAST section paints itself, so that child window must be
+      repainted too; invalidating only the panel leaves the section stale until the
+      designer forces a full redraw (e.g. on click). }
+    procedure InvalidateCard;
 
     procedure CMMouseEnter(var Message: TMessage); message CM_MOUSEENTER;
     procedure CMMouseLeave(var Message: TMessage); message CM_MOUSELEAVE;
@@ -271,17 +297,39 @@ type
     property Hover: Boolean read FHover write SetHover default True;
     property HoverColor: TColor read FHoverColor write SetHoverColor default $00F0F0F0;
 
+    { Icon source. icmImageList draws Images[ImageIndex]; icmGlyph draws the
+      IconGlyph text with an icon font (see IconFontName/IconFontSize/IconColor),
+      exactly like TCWSButton. }
+    property IconMode: TCWSIconMode read FIconMode write SetIconMode default icmImageList;
     property Images: TCustomImageList read FImages write SetImages;
     property ImageIndex: Integer read FImageIndex write SetImageIndex default -1;
 
-    { Round each corner of the card independently. Note the two bottom corners
-      only ever round while the card is collapsed — expanded, the sections sit
-      flush underneath so the header's bottom edge is always square regardless of
-      these flags. }
+    { Glyph icon (used when IconMode = icmGlyph). IconGlyph is a single character
+      from the icon font — e.g. #$E713 in 'Segoe MDL2 Assets'. }
+    property IconGlyph: string read FIconGlyph write SetIconGlyph;
+    property IconFontName: string read FIconFontName write SetIconFontName;
+    property IconFontSize: Integer read FIconFontSize write SetIconFontSize default 14;
+    property IconColor: TColor read FIconColor write SetIconColor default $001B1B1B;
+
+    { Vertical gap (in 96-dpi px, scaled) between the title and the subtitle when
+      both are shown. }
+    property TitleSpacing: Integer read FTitleSpacing write SetTitleSpacing default 2;
+
+    { Round each corner of the card independently. On the header's own bottom edge
+      the two bottom corners only round while the card is collapsed — expanded, the
+      sections sit flush underneath so the header bottom is square. When expanded
+      and RoundLastSection is on, the bottom rounding is instead applied to the
+      last section (see RoundLastSection), still honouring these two flags. }
     property RoundTopLeft: Boolean read FRoundTopLeft write SetRoundTopLeft default True;
     property RoundTopRight: Boolean read FRoundTopRight write SetRoundTopRight default True;
     property RoundBottomLeft: Boolean read FRoundBottomLeft write SetRoundBottomLeft default True;
     property RoundBottomRight: Boolean read FRoundBottomRight write SetRoundBottomRight default True;
+
+    { When expanded, round the bottom corners of the LAST section (radius =
+      CornerRadius) so the whole card keeps rounded bottom corners instead of a
+      square edge. Honours RoundBottomLeft / RoundBottomRight for which corners
+      round. Has no effect while collapsed (the header rounds its own bottom). }
+    property RoundLastSection: Boolean read FRoundLastSection write SetRoundLastSection default False;
 
     property OnExpandedChanged: TNotifyEvent read FOnExpandedChanged write FOnExpandedChanged;
     property OnClick;
@@ -443,10 +491,93 @@ begin
 end;
 
 procedure TCWSOptionsSection.Paint;
+var
+  P: TCWSOptionsPanel;
+  Secs: TArray<TCWSOptionsSection>;
+  R: Single;
+  X0, Y0, RectW, RectH: Single;
+  RBL, RBR, RoundedLast: Boolean;
+  G: TGPGraphics;
+  Path: TGPGraphicsPath;
+  Brush: TGPSolidBrush;
+  Pen: TGPPen;
 begin
-  Canvas.Brush.Color := Color;
-  Canvas.Brush.Style := bsSolid;
-  Canvas.FillRect(ClientRect);
+  P := OwnerPanel;
+
+  { Rounded bottom corners are only applied to the LAST section, and only when the
+    owning panel is expanded with RoundLastSection on. Which corners round follows
+    the panel's RoundBottomLeft / RoundBottomRight flags. }
+  RBL := False;
+  RBR := False;
+  RoundedLast := False;
+  if (P <> nil) and P.FRoundLastSection and P.FExpanded and (P.Scale(P.FCornerRadius) > 0) then
+  begin
+    Secs := P.SortedSections;
+    if (Length(Secs) > 0) and (Secs[High(Secs)] = Self) then
+    begin
+      RBL := P.FRoundBottomLeft;
+      RBR := P.FRoundBottomRight;
+      RoundedLast := RBL or RBR;
+    end;
+  end;
+
+  if RoundedLast then
+  begin
+    R := P.Scale(P.FCornerRadius);
+    { Reproduce, in THIS section's local coordinates, the exact bottom-rounded
+      outline the panel painted for the whole card — same outer rect, same radius —
+      so the fill and border overpaint the panel's pixels seamlessly. Only the two
+      bottom corner shoulders actually fall inside this window; the sides, top and
+      straight bottom edge sit in the 1-px margins the panel owns and are clipped
+      away here, so there is no doubled or misaligned border. }
+    X0 := 0.5 - Left;
+    Y0 := 0.5 - Top;
+    RectW := P.Width - 1;
+    RectH := P.Height - 1;
+
+    { Corner triangles (outside the arc) must read against whatever is behind the
+      card, exactly as the panel drew them. }
+    Canvas.Brush.Color := P.GetParentBgColor;
+    Canvas.Brush.Style := bsSolid;
+    Canvas.FillRect(ClientRect);
+
+    G := TGPGraphics.Create(Canvas.Handle);
+    try
+      G.SetSmoothingMode(SmoothingModeAntiAlias);
+      G.SetPixelOffsetMode(PixelOffsetModeHalf);
+      Path := TGPGraphicsPath.Create;
+      try
+        AddRoundRectPathEx(Path, X0, Y0, RectW, RectH, R, False, False, RBR, RBL);
+        Brush := TGPSolidBrush.Create(MakeGPColor(Color));
+        try
+          G.FillPath(Brush, Path);
+        finally
+          Brush.Free;
+        end;
+        { Restore the card border along the rounded bottom (the panel's stroke here
+          was over-painted by the corner-triangle fill above). }
+        if P.FBorderBottom then
+        begin
+          Pen := TGPPen.Create(MakeGPColor(P.FBorderColor));
+          try
+            G.DrawPath(Pen, Path);
+          finally
+            Pen.Free;
+          end;
+        end;
+      finally
+        Path.Free;
+      end;
+    finally
+      G.Free;
+    end;
+  end
+  else
+  begin
+    Canvas.Brush.Color := Color;
+    Canvas.Brush.Style := bsSolid;
+    Canvas.FillRect(ClientRect);
+  end;
 
   if FShowTopDivider then
   begin
@@ -555,11 +686,18 @@ begin
   FHover := True;
   FHoverColor := $00F0F0F0;
   FImageIndex := -1;
+  FIconMode := icmImageList;
+  FIconGlyph := '';
+  FIconFontName := 'Segoe MDL2 Assets';
+  FIconFontSize := 14;
+  FIconColor := $001B1B1B;
+  FTitleSpacing := 2;
 
   FRoundTopLeft := True;
   FRoundTopRight := True;
   FRoundBottomLeft := True;
   FRoundBottomRight := True;
+  FRoundLastSection := False;
 
   Width := 350;
   Height := FHeaderHeight;
@@ -592,6 +730,16 @@ end;
 function TCWSOptionsPanel.BorderPx: Integer;
 begin
   Result := 1;
+end;
+
+procedure TCWSOptionsPanel.InvalidateCard;
+var
+  I: Integer;
+begin
+  Invalidate;
+  for I := 0 to ControlCount - 1 do
+    if Controls[I] is TCWSOptionsSection then
+      TCWSOptionsSection(Controls[I]).Invalidate;
 end;
 
 function TCWSOptionsPanel.GetParentBgColor: TColor;
@@ -758,6 +906,10 @@ begin
       begin
         Secs[I].Visible := True;
         Secs[I].SetBounds(BW, Y, AvailW, Secs[I].Height);
+        { With rounded-last-section on, which section is last may have changed —
+          repaint them all so the corners land on the right one only. }
+        if FRoundLastSection then
+          Secs[I].Invalidate;
         Inc(Y, Secs[I].Height);
       end;
       Height := Y + BW;
@@ -815,8 +967,10 @@ var
   Pen: TGPPen;
   W, H, R, HH: Single;
   Pad, IconSz, TextX, ChX, ChY, ChW: Integer;
+  GlyphW, GlyphH: Integer;
   TitleH, SubH, BlockH, TopY: Integer;
   RTL, RTR, RBR, RBL: Boolean;
+  CardRBR, CardRBL: Boolean;
   ShowT, ShowS, Designing: Boolean;
   TitlePlaceholder, SubPlaceholder: Boolean;
   TitleText, SubText: string;
@@ -830,8 +984,13 @@ begin
     square whatever the flags say. }
   RTL := FRoundTopLeft;
   RTR := FRoundTopRight;
+  { Header band's own bottom corners round only while collapsed. }
   RBR := FRoundBottomRight and not FExpanded;
   RBL := FRoundBottomLeft and not FExpanded;
+  { The whole card outline: its bottom corners also round while expanded when
+    RoundLastSection is on — the last section paints the matching rounded fill. }
+  CardRBR := FRoundBottomRight and ((not FExpanded) or FRoundLastSection);
+  CardRBL := FRoundBottomLeft and ((not FExpanded) or FRoundLastSection);
 
   Pad := Scale(14);
   IconSz := Scale(24);
@@ -845,7 +1004,7 @@ begin
     // Card fill — the whole outer shape, each corner rounded per its flag.
     Path := TGPGraphicsPath.Create;
     try
-      AddRoundRectPathEx(Path, 0.5, 0.5, W - 1, H - 1, R, RTL, RTR, RBR, RBL);
+      AddRoundRectPathEx(Path, 0.5, 0.5, W - 1, H - 1, R, RTL, RTR, CardRBR, CardRBL);
       Brush := TGPSolidBrush.Create(MakeGPColor(FFillColor));
       try
         G.FillPath(Brush, Path);
@@ -866,7 +1025,7 @@ begin
         BorderPath := TGPGraphicsPath.Create;
         try
           AddBorderMaskPathEx(BorderPath, 0.5, 0.5, W - 1, H - 1, R,
-            RTL, RTR, RBR, RBL,
+            RTL, RTR, CardRBR, CardRBL,
             FBorderTop, FBorderRight, FBorderBottom, FBorderLeft);
           Pen := TGPPen.Create(MakeGPColor(FFillColor));
           try
@@ -902,12 +1061,31 @@ begin
     G.Free;
   end;
 
-  // Icon (optional)
+  // Icon (optional) — either an image-list glyph or an icon-font glyph.
   TextX := Pad;
-  if Assigned(FImages) and (FImageIndex >= 0) and (FImageIndex < FImages.Count) then
-  begin
-    FImages.Draw(Canvas, Pad, (Round(HH) - IconSz) div 2, FImageIndex);
-    TextX := Pad + IconSz + Scale(12);
+  case FIconMode of
+    icmImageList:
+      if Assigned(FImages) and (FImageIndex >= 0) and (FImageIndex < FImages.Count) then
+      begin
+        FImages.Draw(Canvas, Pad, (Round(HH) - IconSz) div 2, FImageIndex);
+        TextX := Pad + IconSz + Scale(12);
+      end;
+    icmGlyph:
+      if FIconGlyph <> '' then
+      begin
+        { Icon font sized like TCWSButton: drive the size through PixelsPerInch so
+          the glyph scales with the monitor DPI. }
+        Canvas.Font.PixelsPerInch := CurrentPPI;
+        Canvas.Font.Name := FIconFontName;
+        Canvas.Font.Size := FIconFontSize;
+        Canvas.Font.Style := [];
+        Canvas.Font.Color := FIconColor;
+        Canvas.Brush.Style := bsClear;
+        GlyphW := Canvas.TextWidth(FIconGlyph);
+        GlyphH := Canvas.TextHeight(FIconGlyph);
+        Canvas.TextOut(Pad, (Round(HH) - GlyphH) div 2, FIconGlyph);
+        TextX := Pad + GlyphW + Scale(12);
+      end;
   end;
 
   // Title + subtitle — each drawn with its own independent font. A line that is
@@ -949,7 +1127,7 @@ begin
   end;
 
   if ShowT and ShowS then
-    BlockH := TitleH + Scale(2) + SubH
+    BlockH := TitleH + Scale(FTitleSpacing) + SubH
   else
     BlockH := TitleH + SubH; { at most one is non-zero }
   TopY := (Round(HH) - BlockH) div 2;
@@ -970,7 +1148,7 @@ begin
     if SubPlaceholder then
       Canvas.Font.Color := BlendColor(FSubtitleFont.Color, FFillColor);
     if ShowT then
-      Canvas.TextOut(TextX, TopY + TitleH + Scale(2), SubText)
+      Canvas.TextOut(TextX, TopY + TitleH + Scale(FTitleSpacing), SubText)
     else
       Canvas.TextOut(TextX, TopY, SubText);
   end;
@@ -1106,7 +1284,7 @@ begin
   if (FCornerRadius <> Value) and (Value >= 0) then
   begin
     FCornerRadius := Value;
-    Invalidate;
+    InvalidateCard;
   end;
 end;
 
@@ -1142,7 +1320,7 @@ begin
   if FBorderColor <> Value then
   begin
     FBorderColor := Value;
-    Invalidate;
+    InvalidateCard;
   end;
 end;
 
@@ -1160,7 +1338,7 @@ begin
   if FBorderBottom <> Value then
   begin
     FBorderBottom := Value;
-    Invalidate;
+    InvalidateCard;
   end;
 end;
 
@@ -1306,7 +1484,7 @@ begin
   if FRoundBottomLeft <> Value then
   begin
     FRoundBottomLeft := Value;
-    Invalidate;
+    InvalidateCard;
   end;
 end;
 
@@ -1315,7 +1493,7 @@ begin
   if FRoundBottomRight <> Value then
   begin
     FRoundBottomRight := Value;
-    Invalidate;
+    InvalidateCard;
   end;
 end;
 
@@ -1338,6 +1516,74 @@ begin
   begin
     FImageIndex := Value;
     Invalidate;
+  end;
+end;
+
+procedure TCWSOptionsPanel.SetIconMode(const Value: TCWSIconMode);
+begin
+  if FIconMode <> Value then
+  begin
+    FIconMode := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TCWSOptionsPanel.SetIconGlyph(const Value: string);
+begin
+  if FIconGlyph <> Value then
+  begin
+    FIconGlyph := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TCWSOptionsPanel.SetIconFontName(const Value: string);
+begin
+  if FIconFontName <> Value then
+  begin
+    if Value = '' then
+      FIconFontName := 'Segoe MDL2 Assets'
+    else
+      FIconFontName := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TCWSOptionsPanel.SetIconFontSize(const Value: Integer);
+begin
+  if (FIconFontSize <> Value) and (Value > 0) then
+  begin
+    FIconFontSize := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TCWSOptionsPanel.SetIconColor(const Value: TColor);
+begin
+  if FIconColor <> Value then
+  begin
+    FIconColor := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TCWSOptionsPanel.SetTitleSpacing(const Value: Integer);
+begin
+  if (FTitleSpacing <> Value) and (Value >= 0) then
+  begin
+    FTitleSpacing := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TCWSOptionsPanel.SetRoundLastSection(const Value: Boolean);
+begin
+  if FRoundLastSection <> Value then
+  begin
+    FRoundLastSection := Value;
+    { The last section must repaint its bottom corners (rounded or square) and the
+      card outline must switch its bottom rounding to match. }
+    InvalidateCard;
   end;
 end;
 

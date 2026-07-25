@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.6.7] — 2026-07
+
+- New on `TCWSOptionsPanel`: icon-font **glyph** support in the header — `IconMode` (`icmImageList` / `icmGlyph`) with `IconGlyph`, `IconFontName`, `IconFontSize` and `IconColor`, exactly like `TCWSButton` (image-list icons still work as before).
+- New `TitleSpacing` property — configurable gap between the header title and subtitle.
+- New `RoundLastSection` property — round the bottom corners of the last section when expanded (honours `RoundBottomLeft` / `RoundBottomRight`) so the whole card keeps rounded bottom corners; the section reconstructs the card border along the rounding.
+- Fix: shape / border properties (`CornerRadius`, `BorderColor`, `BorderBottom`, `RoundBottom*`, `RoundLastSection`) now repaint the hosted sections too, so the rounded last section refreshes immediately at design time.
+- All new metrics are DPI-scaled.
+
 ## [1.6.6] — 2026-07
 
 - New: `Action` (`TActionList`) support on `TCWSButton`, `TCWSCheckBox`, `TCWSRadioButton` and `TCWSSwitch` — the action drives `Caption`, `Enabled`, `Visible`, `Hint` (and `Checked` on the toggle controls) and a click executes `OnExecute`, mirroring the stock VCL controls (value-linking semantics).
