@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.6.7](https://img.shields.io/badge/version-1.6.7-blue.svg)](CHANGELOG.md)
+[![Version: 1.6.8](https://img.shields.io/badge/version-1.6.8-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -216,6 +216,12 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 ---
 
 ## 🗓️ Historia wersji
+
+**Najnowsza wersja — 1.6.8:**
+
+- `TCWSListBox` — scrollbar poprawnie znika / pojawia się po maksymalizacji lub przywróceniu okna dwuklikiem na belce tytułowej (bez potrzeby najechania myszą).
+- `TCWSListBox` — kolor focusa / hover / normalny (oraz podświetlenie zaznaczenia) wypełnia teraz całe tło itema w trybie owner-draw (`lbOwnerDrawFixed` i `lbOwnerDrawVariable`), również pod własnym `OnDrawItem` rysującym na przezroczystym tle.
+- `TCWSSettingsPanel` — nowa właściwość `Constraints` (minimalny / maksymalny rozmiar, jak w standardowych komponentach VCL).
 
 Pełna historia zmian znajduje się w osobnym pliku [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -448,6 +454,12 @@ When using these components, please include appropriate attribution in your appl
 ---
 
 ## 🗓️ Version history
+
+**Latest release — 1.6.8:**
+
+- `TCWSListBox` — the scrollbar now appears / disappears correctly after a title-bar maximize / restore (double-click), without needing the mouse to enter the list.
+- `TCWSListBox` — the focus / hover / normal background (and the selection highlight) now fills the whole item row in owner-draw mode (`lbOwnerDrawFixed` and `lbOwnerDrawVariable`), including under a custom transparent `OnDrawItem`.
+- `TCWSSettingsPanel` — new `Constraints` property (min / max size, like the stock VCL controls).
 
 The full change history is kept in a separate [`CHANGELOG.md`](CHANGELOG.md) file.
 

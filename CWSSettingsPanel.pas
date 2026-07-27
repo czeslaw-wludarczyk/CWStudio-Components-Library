@@ -64,6 +64,7 @@ type
   published
     property Align;
     property Anchors;
+    property Constraints;
     property Color;
     property Top;
     property Left;

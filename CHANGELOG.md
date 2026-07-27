@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.6.8] — 2026-07
+
+- Fix `TCWSListBox`: the scrollbar now appears/disappears correctly after a title-bar **maximize / restore** (double-click). Visibility is recalculated from the target height *before* resizing the inner list, instead of from its stale pre-resize size — previously the scrollbar only refreshed once the mouse entered the list.
+- Fix `TCWSListBox`: the focus / hover / normal background (and the selection highlight) now fills the **whole item row** in owner-draw mode (`lbOwnerDrawFixed` and `lbOwnerDrawVariable`), matching the empty area — including under a custom `OnDrawItem` that draws transparently. The state background is painted before the item content. *(Note: a handler that fills its own opaque background still wins; fill with the brush the component pre-sets, or with `Sender.Color`, to follow the focus colour.)*
+- New `Constraints` property on `TCWSSettingsPanel` — set minimum / maximum width and height, exactly like the stock VCL controls.
+
 ## [1.6.7] — 2026-07
 
 - New on `TCWSOptionsPanel`: icon-font **glyph** support in the header — `IconMode` (`icmImageList` / `icmGlyph`) with `IconGlyph`, `IconFontName`, `IconFontSize` and `IconColor`, exactly like `TCWSButton` (image-list icons still work as before).

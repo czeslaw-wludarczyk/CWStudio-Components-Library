@@ -1231,35 +1231,43 @@ procedure TCWSListBox.ListBoxDrawItem(Control: TWinControl; Index: Integer;
 var
   LTextRect: TRect;
 begin
+  { Focus is focus: the state background (focus / hover / normal — or the
+    selection highlight) must cover the WHOLE item row, exactly like the empty
+    area of the list, no matter whether the default text drawing runs or a user
+    OnDrawItem handler does, and for both lbOwnerDrawFixed and lbOwnerDrawVariable.
+    Owner-draw does not pre-fill item rects, so we paint the state background here
+    FIRST and only then let the handler draw on top. Without this, a handler that
+    only draws text (or draws a transparent background) would leave the focus
+    colour showing only in the empty space below the items. }
+  with FListBox.Canvas do
+  begin
+    if odSelected in State then
+    begin
+      Brush.Color := clHighlight;
+      Font.Color  := clHighlightText;
+    end
+    else
+    begin
+      Brush.Color := GetCurrentBgColor;
+      Font.Color  := FListBox.Font.Color;
+    end;
+    FillRect(Rect);
+  end;
+
   if Assigned(FOnDrawItem) then
     FOnDrawItem(FListBox, Index, Rect, State)
   else
   begin
-    with FListBox.Canvas do
+    if (Index >= 0) and (Index < FListBox.Items.Count) then
     begin
-      if odSelected in State then
-      begin
-        Brush.Color := clHighlight;
-        Font.Color  := clHighlightText;
-      end
-      else
-      begin
-        Brush.Color := FListBox.Color;
-        Font.Color  := FListBox.Font.Color;
-      end;
-      FillRect(Rect);
+      { Inner text margins: 10px on the left and right }
+      LTextRect := Rect;
+      LTextRect.Left := LTextRect.Left + 10;
+      LTextRect.Right := LTextRect.Right - 10;
 
-      if (Index >= 0) and (Index < FListBox.Items.Count) then
-      begin
-        { Inner text margins: 10px on the left and right }
-        LTextRect := Rect;
-        LTextRect.Left := LTextRect.Left + 10;
-        LTextRect.Right := LTextRect.Right - 10;
-
-        { Use the safe DrawText for nice text alignment and trimming }
-        Winapi.Windows.DrawText(Handle, FListBox.Items[Index], -1, LTextRect,
-          DT_LEFT or DT_VCENTER or DT_SINGLELINE or DT_NOPREFIX);
-      end;
+      { Use the safe DrawText for nice text alignment and trimming }
+      Winapi.Windows.DrawText(FListBox.Canvas.Handle, FListBox.Items[Index], -1,
+        LTextRect, DT_LEFT or DT_VCENTER or DT_SINGLELINE or DT_NOPREFIX);
     end;
     if odFocused in State then
       DrawFocusRect(FListBox.Canvas.Handle, Rect);
@@ -1333,7 +1341,7 @@ end;
 
 procedure TCWSListBox.UpdateListBoxPosition;
 var
-  L, T, H, LblH, RgnRadius, Dia, AccentH, BottomMargin: Integer;
+  L, T, H, LblH, RgnRadius, Dia, AccentH, BottomMargin, ItemH: Integer;
   Rgn, TempRgn: HRGN;
   HasAnyCorner: Boolean;
   ClipTopLeft, ClipTopRight, ClipBottomLeft, ClipBottomRight: Boolean;
@@ -1357,14 +1365,26 @@ begin
     Width - Scale(FScrollbarAreaWidth), T,
     Width - Scale(2), T + Max(10, H));
 
-  { First update the scrollbar metrics so we know whether FScrollVisible is True }
-  UpdateScrollbarMetrics;
+  { Decide scrollbar visibility from the HEIGHT we are about to apply, not from
+    the inner list box's current ClientHeight — that still reflects the previous
+    size until the SetBounds below runs. A single-step resize (maximize/restore
+    via a title-bar double click) otherwise computes visibility from the stale
+    height, so the scrollbar wrongly stays/disappears until the next repaint
+    (e.g. on mouse-enter). A drag-resize hid this because it fires many steps and
+    self-corrects on the following one. The inner list box has no border
+    (bsNone), so its ClientHeight equals the height passed here. }
+  ItemH := Max(1, FListBox.GetItemHeight);
+  FScrollVisible := FListBox.GetTotalItems > Max(1, Max(10, H) div ItemH);
 
   { FIX: If the scrollbar is not visible, stretch the inner ListBox to full width }
   if FScrollVisible then
     FListBox.SetBounds(L, T, Max(10, FScrollTrackRect.Left - L), Max(10, H))
   else
     FListBox.SetBounds(L, T, Max(10, Width - (L * 2)), Max(10, H));
+
+  { Now the inner list box has its final size, so compute the thumb geometry
+    (and confirm FScrollVisible consistently) from the real, current metrics. }
+  UpdateScrollbarMetrics;
 
   if FListBox.HandleAllocated then
   begin
@@ -1866,6 +1886,16 @@ procedure TCWSListBox.Resize;
 begin
   inherited;
   UpdateListBoxPosition;
+  { UpdateListBoxPosition recomputes the scrollbar geometry (FScrollVisible /
+    FScrollThumbRect), but the scrollbar is drawn on THIS control's buffer.
+    During an interactive title-bar resize (drag or maximize/restore double
+    click) Windows only invalidates the newly exposed area, so the still-visible
+    interior keeps the stale scrollbar until something else repaints it — which
+    is why it "fixes itself" only after the mouse enters the list. Force a
+    repaint here so the scrollbar always follows the new size. Every other place
+    that calls UpdateListBoxPosition already pairs it with Invalidate; Resize was
+    the one that didn't. }
+  Invalidate;
 end;
 
 procedure TCWSListBox.Loaded;
