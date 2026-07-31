@@ -5,14 +5,16 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, CWSFluentColorsMulti, Vcl.StdCtrls, CWSScrollBox, CWSStringGrid, CWSRadioButton,
-  VCL.Grids, CWSEdit, Vcl.WinXCtrls, ES.BaseControls, ES.Switch;
+  VCL.Grids, CWSEdit, Vcl.WinXCtrls, ES.BaseControls, ES.Switch, CWSListBox;
 
 type
   TfrmGrids = class(TForm)
     CWSScrollBox1: TCWSScrollBox;
     lblTitle1: TLabel;
-    CWSStringGrid1: TCWSStringGrid;
     CWSEdit1: TCWSEdit;
+    lblListBox: TLabel;
+    CWSListBox1: TCWSListBox;
+    CWSStringGrid1: TCWSStringGrid;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure FormShow(Sender: TObject);
@@ -48,12 +50,28 @@ begin
   CWSStringGrid1.GridLineColor := flNeutralStroke1;
   CWSStringGrid1.CellTextColor := flNeutralForeground1;
   CWSStringGrid1.Font.Color:= flNeutralForeground1;
+  CWSStringGrid1.AlternatingRowColors := True;
+  CWSStringGrid1.EvenRowColor:= flNeutralBackground5;
 
   CWSEdit1.BackgroundColor := flNeutralBackground2;
   CWSEdit1.BackgroundHoverColor := flNeutralBackground4;
   CWSEdit1.BackgroundFocusColor := flNeutralBackground1;
   CWSEdit1.BorderColor := flNeutralStroke1;
   CWSEdit1.Font.Color := flNeutralForeground1;
+
+  lblListBox.Font.Color := flNeutralForeground1;
+
+  CWSListBox1.BackgroundColor := flNeutralBackground2;
+  CWSListBox1.BackgroundHoverColor := flNeutralBackground1Hover;
+  CWSListBox1.BackgroundFocusColor := flNeutralBackground2;
+  CWSListBox1.BorderColor := flNeutralStroke1;
+  CWSListBox1.LabelColor := flNeutralForeground2;
+  CWSListBox1.AccentColor := flNeutralForeground2BrandPressed;
+  CWSListBox1.ScrollThumbColor := flNeutralStroke1;
+  CWSListBox1.ScrollThumbHoverColor := flNeutralForeground3;
+  CWSListBox1.DisabledColor := flNeutralBackgroundDisabled;
+  CWSListBox1.DisabledBorderColor := flNeutralStrokeDisabled;
+  CWSListBox1.Font.Color := flNeutralForeground1;
 
   if FluentThemeMode = ftmDark then
     CWSStringGrid1.HighlightTextColor := clBlack

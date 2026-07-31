@@ -1,4 +1,4 @@
-﻿//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 //
 //   CWStudio Components Library
 //   Created by Czesław Włudarczyk 2026 CWStudio
@@ -24,20 +24,18 @@ unit CWSStoreButton;
 interface
 
 uses
-  System.SysUtils, System.Classes, Vcl.Controls, Vcl.StdCtrls, Vcl.Graphics,
-  Vcl.ExtCtrls, Vcl.ImgList, CWSShape, Windows, Messages;
+  System.SysUtils, System.Classes, System.Types, System.UITypes,
+  Vcl.Controls, Vcl.Graphics, Vcl.ExtCtrls, Vcl.ImgList,
+  System.Skia, Vcl.Skia, Windows, Messages;
 
 type
   TCWSIconMode = (icmGlyph, icmImageList);
 
-  TCWSStoreButton = class(TCustomControl)
+  { The whole button is rendered by Skia in a single Draw pass: background,
+    the animated selection cursor, the icon (glyph or image list) and the
+    description text. No child controls are involved. }
+  TCWSStoreButton = class(TSkCustomWinControl)
   private
-    FIconBox: TPaintBox;
-    Fdescription: TLabel;
-    FbckShape: TCWSShape;
-    FCursor: TCWSShape;
-    FMouseLayer: TLabel;
-
     FNormalColor: TColor;
     FbckHoverColor: TColor;
     FbckPressedColor: TColor;
@@ -62,15 +60,10 @@ type
     FDescriptionColorHover: TColor;
     FDescriptionColorPressed: TColor;
 
-    FOnClick: TNotifyEvent;
-    FOnMouseEnter: TNotifyEvent;
-    FOnMouseLeave: TNotifyEvent;
-    FOnMouseDown: TMouseEvent;
-    FOnMouseUp: TMouseEvent;
-
     FAnimTimer: TTimer;
-    FAnimCurrentH: Integer;
-    FAnimTargetH: Integer;
+    FAnimCurrentH: Single;
+    FAnimTop: Single;
+    FAnimTargetH: Single;
     FAnimShowing: Boolean;
     FAnimFromTop: Boolean;
 
@@ -81,6 +74,13 @@ type
 
     FIconOffsetX: Integer;
     FIconOffsetY: Integer;
+
+    { Skia resources are cached because Draw runs on every repaint and on
+      every animation frame. }
+    FIconTypeface: ISkTypeface;
+    FTextTypeface: ISkTypeface;
+    FIconImage: ISkImage;
+    FIconImageKey: string;
 
     procedure SetIconGlyph(const Value: string);
     procedure SetIconGlyphPressed(const Value: string);
@@ -107,30 +107,38 @@ type
     procedure SetDescriptionColorPressed(const Value: TColor);
     procedure SetNormalColor(const Value: TColor);
 
-    procedure ChildMouseEnter(Sender: TObject);
-    procedure ChildMouseLeave(Sender: TObject);
-    procedure MouseClick(Sender: TObject);
-    procedure ChildMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
-    procedure ChildMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
-    procedure IconBoxPaint(Sender: TObject);
-    procedure UpdateColor;
     procedure UpdateGroup;
-    procedure ApplyFontToLabel;
     procedure DoAnimTimer(Sender: TObject);
+    procedure UpdateCursorGeometry;
+
     function  CurrentIconColor: TColor;
-    function  CalcIconSize: Integer;
-    function  ScaledCursorHeight: Integer;
+    function  CurrentBackColor: TColor;
+    function  CurrentDescriptionColor: TColor;
+    function  ScaledCursorHeight: Single;
+    function  Scaled(const AValue: Single): Single;
+
+    function  IconFont: ISkFont;
+    function  DescriptionFont: ISkFont;
+    function  IconImage: ISkImage;
+
+    procedure DrawContent(const ACanvas: ISkCanvas; const ADest: TRectF; const AOpacity: Single);
+    procedure DrawIcon(const ACanvas: ISkCanvas; const ACenter: TPointF; const AOpacity: Single);
+    procedure DrawDescription(const ACanvas: ISkCanvas; const ACenter: TPointF; const AOpacity: Single);
 
   protected
+    procedure Draw(const ACanvas: ISkCanvas; const ADest: TRectF; const AOpacity: Single); override;
     procedure Resize; override;
     procedure Loaded; override;
+    procedure Click; override;
     procedure ChangeScale(M, D: Integer; isDpiChange: Boolean); override;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     procedure CMFontChanged(var Message: TMessage); message CM_FONTCHANGED;
+    procedure CMColorChanged(var Message: TMessage); message CM_COLORCHANGED;
+    procedure CMMouseEnter(var Message: TMessage); message CM_MOUSEENTER;
+    procedure CMMouseLeave(var Message: TMessage); message CM_MOUSELEAVE;
 
   public
     constructor Create(AOwner: TComponent); override;
-    destructor Destroy; override;
 
   published
     property Width;
@@ -176,11 +184,11 @@ type
     property IconOffsetX: Integer read FIconOffsetX write SetIconOffsetX default 0;
     property IconOffsetY: Integer read FIconOffsetY write SetIconOffsetY default 0;
 
-    property OnClick: TNotifyEvent read FOnClick write FOnClick;
-    property OnMouseEnter: TNotifyEvent read FOnMouseEnter write FOnMouseEnter;
-    property OnMouseLeave: TNotifyEvent read FOnMouseLeave write FOnMouseLeave;
-    property OnMouseDown: TMouseEvent read FOnMouseDown write FOnMouseDown;
-    property OnMouseUp: TMouseEvent read FOnMouseUp write FOnMouseUp;
+    property OnClick;
+    property OnMouseEnter;
+    property OnMouseLeave;
+    property OnMouseDown;
+    property OnMouseUp;
   end;
 
 implementation
@@ -188,13 +196,40 @@ implementation
 uses
   System.TypInfo;
 
+const
+  { design-time (96 dpi) metrics }
+  cCornerRadius   = 4;
+  cCursorRadius   = 2;
+  cCursorWidth    = 4;
+  cDescriptionH   = 12;
+  cDescriptionPad = 4;
+  cDefaultIconSize = 24;
+
+function ToAlphaColor(const AColor: TColor; const AOpacity: Single): TAlphaColor;
+var
+  LRGB: Cardinal;
+  LAlpha: Cardinal;
+begin
+  LRGB := ColorToRGB(AColor);
+  LAlpha := Round(255 * AOpacity);
+  if LAlpha > 255 then LAlpha := 255;
+  Result := TAlphaColor((LAlpha shl 24) or ((LRGB and $FF) shl 16) or
+                        (LRGB and $FF00) or ((LRGB shr 16) and $FF));
+end;
+
 { TCWSStoreButton }
 
 constructor TCWSStoreButton.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   ParentColor := False;
-  DoubleBuffered := True;
+
+  { The rounded corners have to blend with whatever sits behind the button, so
+    the surface must start out transparent (the base class defaults it to
+    opaque white) and the parent has to be painted underneath it. }
+  BackgroundColor := TAlphaColors.Null;
+  AllowDrawParentInBackground := True;
+  DrawCacheKind := TSkDrawCacheKind.Raster;
 
   FIconGlyphNormal  := '';
   FIconGlyphPressed := '';
@@ -205,6 +240,8 @@ begin
   FGroupIndex := 0;
 
   FNormalColor             := clBtnFace;
+  FbckHoverColor           := clSilver;
+  FbckPressedColor         := clWhite;
   FIconColorNormal         := clGray;
   FIconColorHover          := clBlack;
   FIconColorPressed        := clGray;
@@ -227,6 +264,7 @@ begin
   Self.Font.Name  := 'Segoe UI';
   Self.Font.Size  := 7;
   Self.Font.Color := FDescriptionColorNormal;
+  Self.Color      := clBtnFace;
 
   FAnimTimer          := TTimer.Create(Self);
   FAnimTimer.Interval := 16;
@@ -237,107 +275,23 @@ begin
 
   Width  := MulDiv(63, CurrentPPI, 96);
   Height := MulDiv(57, CurrentPPI, 96);
-
-  FbckShape              := TCWSShape.Create(Self);
-  FbckShape.Parent       := Self;
-  FbckShape.Shape        := TShapeKind.RoundRectangle;
-  FbckShape.CornerRadius := MulDiv(4, CurrentPPI, 96);
-  FbckShape.Align        := alClient;
-
-  FCursor              := TCWSShape.Create(Self);
-  FCursor.Parent       := Self;
-  FCursor.SetSubComponent(True);
-  FCursor.Shape        := TShapeKind.RoundRectangle;
-  FCursor.CornerRadius := MulDiv(2, CurrentPPI, 96);
-  FCursor.Visible      := False;
-  FCursor.Align        := alNone;
-
-  FIconBox         := TPaintBox.Create(Self);
-  FIconBox.Parent  := Self;
-  FIconBox.OnPaint := IconBoxPaint;
-
-  Fdescription             := TLabel.Create(Self);
-  Fdescription.Parent      := Self;
-  Fdescription.Transparent := True;
-  Fdescription.Caption     := FdescriptionText;
-  Fdescription.Font.Assign(Self.Font);
-  Fdescription.Alignment   := taCenter;
-  Fdescription.Layout      := tlCenter;
-  Fdescription.AutoSize    := False;
-
-  FMouseLayer              := TLabel.Create(Self);
-  FMouseLayer.Parent       := Self;
-  FMouseLayer.Align        := alClient;
-  FMouseLayer.Caption      := '';
-  FMouseLayer.Transparent  := True;
-  FMouseLayer.OnMouseEnter := ChildMouseEnter;
-  FMouseLayer.OnMouseLeave := ChildMouseLeave;
-  FMouseLayer.OnClick      := MouseClick;
-  FMouseLayer.OnMouseDown  := ChildMouseDown;
-  FMouseLayer.OnMouseUp    := ChildMouseUp;
-
-  BckHoverColor   := clSilver;
-  BckPressedColor := clWhite;
-  Self.Color      := clBtnFace;
-
-  UpdateColor;
 end;
 
-destructor TCWSStoreButton.Destroy;
+function TCWSStoreButton.Scaled(const AValue: Single): Single;
 begin
-  inherited;
+  Result := AValue * CurrentPPI / 96;
 end;
 
-function TCWSStoreButton.ScaledCursorHeight: Integer;
+function TCWSStoreButton.ScaledCursorHeight: Single;
 begin
-  Result := MulDiv(FCursorHeight, CurrentPPI, 96);
+  Result := Scaled(FCursorHeight);
 end;
 
-procedure TCWSStoreButton.Notification(AComponent: TComponent; Operation: TOperation);
+function TCWSStoreButton.CurrentBackColor: TColor;
 begin
-  inherited;
-  if (Operation = opRemove) and (AComponent = FImages) then
-  begin
-    FImages := nil;
-    if Assigned(FIconBox) then FIconBox.Invalidate;
-    Invalidate;
-  end;
-end;
-
-procedure TCWSStoreButton.ApplyFontToLabel;
-begin
-  if not Assigned(Fdescription) then Exit;
-  Fdescription.Font.Assign(Self.Font);
-  if FPressed then
-    Fdescription.Font.Color := FDescriptionColorPressed
-  else if FHovering then
-    Fdescription.Font.Color := FDescriptionColorHover
-  else
-    Fdescription.Font.Color := FDescriptionColorNormal;
-end;
-
-procedure TCWSStoreButton.CMFontChanged(var Message: TMessage);
-begin
-  inherited;
-  ApplyFontToLabel;
-  Resize;
-  Invalidate;
-end;
-
-procedure TCWSStoreButton.ChangeScale(M, D: Integer; isDpiChange: Boolean);
-begin
-  inherited;
-  if Assigned(FbckShape) then
-    FbckShape.CornerRadius := MulDiv(4, CurrentPPI, 96);
-  if Assigned(FCursor) then
-    FCursor.CornerRadius := MulDiv(2, CurrentPPI, 96);
-  if FPressed then
-    FAnimCurrentH := ScaledCursorHeight
-  else
-    FAnimCurrentH := 0;
-  ApplyFontToLabel;
-  Resize;
-  Invalidate;
+  if FPressed then Result := FbckPressedColor
+  else if FHovering then Result := FbckHoverColor
+  else Result := FNormalColor;
 end;
 
 function TCWSStoreButton.CurrentIconColor: TColor;
@@ -347,333 +301,406 @@ begin
   else Result := FIconColorNormal;
 end;
 
-function TCWSStoreButton.CalcIconSize: Integer;
-var
-  Bmp: Vcl.Graphics.TBitmap;
-  glyph: string;
-  W, H: Integer;
+function TCWSStoreButton.CurrentDescriptionColor: TColor;
 begin
-  case FIconMode of
-    icmImageList:
-    begin
-      if Assigned(FImages) and (FImages.Width > 0) then
-        Result := FImages.Width
-      else
-        Result := MulDiv(24, CurrentPPI, 96);
-    end;
-    icmGlyph:
-    begin
-      glyph := FIconGlyphNormal;
-      if (glyph = '') and (FIconGlyphPressed <> '') then
-        glyph := FIconGlyphPressed;
-      if glyph = '' then
-      begin
-        Result := MulDiv(24, CurrentPPI, 96);
-        Exit;
-      end;
+  if FPressed then Result := FDescriptionColorPressed
+  else if FHovering then Result := FDescriptionColorHover
+  else Result := FDescriptionColorNormal;
+end;
 
-      Bmp := Vcl.Graphics.TBitmap.Create;
+{ ---------------------------------------------------------------- Skia fonts }
+
+function TCWSStoreButton.IconFont: ISkFont;
+var
+  LSize: Single;
+begin
+  if FIconTypeface = nil then
+    FIconTypeface := TSkTypeface.MakeFromName(FIconFontName, TSkFontStyle.Normal);
+
+  LSize := FIconFontSize * CurrentPPI / 72;
+  if LSize <= 0 then
+    LSize := Scaled(cDefaultIconSize);
+
+  Result := TSkFont.Create(FIconTypeface, LSize, 1, 0);
+  Result.Edging := TSkFontEdging.AntiAlias;
+  Result.Subpixel := True;
+end;
+
+function TCWSStoreButton.DescriptionFont: ISkFont;
+var
+  LWeight: TSkFontWeight;
+  LSlant: TSkFontSlant;
+  LSize: Single;
+begin
+  if FTextTypeface = nil then
+  begin
+    if fsBold in Font.Style then LWeight := TSkFontWeight.Bold
+    else LWeight := TSkFontWeight.Normal;
+    if fsItalic in Font.Style then LSlant := TSkFontSlant.Italic
+    else LSlant := TSkFontSlant.Upright;
+    FTextTypeface := TSkTypeface.MakeFromName(Font.Name,
+      TSkFontStyle.Create(LWeight, TSkFontWidth.Normal, LSlant));
+  end;
+
+  LSize := Font.Size * CurrentPPI / 72;
+  if LSize <= 0 then
+    LSize := Scaled(7 * 96 / 72);
+
+  Result := TSkFont.Create(FTextTypeface, LSize, 1, 0);
+  Result.Edging := TSkFontEdging.SubpixelAntiAlias;
+  Result.Subpixel := True;
+end;
+
+function TCWSStoreButton.IconImage: ISkImage;
+var
+  LIndex: Integer;
+  LColor: TColor;
+  LKey: string;
+  LBitmap: Vcl.Graphics.TBitmap;
+  LSavedColor: Integer;
+begin
+  Result := nil;
+  if (FImages = nil) or (FImages.Width <= 0) or (FImages.Height <= 0) then
+    Exit;
+
+  if FPressed and (FImageIndexPressed >= 0) then LIndex := FImageIndexPressed
+  else LIndex := FImageIndex;
+  if (LIndex < 0) or (LIndex >= FImages.Count) then
+    Exit;
+
+  LColor := CurrentIconColor;
+  LKey := Format('%d|%d|%dx%d', [LIndex, Integer(LColor), FImages.Width, FImages.Height]);
+  if (FIconImage <> nil) and (FIconImageKey = LKey) then
+    Exit(FIconImage);
+
+  LBitmap := Vcl.Graphics.TBitmap.Create;
+  try
+    LBitmap.PixelFormat := pf32bit;
+    LBitmap.SetSize(FImages.Width, FImages.Height);
+    { A freshly created DIB section is zero filled, so switching the alpha
+      format here premultiplies nothing - it only tells TBitmap (and in turn
+      BitmapToSkImage) that the bits the image list writes carry alpha. }
+    LBitmap.AlphaFormat := afDefined;
+
+    { Tint monochrome SVG icons to the current state colour without a
+      compile-time dependency on SVGIconImageList: if the assigned image list
+      publishes a FixedColor property (TSVGIconImageList does), drive it via
+      RTTI. Any other image list just draws as-is. }
+    if IsPublishedProp(FImages, 'FixedColor') then
+    begin
+      LSavedColor := GetOrdProp(FImages, 'FixedColor');
+      SetOrdProp(FImages, 'FixedColor', LColor);
       try
-        Bmp.Canvas.Font.Name := FIconFontName;
-        Bmp.Canvas.Font.PixelsPerInch := CurrentPPI;
-        Bmp.Canvas.Font.Size := FIconFontSize;
-        W := Bmp.Canvas.TextWidth(glyph);
-        H := Bmp.Canvas.TextHeight(glyph);
-        if W > H then Result := W else Result := H;
+        FImages.Draw(LBitmap.Canvas, 0, 0, LIndex);
       finally
-        Bmp.Free;
+        SetOrdProp(FImages, 'FixedColor', LSavedColor);
       end;
-    end;
-  else
-    Result := MulDiv(24, CurrentPPI, 96);
+    end
+    else
+      FImages.Draw(LBitmap.Canvas, 0, 0, LIndex);
+
+    FIconImage    := BitmapToSkImage(LBitmap);
+    FIconImageKey := LKey;
+    Result        := FIconImage;
+  finally
+    LBitmap.Free;
   end;
 end;
 
-procedure TCWSStoreButton.IconBoxPaint(Sender: TObject);
-var
-  idx: Integer;
-  savedColor: TColor;
-  R: TRect;
-  glyph: string;
-begin
-  FIconBox.Canvas.Brush.Color := FbckShape.Brush.Color;
-  FIconBox.Canvas.FillRect(FIconBox.ClientRect);
+{ -------------------------------------------------------------------- Drawing }
 
+procedure TCWSStoreButton.Draw(const ACanvas: ISkCanvas; const ADest: TRectF;
+  const AOpacity: Single);
+var
+  LScale: Single;
+begin
+  if (Width <= 0) or (Height <= 0) or ADest.IsEmpty then
+    Exit;
+
+  { Everything below is laid out in the control's own pixel space, so map
+    ADest onto it once instead of scaling every single metric. }
+  LScale := ADest.Height / Height;
+
+  ACanvas.Save;
+  try
+    ACanvas.Translate(ADest.Left, ADest.Top);
+    if LScale <> 1 then
+      ACanvas.Scale(LScale, LScale);
+    DrawContent(ACanvas, RectF(0, 0, Width, Height), AOpacity);
+  finally
+    ACanvas.Restore;
+  end;
+end;
+
+procedure TCWSStoreButton.DrawContent(const ACanvas: ISkCanvas; const ADest: TRectF;
+  const AOpacity: Single);
+var
+  LPaint: ISkPaint;
+  LRadius: Single;
+  LDescHeight: Single;
+  LCenter: TPointF;
+begin
+  LPaint := TSkPaint.Create(TSkPaintStyle.Fill);
+  LPaint.AntiAlias := True;
+
+  { background }
+  LRadius := Scaled(cCornerRadius);
+  LPaint.Color := ToAlphaColor(CurrentBackColor, AOpacity);
+  ACanvas.DrawRoundRect(ADest, LRadius, LRadius, LPaint);
+
+  { selection cursor on the left edge }
+  if FAnimCurrentH > 0 then
+  begin
+    LRadius := Scaled(cCursorRadius);
+    LPaint.Color := ToAlphaColor(FCursorColor, AOpacity);
+    ACanvas.DrawRoundRect(
+      RectF(ADest.Left, ADest.Top + FAnimTop,
+            ADest.Left + Scaled(cCursorWidth), ADest.Top + FAnimTop + FAnimCurrentH),
+      LRadius, LRadius, LPaint);
+  end;
+
+  LDescHeight := Scaled(cDescriptionH);
+
+  { icon - vertically centred over the whole button when pressed (the
+    description is hidden then), otherwise over the area above it }
+  LCenter.X := ADest.Left + ADest.Width / 2 + Scaled(FIconOffsetX);
+  if FPressed then
+    LCenter.Y := ADest.Top + ADest.Height / 2 + Scaled(FIconOffsetY)
+  else
+    LCenter.Y := ADest.Top + (ADest.Height - LDescHeight) / 2 + Scaled(FIconOffsetY);
+  DrawIcon(ACanvas, LCenter, AOpacity);
+
+  { description }
+  if not FPressed then
+    DrawDescription(ACanvas,
+      PointF(ADest.Left + ADest.Width / 2,
+             ADest.Bottom - Scaled(cDescriptionPad) - LDescHeight / 2),
+      AOpacity);
+end;
+
+procedure TCWSStoreButton.DrawIcon(const ACanvas: ISkCanvas; const ACenter: TPointF;
+  const AOpacity: Single);
+var
+  LGlyph: string;
+  LFont: ISkFont;
+  LPaint: ISkPaint;
+  LMetrics: TSkFontMetrics;
+  LImage: ISkImage;
+  LHalfW, LHalfH: Single;
+begin
   case FIconMode of
     icmGlyph:
-    begin
-      if FPressed then glyph := FIconGlyphPressed
-      else glyph := FIconGlyphNormal;
+      begin
+        if FPressed then LGlyph := FIconGlyphPressed
+        else LGlyph := FIconGlyphNormal;
+        if LGlyph = '' then
+          Exit;
 
-      if glyph = '' then Exit;
+        LFont := IconFont;
+        LFont.GetMetrics(LMetrics);
 
-      FIconBox.Canvas.Font.Name          := FIconFontName;
-      FIconBox.Canvas.Font.PixelsPerInch := CurrentPPI;
-      FIconBox.Canvas.Font.Size          := FIconFontSize;
-      FIconBox.Canvas.Font.Color         := CurrentIconColor;
-      FIconBox.Canvas.Brush.Style        := bsClear;
+        LPaint := TSkPaint.Create(TSkPaintStyle.Fill);
+        LPaint.AntiAlias := True;
+        LPaint.Color := ToAlphaColor(CurrentIconColor, AOpacity);
 
-      R := FIconBox.ClientRect;
-      DrawText(FIconBox.Canvas.Handle,
-               PChar(glyph),
-               -1,
-               R,
-               DT_CENTER or DT_VCENTER or DT_SINGLELINE);
-    end;
+        ACanvas.DrawSimpleText(LGlyph,
+          ACenter.X - LFont.MeasureText(LGlyph) / 2,
+          ACenter.Y - (LMetrics.Ascent + LMetrics.Descent) / 2,
+          LFont, LPaint);
+      end;
 
     icmImageList:
-    begin
-      if FImages = nil then Exit;
-
-      if FPressed and (FImageIndexPressed >= 0) then
-        idx := FImageIndexPressed
-      else
-        idx := FImageIndex;
-
-      if (idx < 0) or (idx >= FImages.Count) then Exit;
-
-      { Tint monochrome SVG icons to the current state colour without a
-        compile-time dependency on SVGIconImageList: if the assigned image list
-        publishes a FixedColor property (TSVGIconImageList does), drive it via
-        RTTI. Any other image list just draws as-is. }
-      if IsPublishedProp(FImages, 'FixedColor') then
       begin
-        savedColor := GetOrdProp(FImages, 'FixedColor');
-        SetOrdProp(FImages, 'FixedColor', CurrentIconColor);
-        FImages.Draw(FIconBox.Canvas, 0, 0, idx);
-        SetOrdProp(FImages, 'FixedColor', savedColor);
-      end
-      else
-        FImages.Draw(FIconBox.Canvas, 0, 0, idx);
-    end;
+        LImage := IconImage;
+        if LImage = nil then
+          Exit;
+
+        LPaint := TSkPaint.Create;
+        LPaint.AntiAlias := True;
+        LPaint.AlphaF := AOpacity;
+
+        LHalfW := LImage.Width / 2;
+        LHalfH := LImage.Height / 2;
+        ACanvas.DrawImageRect(LImage,
+          RectF(ACenter.X - LHalfW, ACenter.Y - LHalfH,
+                ACenter.X + LHalfW, ACenter.Y + LHalfH),
+          TSkSamplingOptions.High, LPaint);
+      end;
   end;
 end;
 
-procedure TCWSStoreButton.UpdateColor;
+procedure TCWSStoreButton.DrawDescription(const ACanvas: ISkCanvas; const ACenter: TPointF;
+  const AOpacity: Single);
+var
+  LFont: ISkFont;
+  LPaint: ISkPaint;
+  LMetrics: TSkFontMetrics;
 begin
-  if (FbckShape = nil) or (FIconBox = nil) or (Fdescription = nil) or
-     (FCursor = nil) or (csDestroying in ComponentState) then
-    Exit;
-  if csLoading in ComponentState then
+  if FdescriptionText = '' then
     Exit;
 
-  if FPressed then FbckShape.Brush.Color := FbckPressedColor
-  else if FHovering then FbckShape.Brush.Color := FbckHoverColor
-  else FbckShape.Brush.Color := FNormalColor;
-  FbckShape.Pen.Color := FbckShape.Brush.Color;
+  LFont := DescriptionFont;
+  LFont.GetMetrics(LMetrics);
 
-  if not FAnimTimer.Enabled then
-    FCursor.Visible := FPressed;
-  if FPressed then
+  LPaint := TSkPaint.Create(TSkPaintStyle.Fill);
+  LPaint.AntiAlias := True;
+  LPaint.Color := ToAlphaColor(CurrentDescriptionColor, AOpacity);
+
+  ACanvas.DrawSimpleText(FdescriptionText,
+    ACenter.X - LFont.MeasureText(FdescriptionText) / 2,
+    ACenter.Y - (LMetrics.Ascent + LMetrics.Descent) / 2,
+    LFont, LPaint);
+end;
+
+{ ------------------------------------------------------------------- Lifecycle }
+
+procedure TCWSStoreButton.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if (Operation = opRemove) and (AComponent = FImages) then
   begin
-    FCursor.Brush.Color := FCursorColor;
-    FCursor.Pen.Color   := FCursorColor;
-    FCursor.Pen.Style   := TShapePenStyle.Solid;
-  end
-  else
-  begin
-    FCursor.Pen.Style   := TShapePenStyle.Clear;
-    FCursor.Brush.Color := clNone;
+    FImages       := nil;
+    FIconImage    := nil;
+    FIconImageKey := '';
+    Redraw;
   end;
+end;
 
-  if FPressed then Fdescription.Font.Color := FDescriptionColorPressed
-  else if FHovering then Fdescription.Font.Color := FDescriptionColorHover
-  else Fdescription.Font.Color := FDescriptionColorNormal;
+procedure TCWSStoreButton.CMFontChanged(var Message: TMessage);
+begin
+  inherited;
+  FTextTypeface := nil;
+  Redraw;
+end;
 
-  if Fdescription.Visible <> (not FPressed) then
-    Fdescription.Visible := not FPressed;
+procedure TCWSStoreButton.CMColorChanged(var Message: TMessage);
+begin
+  inherited;
+  Redraw;
+end;
 
-  FIconBox.Invalidate;
-  Invalidate;
+procedure TCWSStoreButton.ChangeScale(M, D: Integer; isDpiChange: Boolean);
+begin
+  inherited;
+  UpdateCursorGeometry;
+  Redraw;
 end;
 
 procedure TCWSStoreButton.Resize;
-var
-  descHeight, vCursorWidth, vCursorHeight: Integer;
-  iconSize: Integer;
-  scaledOffsetX, scaledOffsetY: Integer;
 begin
   inherited;
-  if not Assigned(FIconBox) or not Assigned(Fdescription) or
-     not Assigned(FCursor) then
-    Exit;
-
-  ApplyFontToLabel;
-
-  scaledOffsetX := MulDiv(FIconOffsetX, CurrentPPI, 96);
-  scaledOffsetY := MulDiv(FIconOffsetY, CurrentPPI, 96);
-
-  vCursorWidth  := MulDiv(4, CurrentPPI, 96);
-  vCursorHeight := ScaledCursorHeight;
-
-  FCursor.Width := vCursorWidth;
-  FCursor.Left  := 0;
   if (FAnimTimer = nil) or not FAnimTimer.Enabled then
-  begin
-    FCursor.Height := vCursorHeight;
-    FCursor.Top    := (Height - vCursorHeight) div 2;
-    if FPressed then FAnimCurrentH := vCursorHeight
-    else FAnimCurrentH := 0;
-  end;
-
-  descHeight := MulDiv(12, CurrentPPI, 96);
-  Fdescription.Height := descHeight;
-
-  iconSize := CalcIconSize;
-
-  FIconBox.Width  := iconSize;
-  FIconBox.Height := iconSize;
-  FIconBox.Left   := (ClientWidth - iconSize) div 2 + scaledOffsetX;
-  if FPressed then
-    FIconBox.Top  := (Height - iconSize) div 2 + scaledOffsetY
-  else
-    FIconBox.Top  := (Height - descHeight - iconSize) div 2 + scaledOffsetY;
-
-  if not FPressed then
-  begin
-    Fdescription.Width   := ClientWidth;
-    Fdescription.Visible := True;
-    Fdescription.SetBounds(0,
-      ClientHeight - descHeight - MulDiv(4, CurrentPPI, 96),
-      ClientWidth, descHeight);
-  end
-  else
-  begin
-    Fdescription.SetBounds(0, 0, 0, 0);
-    Fdescription.Visible := False;
-  end;
-
-  FIconBox.Invalidate;
+    UpdateCursorGeometry;
+  Redraw;
 end;
 
 procedure TCWSStoreButton.Loaded;
 begin
   inherited;
-  if FPressed then
-    FAnimCurrentH := ScaledCursorHeight;
-  if HandleAllocated then
-  begin
-    FbckShape.SendToBack;
-    FMouseLayer.BringToFront;
-  end;
-  ApplyFontToLabel;
-  UpdateColor;
-  Resize;
+  UpdateCursorGeometry;
+  Redraw;
 end;
 
-procedure TCWSStoreButton.SetIconMode(const Value: TCWSIconMode);
-begin
-  if FIconMode = Value then Exit;
-  FIconMode := Value;
-  Resize;
-  UpdateColor;
-  Repaint;
-end;
+{ ----------------------------------------------------------------------- Mouse }
 
-procedure TCWSStoreButton.SetImages(const Value: TCustomImageList);
-begin
-  if FImages = Value then Exit;
-  if FImages <> nil then FImages.RemoveFreeNotification(Self);
-  FImages := Value;
-  if FImages <> nil then FImages.FreeNotification(Self);
-  Resize;
-  if Assigned(FIconBox) then FIconBox.Invalidate;
-  Repaint;
-end;
-
-procedure TCWSStoreButton.SetImageIndex(const Value: Integer);
-begin
-  if FImageIndex = Value then Exit;
-  FImageIndex := Value;
-  if (FIconMode = icmImageList) and Assigned(FIconBox) then
-    FIconBox.Invalidate;
-end;
-
-procedure TCWSStoreButton.SetImageIndexPressed(const Value: Integer);
-begin
-  if FImageIndexPressed = Value then Exit;
-  FImageIndexPressed := Value;
-  if (FIconMode = icmImageList) and FPressed and Assigned(FIconBox) then
-    FIconBox.Invalidate;
-end;
-
-procedure TCWSStoreButton.SetIconOffsetX(const Value: Integer);
-begin
-  if FIconOffsetX <> Value then begin FIconOffsetX := Value; Resize; Invalidate; end;
-end;
-
-procedure TCWSStoreButton.SetIconOffsetY(const Value: Integer);
-begin
-  if FIconOffsetY <> Value then begin FIconOffsetY := Value; Resize; Invalidate; end;
-end;
-
-procedure TCWSStoreButton.SetIconFontName(const Value: string);
-begin
-  if FIconFontName = Value then Exit;
-  if Value = '' then FIconFontName := 'Segoe Fluent Icons'
-  else FIconFontName := Value;
-  Resize;
-  Invalidate;
-end;
-
-procedure TCWSStoreButton.SetIconFontSize(const Value: Integer);
-begin
-  if FIconFontSize = Value then Exit;
-  FIconFontSize := Value;
-  Resize;
-  Invalidate;
-end;
-
-procedure TCWSStoreButton.ChildMouseEnter(Sender: TObject);
+procedure TCWSStoreButton.CMMouseEnter(var Message: TMessage);
 begin
   FHovering := True;
-  UpdateColor;
-  if Assigned(FOnMouseEnter) then FOnMouseEnter(Self);
+  Redraw;
+  inherited;
 end;
 
-procedure TCWSStoreButton.ChildMouseLeave(Sender: TObject);
+procedure TCWSStoreButton.CMMouseLeave(var Message: TMessage);
 begin
   FHovering := False;
-  UpdateColor;
-  if Assigned(FOnMouseLeave) then FOnMouseLeave(Self);
+  Redraw;
+  inherited;
 end;
 
-procedure TCWSStoreButton.MouseClick(Sender: TObject);
+procedure TCWSStoreButton.Click;
 begin
-  if not FPressed then Pressed := True;
-  if Assigned(FOnClick) then FOnClick(Self);
+  if not FPressed then
+    Pressed := True;
+  inherited;
 end;
 
-procedure TCWSStoreButton.ChildMouseDown(Sender: TObject; Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
+{ ------------------------------------------------------------------- Animation }
+
+procedure TCWSStoreButton.UpdateCursorGeometry;
 begin
-  if Assigned(FOnMouseDown) then FOnMouseDown(Self, Button, Shift, X, Y);
+  if FPressed then FAnimCurrentH := ScaledCursorHeight
+  else FAnimCurrentH := 0;
+  FAnimTop := (Height - FAnimCurrentH) / 2;
 end;
 
-procedure TCWSStoreButton.ChildMouseUp(Sender: TObject; Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
+procedure TCWSStoreButton.DoAnimTimer(Sender: TObject);
+var
+  LStep, LFinalTop, LFinalBottom: Single;
 begin
-  if Assigned(FOnMouseUp) then FOnMouseUp(Self, Button, Shift, X, Y);
+  if csDestroying in ComponentState then
+  begin
+    FAnimTimer.Enabled := False;
+    Exit;
+  end;
+
+  LFinalTop    := (Height - FAnimTargetH) / 2;
+  LFinalBottom := LFinalTop + FAnimTargetH;
+
+  if FAnimShowing then
+  begin
+    LStep := (FAnimCurrentH - FAnimTargetH) / 3;
+    if LStep < 2 then LStep := 2;
+    FAnimCurrentH := FAnimCurrentH - LStep;
+    if FAnimCurrentH <= FAnimTargetH then
+    begin
+      FAnimCurrentH      := FAnimTargetH;
+      FAnimTimer.Enabled := False;
+    end;
+    if FAnimFromTop then FAnimTop := LFinalBottom - FAnimCurrentH
+    else FAnimTop := LFinalTop;
+  end
+  else
+  begin
+    LStep := FAnimCurrentH / 3;
+    if LStep < 2 then LStep := 2;
+    FAnimCurrentH := FAnimCurrentH - LStep;
+    if FAnimCurrentH <= 0 then
+    begin
+      FAnimCurrentH      := 0;
+      FAnimTimer.Enabled := False;
+    end;
+    FAnimTop := (Height - FAnimCurrentH) / 2;
+  end;
+
+  Redraw;
 end;
+
+{ ----------------------------------------------------------------------- State }
 
 procedure TCWSStoreButton.SetPressed(const Value: Boolean);
 var
   i: Integer;
   c: TComponent;
-  FinalTop, FinalBottom, StartH: Integer;
-  sCH: Integer;
+  LFinalTop, LFinalBottom, LStartH: Single;
+  LTargetH: Single;
 begin
   if FPressed = Value then Exit;
   FPressed := Value;
 
+  { the icon may differ between the normal and the pressed state }
+  FIconImage    := nil;
+  FIconImageKey := '';
+
   if not (csLoading in ComponentState) and not (csDesigning in ComponentState) then
   begin
-    sCH := ScaledCursorHeight;
-    FAnimTargetH := sCH;
+    LTargetH     := ScaledCursorHeight;
+    FAnimTargetH := LTargetH;
     FAnimShowing := FPressed;
 
     if FPressed then
     begin
+      { grow towards the previously selected sibling so the bar always
+        travels in the direction the selection moved }
       FAnimFromTop := True;
       if (FGroupIndex <> 0) and (Owner <> nil) then
         for i := 0 to Owner.ComponentCount - 1 do
@@ -688,34 +715,25 @@ begin
           end;
         end;
 
-      FinalTop    := (Height - sCH) div 2;
-      FinalBottom := FinalTop + sCH;
-      if FAnimFromTop then StartH := FinalBottom
-      else StartH := Height - FinalTop;
+      LFinalTop    := (Height - LTargetH) / 2;
+      LFinalBottom := LFinalTop + LTargetH;
+      if FAnimFromTop then LStartH := LFinalBottom
+      else LStartH := Height - LFinalTop;
 
-      FAnimCurrentH   := StartH;
-      FCursor.Visible := True;
-      FCursor.Height  := StartH;
-      if FAnimFromTop then FCursor.Top := 0
-      else FCursor.Top := FinalTop;
+      FAnimCurrentH := LStartH;
+      if FAnimFromTop then FAnimTop := 0
+      else FAnimTop := LFinalTop;
     end;
 
     FAnimTimer.Enabled := True;
-  end;
+  end
+  else
+    UpdateCursorGeometry;
 
-  UpdateColor;
-  Resize;
+  Redraw;
 
   if FPressed and (FGroupIndex <> 0) and not (csLoading in ComponentState) then
     UpdateGroup;
-end;
-
-procedure TCWSStoreButton.SetCursorHeight(const Value: Integer);
-begin
-  if FCursorHeight = Value then Exit;
-  FCursorHeight := Value;
-  Resize;
-  Invalidate;
 end;
 
 procedure TCWSStoreButton.UpdateGroup;
@@ -730,115 +748,177 @@ begin
     c := Owner.Components[i];
     if (c is TCWSStoreButton) and (c <> Self) then
       if TCWSStoreButton(c).GroupIndex = FGroupIndex then
-      begin
         TCWSStoreButton(c).Pressed := False;
-        TCWSStoreButton(c).UpdateColor;
-      end;
   end;
 end;
 
-procedure TCWSStoreButton.DoAnimTimer(Sender: TObject);
-var
-  Step, FinalTop, FinalBottom: Integer;
+{ ------------------------------------------------------------------- Setters }
+
+procedure TCWSStoreButton.SetIconMode(const Value: TCWSIconMode);
 begin
-  if (FCursor = nil) or (csDestroying in ComponentState) then
-  begin
-    FAnimTimer.Enabled := False;
-    Exit;
-  end;
+  if FIconMode = Value then Exit;
+  FIconMode := Value;
+  Redraw;
+end;
 
-  FinalTop    := (Height - FAnimTargetH) div 2;
-  FinalBottom := FinalTop + FAnimTargetH;
+procedure TCWSStoreButton.SetImages(const Value: TCustomImageList);
+begin
+  if FImages = Value then Exit;
+  if FImages <> nil then FImages.RemoveFreeNotification(Self);
+  FImages := Value;
+  if FImages <> nil then FImages.FreeNotification(Self);
+  FIconImage    := nil;
+  FIconImageKey := '';
+  Redraw;
+end;
 
-  if FAnimShowing then
-  begin
-    Step := (FAnimCurrentH - FAnimTargetH) div 3;
-    if Step < 2 then Step := 2;
-    Dec(FAnimCurrentH, Step);
-    if FAnimCurrentH <= FAnimTargetH then
-    begin
-      FAnimCurrentH      := FAnimTargetH;
-      FAnimTimer.Enabled := False;
-    end;
-  end
-  else
-  begin
-    Step := FAnimCurrentH div 3;
-    if Step < 2 then Step := 2;
-    Dec(FAnimCurrentH, Step);
-    if FAnimCurrentH <= 0 then
-    begin
-      FAnimCurrentH      := 0;
-      FCursor.Visible    := False;
-      FAnimTimer.Enabled := False;
-    end;
-  end;
+procedure TCWSStoreButton.SetImageIndex(const Value: Integer);
+begin
+  if FImageIndex = Value then Exit;
+  FImageIndex := Value;
+  if FIconMode = icmImageList then Redraw;
+end;
 
-  FCursor.Height := FAnimCurrentH;
-  if FAnimShowing then
-  begin
-    if FAnimFromTop then FCursor.Top := FinalBottom - FAnimCurrentH
-    else FCursor.Top := FinalTop;
-  end
-  else
-    FCursor.Top := (Height - FAnimCurrentH) div 2;
+procedure TCWSStoreButton.SetImageIndexPressed(const Value: Integer);
+begin
+  if FImageIndexPressed = Value then Exit;
+  FImageIndexPressed := Value;
+  if (FIconMode = icmImageList) and FPressed then Redraw;
+end;
+
+procedure TCWSStoreButton.SetIconOffsetX(const Value: Integer);
+begin
+  if FIconOffsetX = Value then Exit;
+  FIconOffsetX := Value;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetIconOffsetY(const Value: Integer);
+begin
+  if FIconOffsetY = Value then Exit;
+  FIconOffsetY := Value;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetIconFontName(const Value: string);
+begin
+  if FIconFontName = Value then Exit;
+  if Value = '' then FIconFontName := 'Segoe Fluent Icons'
+  else FIconFontName := Value;
+  FIconTypeface := nil;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetIconFontSize(const Value: Integer);
+begin
+  if FIconFontSize = Value then Exit;
+  FIconFontSize := Value;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetCursorHeight(const Value: Integer);
+begin
+  if FCursorHeight = Value then Exit;
+  FCursorHeight := Value;
+  if (FAnimTimer = nil) or not FAnimTimer.Enabled then
+    UpdateCursorGeometry;
+  Redraw;
 end;
 
 procedure TCWSStoreButton.SetBckColor(const Value: TColor);
-begin FbckHoverColor := Value; UpdateColor; end;
+begin
+  if FbckHoverColor = Value then Exit;
+  FbckHoverColor := Value;
+  Redraw;
+end;
 
 procedure TCWSStoreButton.SetBckPressedColor(const Value: TColor);
-begin FbckPressedColor := Value; UpdateColor; end;
-
-procedure TCWSStoreButton.SetCursorColor(const Value: TColor);
 begin
-  if FCursorColor <> Value then begin FCursorColor := Value; UpdateColor; end;
-end;
-
-procedure TCWSStoreButton.SetGroupIndex(const Value: Integer);
-begin FGroupIndex := Value; end;
-
-procedure TCWSStoreButton.SetDescriptionColorHover(const Value: TColor);
-begin FDescriptionColorHover := Value; UpdateColor; end;
-
-procedure TCWSStoreButton.SetDescriptionColorNormal(const Value: TColor);
-begin FDescriptionColorNormal := Value; UpdateColor; end;
-
-procedure TCWSStoreButton.SetDescriptionColorPressed(const Value: TColor);
-begin FDescriptionColorPressed := Value; UpdateColor; end;
-
-procedure TCWSStoreButton.SetDescriptionText(const Value: string);
-begin
-  FdescriptionText := Value;
-  if Assigned(Fdescription) then Fdescription.Caption := FdescriptionText;
-end;
-
-procedure TCWSStoreButton.SetIconColorHover(const Value: TColor);
-begin FIconColorHover := Value; UpdateColor; end;
-
-procedure TCWSStoreButton.SetIconColorNormal(const Value: TColor);
-begin FIconColorNormal := Value; UpdateColor; end;
-
-procedure TCWSStoreButton.SetIconColorPressed(const Value: TColor);
-begin FIconColorPressed := Value; UpdateColor; end;
-
-procedure TCWSStoreButton.SetIconGlyph(const Value: string);
-begin
-  FIconGlyphNormal := Value;
-  Resize;
-  Invalidate;
-end;
-
-procedure TCWSStoreButton.SetIconGlyphPressed(const Value: string);
-begin
-  FIconGlyphPressed := Value;
-  Resize;
-  Invalidate;
+  if FbckPressedColor = Value then Exit;
+  FbckPressedColor := Value;
+  Redraw;
 end;
 
 procedure TCWSStoreButton.SetNormalColor(const Value: TColor);
 begin
-  if FNormalColor <> Value then begin FNormalColor := Value; UpdateColor; end;
+  if FNormalColor = Value then Exit;
+  FNormalColor := Value;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetCursorColor(const Value: TColor);
+begin
+  if FCursorColor = Value then Exit;
+  FCursorColor := Value;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetGroupIndex(const Value: Integer);
+begin
+  FGroupIndex := Value;
+end;
+
+procedure TCWSStoreButton.SetDescriptionColorHover(const Value: TColor);
+begin
+  if FDescriptionColorHover = Value then Exit;
+  FDescriptionColorHover := Value;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetDescriptionColorNormal(const Value: TColor);
+begin
+  if FDescriptionColorNormal = Value then Exit;
+  FDescriptionColorNormal := Value;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetDescriptionColorPressed(const Value: TColor);
+begin
+  if FDescriptionColorPressed = Value then Exit;
+  FDescriptionColorPressed := Value;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetDescriptionText(const Value: string);
+begin
+  if FdescriptionText = Value then Exit;
+  FdescriptionText := Value;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetIconColorHover(const Value: TColor);
+begin
+  if FIconColorHover = Value then Exit;
+  FIconColorHover := Value;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetIconColorNormal(const Value: TColor);
+begin
+  if FIconColorNormal = Value then Exit;
+  FIconColorNormal := Value;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetIconColorPressed(const Value: TColor);
+begin
+  if FIconColorPressed = Value then Exit;
+  FIconColorPressed := Value;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetIconGlyph(const Value: string);
+begin
+  if FIconGlyphNormal = Value then Exit;
+  FIconGlyphNormal := Value;
+  Redraw;
+end;
+
+procedure TCWSStoreButton.SetIconGlyphPressed(const Value: string);
+begin
+  if FIconGlyphPressed = Value then Exit;
+  FIconGlyphPressed := Value;
+  Redraw;
 end;
 
 end.

@@ -5,7 +5,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, CWSFluentColorsMulti, Vcl.TitleBarCtrls, Vcl.ExtCtrls, CWSScrollBox, ES.BaseControls,
-  ES.Shapes, CWSStoreButton, home, Vcl.StdCtrls, CWSButton, CWSDimOverlay;
+  ES.Shapes, CWSStoreButton, home, Vcl.StdCtrls, CWSButton, CWSDimOverlay, System.Skia, Vcl.Skia;
 
 type
   TfrmMain = class(TForm)

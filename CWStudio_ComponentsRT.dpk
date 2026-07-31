@@ -25,14 +25,16 @@ package CWStudio_ComponentsRT;
 {$IMAGEBASE $400000}
 {$DEFINE RELEASE}
 {$ENDIF IMPLICITBUILDING}
-{$DESCRIPTION 'CWStudio Components Library 1.6.8 (runtime)'}
+{$DESCRIPTION 'CWStudio Components Library 1.6.9 (runtime)'}
 {$IMPLICITBUILD ON}
 
 requires
   vcl,
   rtl,
   dbrtl,
-  vcldb;
+  vcldb,
+  Skia.Package.RTL,
+  Skia.Package.VCL;
 
 contains
   CWStudio_Version in 'CWStudio_Version.pas',

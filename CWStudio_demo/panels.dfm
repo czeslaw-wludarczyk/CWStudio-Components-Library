@@ -165,5 +165,71 @@ object frmPanels: TfrmPanels
         ParentFont = False
       end
     end
+    object pnlOptions: TCWSOptionsPanel
+      Left = 16
+      Top = 300
+      Width = 761
+      Height = 181
+      Anchors = [akLeft, akTop, akRight]
+      DoubleBuffered = True
+      Title = 'CWSOptionsPanel'
+      Subtitle = 'Collapsible options card with stacked sections'
+      Expanded = True
+      TitleFont.Charset = DEFAULT_CHARSET
+      TitleFont.Color = 1776411
+      TitleFont.Height = -13
+      TitleFont.Name = 'Segoe UI'
+      TitleFont.Style = [fsBold]
+      SubtitleFont.Charset = DEFAULT_CHARSET
+      SubtitleFont.Color = 6316128
+      SubtitleFont.Height = -11
+      SubtitleFont.Name = 'Segoe UI'
+      SubtitleFont.Style = []
+      ImageIndex = 0
+      object sectOpt1: TCWSOptionsSection
+        Left = 1
+        Top = 60
+        Width = 759
+        Height = 60
+        Color = clWhite
+        DoubleBuffered = True
+        ParentColor = False
+        object lblOpt1: TLabel
+          Left = 16
+          Top = 20
+          Width = 173
+          Height = 17
+          Caption = 'General - first options section'
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clWindowText
+          Font.Height = -13
+          Font.Name = 'Segoe UI'
+          Font.Style = []
+          ParentFont = False
+        end
+      end
+      object sectOpt2: TCWSOptionsSection
+        Left = 1
+        Top = 120
+        Width = 759
+        Height = 60
+        Color = clWhite
+        DoubleBuffered = True
+        ParentColor = False
+        object lblOpt2: TLabel
+          Left = 16
+          Top = 20
+          Width = 205
+          Height = 17
+          Caption = 'Advanced - second options section'
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clWindowText
+          Font.Height = -13
+          Font.Name = 'Segoe UI'
+          Font.Style = []
+          ParentFont = False
+        end
+      end
+    end
   end
 end

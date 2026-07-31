@@ -83,6 +83,8 @@ type
   TCWSInternalDBGrid = class(TDBGrid)
   private
     FOwner: TCWSDBGrid;
+    FDrawRow: Integer;        { grid row currently being painted (see DrawCell) }
+    function DataRowNumber: Integer;
   protected
     procedure DrawCell(ACol, ARow: Longint; ARect: TRect;
       AState: TGridDrawState); override;
@@ -174,6 +176,9 @@ type
     FFixedTextColor: TColor;
     FCellHighlightColor: TColor;
     FHighlightTextColor: TColor;
+    FAlternatingRowColors: Boolean;
+    FOddRowColor: TColor;
+    FEvenRowColor: TColor;
 
     { Scrollbar appearance }
     FScrollThumbColor: TColor;
@@ -278,6 +283,11 @@ type
     procedure SetFixedTextColor(const Value: TColor);
     procedure SetCellHighlightColor(const Value: TColor);
     procedure SetHighlightTextColor(const Value: TColor);
+    procedure SetAlternatingRowColors(const Value: Boolean);
+    procedure SetOddRowColor(const Value: TColor);
+    procedure SetEvenRowColor(const Value: TColor);
+    function RowBackColor(ARowNumber: Integer): TColor;
+    function AlternateShade(ABase: TColor): TColor;
 
     procedure SetCornerRadius(const Value: Single);
     procedure ReadCornerRadius(Reader: TReader);
@@ -452,6 +462,21 @@ type
     property FixedTextColor: TColor read FFixedTextColor write SetFixedTextColor default $202020;
     property CellHighlightColor: TColor read FCellHighlightColor write SetCellHighlightColor default $F0D9BE;
     property HighlightTextColor: TColor read FHighlightTextColor write SetHighlightTextColor default $202020;
+
+    { Zebra striping. Off by default — every data cell then uses CellColor.
+      Rows are numbered by record, from 1, so the first record is the odd one
+      and the banding stays with the data while the grid scrolls. The title row,
+      the indicator column and the selected row keep their own colors.
+
+      Both colors default to clNone = "derive me from CellColor": odd rows take
+      CellColor itself and even rows a slightly shaded variant of it (darker on
+      a light theme, lighter on a dark one). Left that way the striping follows
+      a CWSFluentColors theme switch on its own — the application only has to
+      re-assign CellColor, exactly as it already does. Assign an explicit color
+      to pin one (or both) bands to a fixed value instead. }
+    property AlternatingRowColors: Boolean read FAlternatingRowColors write SetAlternatingRowColors default False;
+    property OddRowColor: TColor read FOddRowColor write SetOddRowColor default clNone;
+    property EvenRowColor: TColor read FEvenRowColor write SetEvenRowColor default clNone;
 
     { Border }
     property ShowBorder: Boolean read FShowBorder write SetShowBorder default True;
@@ -694,10 +719,35 @@ begin
   end
   else
   begin
-    { Data cell — let the grid map the record/field, then overlay our line }
+    { Data cell — let the grid map the record/field, then overlay our line.
+      Remember the row: the base DrawCell routes into DrawColumnCell, which is
+      not told which row it is painting but needs it for the zebra striping. }
+    FDrawRow := ARow;
     inherited DrawCell(ACol, ARow, ARect, AState);
     FOwner.DrawGridLine(Canvas, ARect);
   end;
+end;
+
+function TCWSInternalDBGrid.DataRowNumber: Integer;
+var
+  DS: TDataSet;
+begin
+  { 1-based number of the data row being painted. The on-screen row is the
+    fallback; when striping is on we prefer the record number, because the base
+    DrawCell points the data link at the row's record before handing it to
+    DrawColumnCell (that is how the column reads its field value). Numbering by
+    record keeps the stripes glued to the data instead of to the window, so they
+    don't flip every time the grid scrolls by one record. }
+  Result := FDrawRow - FixedRows + 1;
+  if (FOwner = nil) or not FOwner.FAlternatingRowColors then
+    Exit;
+  if DataSource = nil then
+    Exit;
+  DS := DataSource.DataSet;
+  if (DS = nil) or not DS.Active or not DS.IsSequenced then
+    Exit;
+  if DS.RecNo > 0 then
+    Result := DS.RecNo;
 end;
 
 procedure TCWSInternalDBGrid.DrawColumnCell(const Rect: TRect; DataCol: Integer;
@@ -714,7 +764,7 @@ begin
     end
     else
     begin
-      Bg := FOwner.FCellColor;
+      Bg := FOwner.RowBackColor(DataRowNumber);
       Tx := FOwner.FCellTextColor;
     end;
     { The default field painter fills + writes using the current canvas state }
@@ -947,6 +997,9 @@ begin
   FFixedTextColor := $202020;
   FCellHighlightColor := $F0D9BE;
   FHighlightTextColor := $202020;
+  FAlternatingRowColors := False;
+  FOddRowColor := clNone;
+  FEvenRowColor := clNone;
 
   FScrollThumbColor := $C0C0C0;
   FScrollThumbHoverColor := $909090;
@@ -1229,6 +1282,49 @@ begin
   FGrid.RefreshEditorColors;
   FGrid.Invalidate;
   Invalidate;
+end;
+
+function TCWSDBGrid.AlternateShade(ABase: TColor): TColor;
+var
+  C: Longint;
+  R, G, B, Delta: Integer;
+begin
+  { The automatic even-row color: the cell color nudged towards the opposite end
+    of the scale, so the band stays visible whatever the theme — a light cell is
+    darkened, a dark one lightened. Derived on every paint, which is what makes
+    the striping follow a theme switch by itself. }
+  C := ColorToRGB(ABase);
+  R := GetRValue(C);
+  G := GetGValue(C);
+  B := GetBValue(C);
+  if R + G + B > 384 then      { 3 * 128 — a light background }
+    Delta := -10
+  else
+    Delta := 16;
+  Result := TColor(RGB(EnsureRange(R + Delta, 0, 255),
+                       EnsureRange(G + Delta, 0, 255),
+                       EnsureRange(B + Delta, 0, 255)));
+end;
+
+function TCWSDBGrid.RowBackColor(ARowNumber: Integer): TColor;
+begin
+  { Background of a data row: plain CellColor unless zebra striping is on, in
+    which case the 1-based row number decides — so the first row is the odd one.
+    clNone on either band means "follow CellColor" (see the property comment). }
+  if not FAlternatingRowColors then
+    Exit(FCellColor);
+  if Odd(ARowNumber) then
+  begin
+    Result := FOddRowColor;
+    if Result = clNone then
+      Result := FCellColor;
+  end
+  else
+  begin
+    Result := FEvenRowColor;
+    if Result = clNone then
+      Result := AlternateShade(FCellColor);
+  end;
 end;
 
 procedure TCWSDBGrid.DrawGridLine(C: TCanvas; const R: TRect);
@@ -2697,6 +2793,15 @@ begin if FCellHighlightColor <> Value then begin FCellHighlightColor := Value; A
 
 procedure TCWSDBGrid.SetHighlightTextColor(const Value: TColor);
 begin if FHighlightTextColor <> Value then begin FHighlightTextColor := Value; ApplyColors; end; end;
+
+procedure TCWSDBGrid.SetAlternatingRowColors(const Value: Boolean);
+begin if FAlternatingRowColors <> Value then begin FAlternatingRowColors := Value; ApplyColors; end; end;
+
+procedure TCWSDBGrid.SetOddRowColor(const Value: TColor);
+begin if FOddRowColor <> Value then begin FOddRowColor := Value; ApplyColors; end; end;
+
+procedure TCWSDBGrid.SetEvenRowColor(const Value: TColor);
+begin if FEvenRowColor <> Value then begin FEvenRowColor := Value; ApplyColors; end; end;
 
 procedure TCWSDBGrid.SetCornerRadius(const Value: Single);
 var

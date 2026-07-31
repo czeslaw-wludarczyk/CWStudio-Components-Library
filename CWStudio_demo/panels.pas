@@ -5,7 +5,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, CWSFluentColorsMulti, CWSSettingsPanel, Vcl.ExtCtrls, CWSCornerPanel, Vcl.StdCtrls,
-  CWSScrollBox;
+  CWSScrollBox, CWSOptionsPanel;
 
 type
   TfrmPanels = class(TForm)
@@ -21,6 +21,11 @@ type
     Label5: TLabel;
     Label6: TLabel;
     scrbPanels: TCWSScrollBox;
+    pnlOptions: TCWSOptionsPanel;
+    sectOpt1: TCWSOptionsSection;
+    lblOpt1: TLabel;
+    sectOpt2: TCWSOptionsSection;
+    lblOpt2: TLabel;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure pnlCard1MouseEnter(Sender: TObject);
@@ -67,11 +72,24 @@ begin
       TCWSSettingsPanel(Comp).BorderColor := flNeutralStroke1;
     end;
 
+    if Comp is TCWSOptionsSection then
+    begin
+      TCWSOptionsSection(Comp).Color := flNeutralBackground2;
+      TCWSOptionsSection(Comp).DividerColor := flNeutralStroke1;
+    end;
+
     if Comp is TLabel then
     begin
       TLabel(Comp).Font.Color := flNeutralForeground1;
     end;
   end;
+
+  pnlOptions.FillColor := flNeutralBackground2;
+  pnlOptions.BorderColor := flNeutralStroke1;
+  pnlOptions.ChevronColor := flNeutralForeground3;
+  pnlOptions.HoverColor := flNeutralBackground2Hover;
+  pnlOptions.TitleColor := flNeutralForeground1;
+  pnlOptions.SubtitleColor := flNeutralForeground3;
 
   lblIcon1.Font.Color := clGreen;
   lblIcon2.Font.Color := clWebDarkOrange;

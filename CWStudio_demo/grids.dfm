@@ -25,7 +25,6 @@ object frmGrids: TfrmGrids
     ShowBorder = False
     Align = alClient
     TabOrder = 0
-    ExplicitHeight = 480
     DesignSize = (
       640
       562)
@@ -42,16 +41,6 @@ object frmGrids: TfrmGrids
       Font.Style = [fsBold]
       ParentFont = False
     end
-    object CWSStringGrid1: TCWSStringGrid
-      Left = 24
-      Top = 64
-      Width = 449
-      Height = 475
-      Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goRangeSelect, goDrawFocusSelected, goEditing, goThumbTracking, goFixedRowDefAlign]
-      Anchors = [akLeft, akTop, akRight]
-      TabOrder = 3
-      CornerRadiusF = 6.000000000000000000
-    end
     object CWSEdit1: TCWSEdit
       Left = 488
       Top = 64
@@ -63,8 +52,55 @@ object frmGrids: TfrmGrids
       CornerRadius = 4.000000000000000000
       OnKeyPress = CWSEdit1KeyPress
       Anchors = [akTop, akRight]
-      TabOrder = 4
+      TabOrder = 3
       TabStop = True
+    end
+    object CWSStringGrid1: TCWSStringGrid
+      Left = 24
+      Top = 64
+      Width = 433
+      Height = 475
+      Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goRangeSelect, goFixedRowDefAlign]
+      Anchors = [akLeft, akTop, akRight, akBottom]
+      TabOrder = 5
+      CornerRadiusF = 6.000000000000000000
+    end
+    object lblListBox: TLabel
+      Left = 488
+      Top = 128
+      Width = 90
+      Height = 21
+      Anchors = [akTop, akRight]
+      Caption = 'CWSListBox'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clWindowText
+      Font.Height = -16
+      Font.Name = 'Segoe UI'
+      Font.Style = [fsBold]
+      ParentFont = False
+    end
+    object CWSListBox1: TCWSListBox
+      Left = 488
+      Top = 160
+      Width = 123
+      Height = 379
+      Items.Strings = (
+        'Alpha'
+        'Bravo'
+        'Charlie'
+        'Delta'
+        'Echo'
+        'Foxtrot'
+        'Golf'
+        'Hotel'
+        'India'
+        'Juliet')
+      LabelText = 'Items'
+      IntegralHeight = False
+      ItemHeight = 15
+      Anchors = [akTop, akRight, akBottom]
+      TabOrder = 4
+      CornerRadiusF = 4.000000000000000000
     end
   end
 end

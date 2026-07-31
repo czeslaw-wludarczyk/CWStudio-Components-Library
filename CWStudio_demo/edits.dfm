@@ -450,17 +450,6 @@ object frmEdits: TfrmEdits
         TabStop = True
         ItemIndex = -1
       end
-      object CWSDatePicker1: TCWSDatePicker
-        Left = 16
-        Top = 125
-        Width = 280
-        Height = 29
-        DateFormat = 'yyyy-MM-dd'
-        CornerRadius = 4.000000000000000000
-        DropdownCornerRadius = 8.000000000000000000
-        TabOrder = 3
-        TabStop = True
-      end
       object CWSDatePicker2: TCWSDatePicker
         Left = 608
         Top = 125
@@ -470,7 +459,7 @@ object frmEdits: TfrmEdits
         CornerRadius = 4.000000000000000000
         DropdownCornerRadius = 8.000000000000000000
         Enabled = False
-        TabOrder = 4
+        TabOrder = 3
         TabStop = True
       end
       object CWSDatePicker3: TCWSDatePicker
@@ -481,8 +470,74 @@ object frmEdits: TfrmEdits
         DateFormat = 'yyyy-MM-dd'
         CornerRadius = 4.000000000000000000
         DropdownCornerRadius = 8.000000000000000000
+        TabOrder = 4
+        TabStop = True
+      end
+      object CWSDatePicker1: TCWSDatePicker
+        Left = 16
+        Top = 128
+        Width = 280
+        Height = 29
+        DateFormat = 'yyyy-MM-dd'
+        CornerRadius = 4.000000000000000000
+        DropdownCornerRadius = 8.000000000000000000
+        LinkTextColor = clWhite
         TabOrder = 5
         TabStop = True
+      end
+    end
+    object pnlEdits5: TCWSSettingsPanel
+      Left = 40
+      Top = 1231
+      Width = 912
+      Height = 150
+      Anchors = [akLeft, akTop, akRight]
+      DoubleBuffered = True
+      object lblTitle5: TLabel
+        Left = 16
+        Top = 16
+        Width = 122
+        Height = 25
+        Caption = 'CWSEditMask'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -19
+        Font.Name = 'Segoe UI'
+        Font.Style = [fsBold]
+        ParentFont = False
+      end
+      object CWSEditMask1: TCWSEditMask
+        Left = 16
+        Top = 64
+        Width = 280
+        Height = 47
+        Cursor = crIBeam
+        LabelText = 'Date'
+        EditMask = '0000-00-00;1;_'
+        CornerRadius = 4.000000000000000000
+        TabOrder = 0
+      end
+      object CWSEditMask2: TCWSEditMask
+        Left = 312
+        Top = 64
+        Width = 280
+        Height = 47
+        Cursor = crIBeam
+        LabelText = 'Phone'
+        EditMask = '000-000-000;1;_'
+        CornerRadius = 4.000000000000000000
+        TabOrder = 1
+      end
+      object CWSEditMask3: TCWSEditMask
+        Left = 608
+        Top = 64
+        Width = 280
+        Height = 47
+        Cursor = crIBeam
+        LabelText = 'Postal code'
+        EditMask = '00-000;1;_'
+        CornerRadius = 4.000000000000000000
+        TabOrder = 2
       end
     end
   end

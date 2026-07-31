@@ -54,7 +54,6 @@ object frmMain: TfrmMain
     Color = clWhite
     ParentBackground = False
     TabOrder = 1
-    ExplicitHeight = 670
     object shpLineMenu: TShape
       Left = 0
       Top = 576
@@ -88,7 +87,6 @@ object frmMain: TfrmMain
       ShowBorder = False
       Align = alClient
       TabOrder = 1
-      ExplicitHeight = 558
       object CWSStoreButton1: TCWSStoreButton
         AlignWithMargins = True
         Left = 3
@@ -96,6 +94,7 @@ object frmMain: TfrmMain
         Width = 72
         Height = 57
         Align = alTop
+        OnClick = CWSStoreButton1Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -119,7 +118,6 @@ object frmMain: TfrmMain
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
-        OnClick = CWSStoreButton1Click
       end
       object CWSStoreButton6: TCWSStoreButton
         AlignWithMargins = True
@@ -128,6 +126,7 @@ object frmMain: TfrmMain
         Width = 72
         Height = 57
         Align = alTop
+        OnClick = CWSStoreButton6Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -151,7 +150,6 @@ object frmMain: TfrmMain
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
-        OnClick = CWSStoreButton6Click
       end
       object CWSStoreButton2: TCWSStoreButton
         AlignWithMargins = True
@@ -160,6 +158,7 @@ object frmMain: TfrmMain
         Width = 72
         Height = 57
         Align = alTop
+        OnClick = CWSStoreButton2Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -183,7 +182,6 @@ object frmMain: TfrmMain
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
-        OnClick = CWSStoreButton2Click
       end
       object CWSStoreButton5: TCWSStoreButton
         AlignWithMargins = True
@@ -192,6 +190,7 @@ object frmMain: TfrmMain
         Width = 72
         Height = 57
         Align = alTop
+        OnClick = CWSStoreButton5Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -215,7 +214,6 @@ object frmMain: TfrmMain
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
-        OnClick = CWSStoreButton5Click
       end
       object CWSStoreButton3: TCWSStoreButton
         AlignWithMargins = True
@@ -224,6 +222,7 @@ object frmMain: TfrmMain
         Width = 72
         Height = 57
         Align = alTop
+        OnClick = CWSStoreButton3Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -247,7 +246,6 @@ object frmMain: TfrmMain
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
-        OnClick = CWSStoreButton3Click
       end
       object CWSStoreButton4: TCWSStoreButton
         AlignWithMargins = True
@@ -256,6 +254,7 @@ object frmMain: TfrmMain
         Width = 72
         Height = 57
         Align = alTop
+        OnClick = CWSStoreButton4Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -279,7 +278,6 @@ object frmMain: TfrmMain
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
-        OnClick = CWSStoreButton4Click
       end
       object CWSStoreButton7: TCWSStoreButton
         AlignWithMargins = True
@@ -288,6 +286,7 @@ object frmMain: TfrmMain
         Width = 72
         Height = 57
         Align = alTop
+        OnClick = CWSStoreButton7Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -311,7 +310,6 @@ object frmMain: TfrmMain
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
-        OnClick = CWSStoreButton7Click
       end
       object CWSStoreButton9: TCWSStoreButton
         AlignWithMargins = True
@@ -320,6 +318,7 @@ object frmMain: TfrmMain
         Width = 72
         Height = 57
         Align = alTop
+        OnClick = CWSStoreButton9Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -344,7 +343,6 @@ object frmMain: TfrmMain
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
         IconOffsetX = 1
-        OnClick = CWSStoreButton9Click
       end
     end
     object CWSStoreButton8: TCWSStoreButton
@@ -354,6 +352,7 @@ object frmMain: TfrmMain
       Width = 72
       Height = 57
       Align = alBottom
+      OnClick = CWSStoreButton8Click
       Color = clBtnFace
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clGray
@@ -377,8 +376,6 @@ object frmMain: TfrmMain
       DescriptionColorNormal = clGray
       DescriptionColorHover = clBlack
       DescriptionColorPressed = clGray
-      OnClick = CWSStoreButton8Click
-      ExplicitTop = 610
     end
   end
   object pnlContent: TPanel
@@ -391,7 +388,6 @@ object frmMain: TfrmMain
     Caption = 'Panel1'
     ParentBackground = False
     TabOrder = 2
-    ExplicitHeight = 670
     object shpContent: TEsShape
       Left = 0
       Top = 48
@@ -489,7 +485,6 @@ object frmMain: TfrmMain
       Color = 15329769
       ParentBackground = False
       TabOrder = 1
-      ExplicitHeight = 613
     end
   end
   object CWSDimOverlay1: TCWSDimOverlay

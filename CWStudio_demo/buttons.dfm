@@ -659,6 +659,130 @@ object frmButtons: TfrmButtons
         ImageIndexPressed = 0
       end
     end
+    object pnlEdits4: TCWSSettingsPanel
+      Left = 40
+      Top = 811
+      Width = 815
+      Height = 220
+      Anchors = [akLeft, akTop, akRight]
+      DoubleBuffered = True
+      object lblTitle4: TLabel
+        Left = 16
+        Top = 16
+        Width = 383
+        Height = 25
+        Caption = 'CWSCheckBox  /  CWSRadioButton  /  CWSSwitch'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -19
+        Font.Name = 'Segoe UI'
+        Font.Style = [fsBold]
+        ParentFont = False
+      end
+      object Label4: TLabel
+        Left = 24
+        Top = 52
+        Width = 74
+        Height = 17
+        Caption = 'CheckBoxes'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -13
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+      end
+      object Label5: TLabel
+        Left = 264
+        Top = 52
+        Width = 82
+        Height = 17
+        Caption = 'RadioButtons'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -13
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+      end
+      object Label6: TLabel
+        Left = 504
+        Top = 52
+        Width = 51
+        Height = 17
+        Caption = 'Switches'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -13
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+      end
+      object CWSCheckBox1: TCWSCheckBox
+        Left = 24
+        Top = 80
+        Width = 130
+        Height = 22
+        Caption = 'Enable feature'
+        Checked = True
+        TabOrder = 0
+      end
+      object CWSCheckBox2: TCWSCheckBox
+        Left = 24
+        Top = 116
+        Width = 130
+        Height = 22
+        Caption = 'Auto update'
+        TabOrder = 1
+      end
+      object CWSRadioButton1: TCWSRadioButton
+        Left = 264
+        Top = 80
+        Width = 130
+        Height = 22
+        Caption = 'Option A'
+        Checked = True
+        GroupIndex = 1
+        TabOrder = 2
+      end
+      object CWSRadioButton2: TCWSRadioButton
+        Left = 264
+        Top = 116
+        Width = 130
+        Height = 22
+        Caption = 'Option B'
+        GroupIndex = 1
+        TabOrder = 3
+      end
+      object CWSSwitch1: TCWSSwitch
+        Left = 504
+        Top = 80
+        Width = 120
+        Height = 22
+        Caption = 'Wi-Fi'
+        Checked = True
+        TabOrder = 4
+      end
+      object CWSSwitch2: TCWSSwitch
+        Left = 504
+        Top = 116
+        Width = 120
+        Height = 22
+        Caption = 'Bluetooth'
+        TabOrder = 5
+      end
+      object btnPopup: TCWSButton
+        Left = 656
+        Top = 80
+        Width = 140
+        Height = 40
+        Color = clBtnFace
+        TabOrder = 6
+        IconFontName = 'Segoe MDL2 Assets'
+        Caption = 'Show menu'
+        OnClick = btnPopupClick
+      end
+    end
   end
   object SVGIconImageList1: TSVGIconImageList
     SVGIconItems = <
@@ -788,5 +912,24 @@ object frmButtons: TfrmButtons
     Scaled = True
     Left = 776
     Top = 264
+  end
+  object CWSPopupMenu1: TCWSPopupMenu
+    Left = 776
+    Top = 344
+    object miNew: TMenuItem
+      Caption = 'New'
+    end
+    object miOpen: TMenuItem
+      Caption = 'Open...'
+    end
+    object miSave: TMenuItem
+      Caption = 'Save'
+    end
+    object miSep1: TMenuItem
+      Caption = '-'
+    end
+    object miExit: TMenuItem
+      Caption = 'Exit'
+    end
   end
 end

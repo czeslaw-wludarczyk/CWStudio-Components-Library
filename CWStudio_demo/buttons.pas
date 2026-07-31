@@ -3,9 +3,10 @@ unit buttons;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, CWSSettingsPanel, CWSScrollBox, CWSStoreButton, CWSFluentColorsMulti,
-  CWSMenuButton, CWSButton, System.ImageList, Vcl.ImgList, SVGIconImageListBase, SVGIconImageList;
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, System.Types, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Menus, CWSSettingsPanel, CWSScrollBox, CWSStoreButton, CWSFluentColorsMulti,
+  CWSMenuButton, CWSButton, CWSCheckBox, CWSRadioButton, CWSSwitch, CWSPopupMenu, System.ImageList, Vcl.ImgList,
+  SVGIconImageListBase, SVGIconImageList;
 
 type
   TfrmButtons = class(TForm)
@@ -39,12 +40,31 @@ type
     CWSButton8: TCWSButton;
     CWSButton9: TCWSButton;
     SVGIconImageList1: TSVGIconImageList;
+    pnlEdits4: TCWSSettingsPanel;
+    lblTitle4: TLabel;
+    Label4: TLabel;
+    Label5: TLabel;
+    Label6: TLabel;
+    CWSCheckBox1: TCWSCheckBox;
+    CWSCheckBox2: TCWSCheckBox;
+    CWSRadioButton1: TCWSRadioButton;
+    CWSRadioButton2: TCWSRadioButton;
+    CWSSwitch1: TCWSSwitch;
+    CWSSwitch2: TCWSSwitch;
+    btnPopup: TCWSButton;
+    CWSPopupMenu1: TCWSPopupMenu;
+    miNew: TMenuItem;
+    miOpen: TMenuItem;
+    miSave: TMenuItem;
+    miSep1: TMenuItem;
+    miExit: TMenuItem;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure CWSStoreButton4Click(Sender: TObject);
     procedure CWSStoreButton5Click(Sender: TObject);
     procedure CWSStoreButton6Click(Sender: TObject);
     procedure CWSStoreButton7Click(Sender: TObject);
+    procedure btnPopupClick(Sender: TObject);
     procedure FormShow(Sender: TObject);
   private
     { Private declarations }
@@ -79,10 +99,23 @@ begin
   pnlEdits3.Color := flNeutralBackground2;
   pnlEdits3.FillColor := flNeutralBackground3;
   pnlEdits3.BorderColor := flNeutralStroke1;
+  pnlEdits4.Color := flNeutralBackground2;
+  pnlEdits4.FillColor := flNeutralBackground3;
+  pnlEdits4.BorderColor := flNeutralStroke1;
 
   lblTitle1.Font.Color := flNeutralForeground1;
   lblTitle2.Font.Color := flNeutralForeground1;
   lblTitle3.Font.Color := flNeutralForeground1;
+  lblTitle4.Font.Color := flNeutralForeground1;
+
+  CWSPopupMenu1.BackgroundColor := flNeutralBackground1;
+  CWSPopupMenu1.BorderColor := flNeutralStroke1;
+  CWSPopupMenu1.TextColor := flNeutralForeground1;
+  CWSPopupMenu1.DisabledTextColor := flNeutralForegroundDisabled;
+  CWSPopupMenu1.HighlightColor := flNeutralBackground1Hover;
+  CWSPopupMenu1.HighlightTextColor := flNeutralForeground1;
+  CWSPopupMenu1.SeparatorColor := flNeutralStroke1;
+  CWSPopupMenu1.ShortCutColor := flNeutralForeground3;
 
   for i := 0 to ComponentCount - 1 do
   begin
@@ -125,6 +158,45 @@ begin
 
     end;
 
+    if Comp is TCWSCheckBox then
+    begin
+      TCWSCheckBox(Comp).BoxColorNormal := flNeutralForeground3;
+      TCWSCheckBox(Comp).BoxColorChecked := flBrandBackground;
+      TCWSCheckBox(Comp).BoxColorDisabled := flNeutralStrokeDisabled;
+      TCWSCheckBox(Comp).FillColorNormal := flNeutralBackground3;
+      TCWSCheckBox(Comp).FillColorDisabled := flNeutralBackgroundDisabled;
+      TCWSCheckBox(Comp).CheckColor := clWhite;
+      TCWSCheckBox(Comp).FontColorNormal := flNeutralForeground1;
+      TCWSCheckBox(Comp).FontColorChecked := flNeutralForeground1;
+      TCWSCheckBox(Comp).FontColorDisabled := flNeutralForegroundDisabled;
+    end;
+
+    if Comp is TCWSRadioButton then
+    begin
+      TCWSRadioButton(Comp).RadioColorNormal := flNeutralForeground3;
+      TCWSRadioButton(Comp).RadioColorChecked := flBrandBackground;
+      TCWSRadioButton(Comp).RadioColorDisabled := flNeutralStrokeDisabled;
+      TCWSRadioButton(Comp).FillColorNormal := flNeutralBackground3;
+      TCWSRadioButton(Comp).FillColorDisabled := flNeutralBackgroundDisabled;
+      TCWSRadioButton(Comp).DotColor := clWhite;
+      TCWSRadioButton(Comp).FontColorNormal := flNeutralForeground1;
+      TCWSRadioButton(Comp).FontColorChecked := flNeutralForeground1;
+      TCWSRadioButton(Comp).FontColorDisabled := flNeutralForegroundDisabled;
+    end;
+
+    if Comp is TCWSSwitch then
+    begin
+      TCWSSwitch(Comp).TrackColorNormal := flNeutralBackground3;
+      TCWSSwitch(Comp).TrackColorChecked := flBrandBackground;
+      TCWSSwitch(Comp).TrackColorDisabled := flNeutralBackgroundDisabled;
+      TCWSSwitch(Comp).BorderColorNormal := flNeutralForeground3;
+      TCWSSwitch(Comp).KnobColorNormal := flNeutralForeground3;
+      TCWSSwitch(Comp).KnobColorChecked := clWhite;
+      TCWSSwitch(Comp).KnobColorDisabled := flNeutralForegroundDisabled;
+      TCWSSwitch(Comp).FontColorNormal := flNeutralForeground1;
+      TCWSSwitch(Comp).FontColorChecked := flNeutralForeground1;
+      TCWSSwitch(Comp).FontColorDisabled := flNeutralForegroundDisabled;
+    end;
 
     if Comp is TCWSButton then
     begin
@@ -224,6 +296,14 @@ begin
     CWSStoreButton7.Pressed := True;
     FPressed4 := True;
   end;
+end;
+
+procedure TfrmButtons.btnPopupClick(Sender: TObject);
+var
+  P: TPoint;
+begin
+  P := btnPopup.ClientToScreen(Point(0, btnPopup.Height));
+  CWSPopupMenu1.Popup(P.X, P.Y);
 end;
 
 procedure TfrmButtons.FormCreate(Sender: TObject);

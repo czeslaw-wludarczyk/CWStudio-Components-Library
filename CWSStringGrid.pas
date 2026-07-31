@@ -102,6 +102,9 @@ type
     FFixedTextColor: TColor;
     FCellHighlightColor: TColor;
     FHighlightTextColor: TColor;
+    FAlternatingRowColors: Boolean;
+    FOddRowColor: TColor;
+    FEvenRowColor: TColor;
 
     { Scrollbar appearance }
     FScrollThumbColor: TColor;
@@ -194,6 +197,11 @@ type
     procedure SetFixedTextColor(const Value: TColor);
     procedure SetCellHighlightColor(const Value: TColor);
     procedure SetHighlightTextColor(const Value: TColor);
+    procedure SetAlternatingRowColors(const Value: Boolean);
+    procedure SetOddRowColor(const Value: TColor);
+    procedure SetEvenRowColor(const Value: TColor);
+    function RowBackColor(ARow: Integer): TColor;
+    function AlternateShade(ABase: TColor): TColor;
 
     procedure SetCornerRadius(const Value: Single);
     procedure ReadCornerRadius(Reader: TReader);
@@ -311,6 +319,21 @@ type
     property FixedTextColor: TColor read FFixedTextColor write SetFixedTextColor default $202020;
     property CellHighlightColor: TColor read FCellHighlightColor write SetCellHighlightColor default $F0D9BE;
     property HighlightTextColor: TColor read FHighlightTextColor write SetHighlightTextColor default $202020;
+
+    { Zebra striping. Off by default — every data cell then uses CellColor.
+      Data rows are numbered from 1 (the first row below the fixed rows is the
+      odd one), so it is the odd row that starts the pattern. The fixed
+      rows/columns and the highlighted (current) cell keep their own colors.
+
+      Both colors default to clNone = "derive me from CellColor": odd rows take
+      CellColor itself and even rows a slightly shaded variant of it (darker on
+      a light theme, lighter on a dark one). Left that way the striping follows
+      a CWSFluentColors theme switch on its own — the application only has to
+      re-assign CellColor, exactly as it already does. Assign an explicit color
+      to pin one (or both) bands to a fixed value instead. }
+    property AlternatingRowColors: Boolean read FAlternatingRowColors write SetAlternatingRowColors default False;
+    property OddRowColor: TColor read FOddRowColor write SetOddRowColor default clNone;
+    property EvenRowColor: TColor read FEvenRowColor write SetEvenRowColor default clNone;
 
     { Border }
     property ShowBorder: Boolean read FShowBorder write SetShowBorder default True;
@@ -553,6 +576,9 @@ begin
   FFixedTextColor := $202020;
   FCellHighlightColor := $F0D9BE;
   FHighlightTextColor := $202020;
+  FAlternatingRowColors := False;
+  FOddRowColor := clNone;
+  FEvenRowColor := clNone;
 
   FScrollThumbColor := $C0C0C0;
   FScrollThumbHoverColor := $909090;
@@ -622,6 +648,50 @@ end;
 
 { *** Owner cell drawing (flat, no 3D) *** }
 
+function TCWSStringGrid.AlternateShade(ABase: TColor): TColor;
+var
+  C: Longint;
+  R, G, B, Delta: Integer;
+begin
+  { The automatic even-row color: the cell color nudged towards the opposite end
+    of the scale, so the band stays visible whatever the theme — a light cell is
+    darkened, a dark one lightened. Derived on every paint, which is what makes
+    the striping follow a theme switch by itself. }
+  C := ColorToRGB(ABase);
+  R := GetRValue(C);
+  G := GetGValue(C);
+  B := GetBValue(C);
+  if R + G + B > 384 then      { 3 * 128 — a light background }
+    Delta := -10
+  else
+    Delta := 16;
+  Result := TColor(RGB(EnsureRange(R + Delta, 0, 255),
+                       EnsureRange(G + Delta, 0, 255),
+                       EnsureRange(B + Delta, 0, 255)));
+end;
+
+function TCWSStringGrid.RowBackColor(ARow: Integer): TColor;
+begin
+  { Background of a data row: plain CellColor unless zebra striping is on, in
+    which case the row number decides. Data rows are counted from 1 (the first
+    row below the fixed ones), so it is the odd row that starts the pattern.
+    clNone on either band means "follow CellColor" — see the property comment. }
+  if not FAlternatingRowColors then
+    Exit(FCellColor);
+  if Odd(ARow - FGrid.FixedRows + 1) then
+  begin
+    Result := FOddRowColor;
+    if Result = clNone then
+      Result := FCellColor;
+  end
+  else
+  begin
+    Result := FEvenRowColor;
+    if Result = clNone then
+      Result := AlternateShade(FCellColor);
+  end;
+end;
+
 procedure TCWSStringGrid.GridPaintCell(ACol, ARow: Integer; ARect: TRect;
   AState: TGridDrawState);
 var
@@ -646,7 +716,7 @@ begin
   end
   else
   begin
-    Bg := FCellColor;
+    Bg := RowBackColor(ARow);
     Tx := FCellTextColor;
   end;
 
@@ -1701,6 +1771,15 @@ begin if FCellHighlightColor <> Value then begin FCellHighlightColor := Value; A
 
 procedure TCWSStringGrid.SetHighlightTextColor(const Value: TColor);
 begin if FHighlightTextColor <> Value then begin FHighlightTextColor := Value; ApplyColors; end; end;
+
+procedure TCWSStringGrid.SetAlternatingRowColors(const Value: Boolean);
+begin if FAlternatingRowColors <> Value then begin FAlternatingRowColors := Value; ApplyColors; end; end;
+
+procedure TCWSStringGrid.SetOddRowColor(const Value: TColor);
+begin if FOddRowColor <> Value then begin FOddRowColor := Value; ApplyColors; end; end;
+
+procedure TCWSStringGrid.SetEvenRowColor(const Value: TColor);
+begin if FEvenRowColor <> Value then begin FEvenRowColor := Value; ApplyColors; end; end;
 
 procedure TCWSStringGrid.SetCornerRadius(const Value: Single);
 var

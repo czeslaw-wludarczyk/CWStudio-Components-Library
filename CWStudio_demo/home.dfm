@@ -474,4 +474,51 @@ object frmHome: TfrmHome
     RightFont.Name = 'Segoe UI'
     RightFont.Style = [fsBold]
   end
+  object lblTrendTitle: TLabel
+    Left = 340
+    Top = 24
+    Width = 118
+    Height = 17
+    Caption = 'CWSLabelTrend'
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -13
+    Font.Name = 'Segoe UI'
+    Font.Style = [fsBold]
+    ParentFont = False
+  end
+  object CWSLabelTrend1: TCWSLabelTrend
+    Left = 340
+    Top = 52
+    Width = 96
+    Height = 33
+    Caption = '+12.5%'
+    Color = clWhite
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -13
+    Font.Name = 'Segoe UI'
+    Font.Style = [fsBold]
+    ParentFont = False
+    LeftIcon = tiGlyph
+    LeftGlyph = #59150
+    IconColor = clGreen
+  end
+  object CWSLabelTrend2: TCWSLabelTrend
+    Left = 448
+    Top = 52
+    Width = 96
+    Height = 33
+    Caption = '-3.2%'
+    Color = clWhite
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -13
+    Font.Name = 'Segoe UI'
+    Font.Style = [fsBold]
+    ParentFont = False
+    LeftIcon = tiGlyph
+    LeftGlyph = #59149
+    IconColor = clRed
+  end
 end

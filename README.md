@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.6.8](https://img.shields.io/badge/version-1.6.8-blue.svg)](CHANGELOG.md)
+[![Version: 1.6.9](https://img.shields.io/badge/version-1.6.9-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -70,8 +70,8 @@ CWStudio to zestaw nowoczesnych, wysokiej jakości komponentów VCL dla środowi
 | Komponent | Opis |
 |-----------|------|
 | **`TCWSListBox`** | Lista (ListBox) w stylu Fluent z dyskretnym, zanikającym paskiem przewijania (tak jak w `TCWSMemo`). |
-| **`TCWSStringGrid`** | Płaska siatka tekstowa (StringGrid) z fluentowymi paskami przewijania (pionowy + poziomy). Konfigurowalne kolory (tło komórek, tło poza komórkami, linie siatki, komórki *fixed*, podświetlenie komórki, ramka), zaokrąglone narożniki z możliwością wyłączenia każdego z osobna oraz komórki bez efektu 3D. |
-| **`TCWSDBGrid`** | Siatka **danych** (DBGrid) w stylu Fluent — opakowuje wewnętrzny `TDBGrid`, więc zachowuje jego pełny interfejs (`DataSource`, `Columns`, `Options`, zdarzenia `OnDrawColumnCell` / `OnCellClick` / `OnTitleClick` itd.). Fluentowe paski przewijania (pionowy + poziomy), konfigurowalne kolory (tło, komórki, tekst, linie siatki, komórki *fixed*, podświetlenie), zaokrąglone narożniki z możliwością wyłączenia każdego z osobna, automatyczne dopasowanie szerokości kolumn (`AutoFitColumns`), regulowana wysokość wiersza i nagłówka oraz pionowe wyśrodkowanie tekstu. |
+| **`TCWSStringGrid`** | Płaska siatka tekstowa (StringGrid) z fluentowymi paskami przewijania (pionowy + poziomy). Konfigurowalne kolory (tło komórek, tło poza komórkami, linie siatki, komórki *fixed*, podświetlenie komórki, ramka), naprzemienne kolorowanie wierszy (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), zaokrąglone narożniki z możliwością wyłączenia każdego z osobna oraz komórki bez efektu 3D. |
+| **`TCWSDBGrid`** | Siatka **danych** (DBGrid) w stylu Fluent — opakowuje wewnętrzny `TDBGrid`, więc zachowuje jego pełny interfejs (`DataSource`, `Columns`, `Options`, zdarzenia `OnDrawColumnCell` / `OnCellClick` / `OnTitleClick` itd.). Fluentowe paski przewijania (pionowy + poziomy), konfigurowalne kolory (tło, komórki, tekst, linie siatki, komórki *fixed*, podświetlenie), naprzemienne kolorowanie wierszy liczone po rekordach (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), zaokrąglone narożniki z możliwością wyłączenia każdego z osobna, automatyczne dopasowanie szerokości kolumn (`AutoFitColumns`), regulowana wysokość wiersza i nagłówka oraz pionowe wyśrodkowanie tekstu. |
 
 ### Wskaźniki postępu
 
@@ -217,7 +217,13 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Historia wersji
 
-**Najnowsza wersja — 1.6.8:**
+**Najnowsza wersja — 1.6.9:**
+
+- `TCWSStringGrid` i `TCWSDBGrid` — nowe **naprzemienne kolorowanie wierszy**: `AlternatingRowColors` (domyślnie wyłączone) oraz `OddRowColor` / `EvenRowColor`. Wiersze liczone są od 1, więc pierwszy wiersz danych jest nieparzysty; wiersze / kolumny *fixed* i wiersz podświetlony zachowują własne kolory.
+- Oba kolory pasów mają domyślnie `clNone` = *wylicz z `CellColor`*: wiersz nieparzysty bierze `CellColor`, parzysty jego lekko przycieniowany wariant (ciemniejszy na jasnym motywie, jaśniejszy na ciemnym). Dzięki temu pasy same podążają za zmianą motywu `CWSFluentColors` — aplikacja przestawia tylko `CellColor`, tak jak dotąd. Jawnie przypisany kolor przypina pas na sztywno.
+- `TCWSDBGrid` liczy pasy **po rekordach** (`DataSet.RecNo`), a nie po pozycji na ekranie, więc nie przeskakują przy przewijaniu o jeden rekord (dla zbiorów bez `IsSequenced` jest fallback na numer wiersza).
+
+**Wersja 1.6.8:**
 
 - `TCWSListBox` — scrollbar poprawnie znika / pojawia się po maksymalizacji lub przywróceniu okna dwuklikiem na belce tytułowej (bez potrzeby najechania myszą).
 - `TCWSListBox` — kolor focusa / hover / normalny (oraz podświetlenie zaznaczenia) wypełnia teraz całe tło itema w trybie owner-draw (`lbOwnerDrawFixed` i `lbOwnerDrawVariable`), również pod własnym `OnDrawItem` rysującym na przezroczystym tle.
@@ -307,8 +313,8 @@ CWStudio is a library of modern, high-quality VCL components for Delphi, designe
 | Component | Description |
 |-----------|-------------|
 | **`TCWSListBox`** | Fluent-style list box with a subtle auto-hiding scrollbar (same as `TCWSMemo`). |
-| **`TCWSStringGrid`** | Flat text grid (StringGrid) with Fluent scrollbars (vertical + horizontal). Configurable colors (cell background, area-beyond-cells background, grid lines, fixed cells, cell highlight, border), rounded corners with each corner independently switchable, and flat (no 3D) cells. |
-| **`TCWSDBGrid`** | Fluent-style **data-aware** grid (DBGrid) — wraps an internal `TDBGrid`, so it keeps the full DBGrid surface (`DataSource`, `Columns`, `Options`, events `OnDrawColumnCell` / `OnCellClick` / `OnTitleClick`, etc.). Fluent scrollbars (vertical + horizontal), configurable colors (background, cells, text, grid lines, fixed cells, highlight), rounded corners with each corner independently switchable, automatic column-width fitting (`AutoFitColumns`), adjustable row and title height, and vertical text centering. |
+| **`TCWSStringGrid`** | Flat text grid (StringGrid) with Fluent scrollbars (vertical + horizontal). Configurable colors (cell background, area-beyond-cells background, grid lines, fixed cells, cell highlight, border), alternating row colors (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), rounded corners with each corner independently switchable, and flat (no 3D) cells. |
+| **`TCWSDBGrid`** | Fluent-style **data-aware** grid (DBGrid) — wraps an internal `TDBGrid`, so it keeps the full DBGrid surface (`DataSource`, `Columns`, `Options`, events `OnDrawColumnCell` / `OnCellClick` / `OnTitleClick`, etc.). Fluent scrollbars (vertical + horizontal), configurable colors (background, cells, text, grid lines, fixed cells, highlight), alternating row colors banded by record (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), rounded corners with each corner independently switchable, automatic column-width fitting (`AutoFitColumns`), adjustable row and title height, and vertical text centering. |
 
 ### Progress indicators
 
@@ -455,7 +461,13 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ Version history
 
-**Latest release — 1.6.8:**
+**Latest release — 1.6.9:**
+
+- `TCWSStringGrid` and `TCWSDBGrid` — new **alternating (zebra) row colors**: `AlternatingRowColors` (off by default) plus `OddRowColor` / `EvenRowColor`. Rows are numbered from 1, so the first data row is the odd one; fixed rows / columns and the highlighted row keep their own colors.
+- Both band colors default to `clNone` = *derive from `CellColor`*: odd rows take `CellColor` itself, even rows a slightly shaded variant (darker on a light theme, lighter on a dark one). Left that way the striping follows a `CWSFluentColors` theme switch on its own — the application only re-assigns `CellColor`, as it already does. An explicit color pins a band to a fixed value.
+- `TCWSDBGrid` bands by **record** (`DataSet.RecNo`) rather than by screen position, so the stripes don't flip when the grid scrolls by one record (datasets without `IsSequenced` fall back to the on-screen row).
+
+**Release 1.6.8:**
 
 - `TCWSListBox` — the scrollbar now appears / disappears correctly after a title-bar maximize / restore (double-click), without needing the mouse to enter the list.
 - `TCWSListBox` — the focus / hover / normal background (and the selection highlight) now fills the whole item row in owner-draw mode (`lbOwnerDrawFixed` and `lbOwnerDrawVariable`), including under a custom transparent `OnDrawItem`.
