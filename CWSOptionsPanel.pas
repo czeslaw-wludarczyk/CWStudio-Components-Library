@@ -204,6 +204,12 @@ type
       expanded — so Relayout keeps the change instead of snapping it back. }
     procedure ApplyDesignHeight;
     function GetParentBgColor: TColor;
+    { Paints what is really behind the card into DC, outside the rounded outline.
+      (ADX, ADY) is where this panel's client origin sits in DC's device space —
+      (0, 0) when the panel paints itself, (-Left, -Top) of a hosted section when
+      that section paints the card's rounded bottom in its own coordinates. }
+    procedure DrawParentBackground(DC: HDC; ARadius: Single;
+      ADX: Integer = 0; ADY: Integer = 0);
     function PointInHeader(X, Y: Integer): Boolean;
     procedure DrawHeader;
     { Invalidate the whole card — the header AND every hosted section. Shape/border
@@ -409,15 +415,23 @@ begin
   APath.CloseFigure;
 end;
 
-{ Collects the outline segments belonging to *hidden* border edges so they can
-  be re-stroked in the fill colour ON TOP of the full border. This keeps the card
-  at full size with crisp corners — a removed edge simply blends into the
-  interior instead of leaving a gap that shows the parent background through.
-  A straight edge is added when it is hidden; a corner arc is added when it is
-  rounded and at least one of its two adjacent edges is hidden. Geometry mirrors
-  AddRoundRectPathEx exactly so the fill stroke covers the border pixel-for-pixel.
+{ Collects the outline segments belonging to *visible* border edges, so only
+  those get stroked. The card keeps its full size and crisp corners — a hidden
+  edge simply blends into the interior instead of leaving a gap that shows the
+  parent background through.
+
+  This must not be done the other way round (stroke the whole outline, then
+  re-stroke the hidden parts in the fill colour). On a straight edge the second
+  stroke lands on full-coverage pixels and replaces the first one exactly, but on
+  a corner arc the antialiased coverage is fractional, so the two strokes blend
+  instead of cancelling and the arc keeps a visible ghost of BorderColor — the
+  corners read as a third colour that is neither the fill nor the background.
+
+  A straight edge is added when it is visible; a corner arc is added when it is
+  rounded and BOTH of its adjacent edges are visible. Geometry mirrors
+  AddRoundRectPathEx exactly so the stroke sits on the card outline.
   ET/ER/EB/EL are the edge-ENABLED flags. Each segment is its own figure. }
-procedure AddBorderMaskPathEx(APath: TGPGraphicsPath; X, Y, W, H, R: Single;
+procedure AddBorderVisiblePathEx(APath: TGPGraphicsPath; X, Y, W, H, R: Single;
   TL, TR, BR, BL: Boolean; ET, ER, EB, EL: Boolean);
 var
   D: Single;
@@ -432,34 +446,34 @@ begin
   if D < 0 then D := 0;
   R := D / 2;
 
-  { Corner arcs — hidden when the corner is rounded and either adjacent edge is
-    hidden (a corner stays in the border colour only when both its edges show). }
-  if TL and not (EL and ET) then
+  { Corner arcs — a corner is drawn in the border colour only when both of its
+    edges show. }
+  if TL and EL and ET then
   begin APath.StartFigure; APath.AddArc(X, Y, D, D, 180, 90); end;
-  if TR and not (ET and ER) then
+  if TR and ET and ER then
   begin APath.StartFigure; APath.AddArc(X + W - D, Y, D, D, 270, 90); end;
-  if BR and not (ER and EB) then
+  if BR and ER and EB then
   begin APath.StartFigure; APath.AddArc(X + W - D, Y + H - D, D, D, 0, 90); end;
-  if BL and not (EB and EL) then
+  if BL and EB and EL then
   begin APath.StartFigure; APath.AddArc(X, Y + H - D, D, D, 90, 90); end;
 
-  { Hidden straight edges. }
-  if not ET then
+  { Visible straight edges. }
+  if ET then
   begin
     APath.StartFigure;
     APath.AddLine(X + Ret(TL), Y, X + W - Ret(TR), Y);
   end;
-  if not ER then
+  if ER then
   begin
     APath.StartFigure;
     APath.AddLine(X + W, Y + Ret(TR), X + W, Y + H - Ret(BR));
   end;
-  if not EB then
+  if EB then
   begin
     APath.StartFigure;
     APath.AddLine(X + W - Ret(BR), Y + H, X + Ret(BL), Y + H);
   end;
-  if not EL then
+  if EL then
   begin
     APath.StartFigure;
     APath.AddLine(X, Y + H - Ret(BL), X, Y + Ret(TL));
@@ -540,6 +554,9 @@ begin
     Canvas.Brush.Color := P.GetParentBgColor;
     Canvas.Brush.Style := bsSolid;
     Canvas.FillRect(ClientRect);
+    { Same outline the panel used, so hand it this DC with our offset — it knows
+      what is really behind the card. }
+    P.DrawParentBackground(Canvas.Handle, R, -Left, -Top);
 
     G := TGPGraphics.Create(Canvas.Handle);
     try
@@ -748,6 +765,47 @@ begin
     Result := TControlAccess(Parent).Color
   else
     Result := clBtnFace;
+end;
+
+procedure TCWSOptionsPanel.DrawParentBackground(DC: HDC; ARadius: Single;
+  ADX: Integer = 0; ADY: Integer = 0);
+var
+  SaveIdx: Integer;
+  Rgn: HRGN;
+  D: Integer;
+begin
+  { The GetParentBgColor fill done by the caller is only a correct guess when the
+    parent paints itself as a flat fill of that very color. A container drawing a
+    gradient/card background, a VCL-styled form, or a parent whose Color is out
+    of sync with what it actually paints all leave visible wrong-colored
+    triangles outside the card's rounded corners — so let the parent render its
+    real background here instead.
+    Skipped at design time: a form's PaintWindow draws the designer dot grid,
+    which would then bleed into the corners. }
+  if (Parent = nil) or (csDesigning in ComponentState) then
+    Exit;
+  SaveIdx := SaveDC(DC);
+  try
+    { Clip to the sliver outside the card outline (inset by 1 px so the
+      antialiased edge blends against real parent pixels). Region coordinates
+      are device units, so this must happen before MoveWindowOrg — hence the
+      explicit (ADX, ADY) rather than relying on the origin shift. }
+    D := Round(ARadius) * 2;
+    Rgn := CreateRoundRectRgn(ADX + 1, ADY + 1, ADX + Width, ADY + Height, D, D);
+    try
+      ExtSelectClipRgn(DC, Rgn, RGN_DIFF);
+    finally
+      DeleteObject(Rgn);
+    end;
+    { Shift the origin so our parent paints in its own coordinate system. }
+    MoveWindowOrg(DC, ADX - Left, ADY - Top);
+    Parent.Perform(WM_ERASEBKGND, WPARAM(DC), 0);
+    { Parents that swallow WM_ERASEBKGND and paint in WM_PAINT (all the CWStudio
+      containers do) only respond to this one. }
+    Parent.Perform(WM_PRINTCLIENT, WPARAM(DC), PRF_CLIENT);
+  finally
+    RestoreDC(DC, SaveIdx);
+  end;
 end;
 
 function TCWSOptionsPanel.PointInHeader(X, Y: Integer): Boolean;
@@ -963,6 +1021,7 @@ var
   G: TGPGraphics;
   Path: TGPGraphicsPath;
   BorderPath: TGPGraphicsPath;
+  HoverPath: TGPGraphicsPath;
   Brush: TGPSolidBrush;
   Pen: TGPPen;
   W, H, R, HH: Single;
@@ -1011,52 +1070,54 @@ begin
       finally
         Brush.Free;
       end;
-      { Always stroke the full outline in the border colour first. }
-      Pen := TGPPen.Create(MakeGPColor(FBorderColor));
-      try
-        G.DrawPath(Pen, Path);
-      finally
-        Pen.Free;
-      end;
-      { Any hidden edge is not removed — it is over-painted in the fill colour so
-        the card keeps its full size/shape and blends into the interior there. }
-      if not (FBorderTop and FBorderRight and FBorderBottom and FBorderLeft) then
+
+      { Subtle hover highlight over the header band only. It is painted BEFORE
+        the outline: its path runs down the middle of the border pixels (the same
+        0.5-offset geometry the stroke uses), so an antialiased fill on top would
+        blend half the hover colour into them and the border would visibly change
+        colour while hovered. Stroking after keeps BorderColor exact. }
+      if FHover and FHeaderHovered and (not (csDesigning in ComponentState)) then
       begin
-        BorderPath := TGPGraphicsPath.Create;
+        HoverPath := TGPGraphicsPath.Create;
         try
-          AddBorderMaskPathEx(BorderPath, 0.5, 0.5, W - 1, H - 1, R,
-            RTL, RTR, CardRBR, CardRBL,
-            FBorderTop, FBorderRight, FBorderBottom, FBorderLeft);
-          Pen := TGPPen.Create(MakeGPColor(FFillColor));
+          AddRoundRectPathEx(HoverPath, 0.5, 0.5, W - 1, HH - 1, R, RTL, RTR, RBR, RBL);
+          Brush := TGPSolidBrush.Create(MakeGPColor(FHoverColor));
           try
-            G.DrawPath(Pen, BorderPath);
+            G.FillPath(Brush, HoverPath);
           finally
-            Pen.Free;
+            Brush.Free;
           end;
         finally
-          BorderPath.Free;
+          HoverPath.Free;
         end;
+      end;
+
+      { Stroke only what should show. A hidden edge is simply not drawn — never
+        drawn and then painted over, which leaves a BorderColor ghost on the
+        antialiased corner arcs (see AddBorderVisiblePathEx). }
+      Pen := TGPPen.Create(MakeGPColor(FBorderColor));
+      try
+        if FBorderTop and FBorderRight and FBorderBottom and FBorderLeft then
+          G.DrawPath(Pen, Path)
+        else
+        begin
+          BorderPath := TGPGraphicsPath.Create;
+          try
+            AddBorderVisiblePathEx(BorderPath, 0.5, 0.5, W - 1, H - 1, R,
+              RTL, RTR, CardRBR, CardRBL,
+              FBorderTop, FBorderRight, FBorderBottom, FBorderLeft);
+            G.DrawPath(Pen, BorderPath);
+          finally
+            BorderPath.Free;
+          end;
+        end;
+      finally
+        Pen.Free;
       end;
     finally
       Path.Free;
     end;
 
-    // Subtle hover highlight over the header band only.
-    if FHover and FHeaderHovered and (not (csDesigning in ComponentState)) then
-    begin
-      Path := TGPGraphicsPath.Create;
-      try
-        AddRoundRectPathEx(Path, 0.5, 0.5, W - 1, HH - 1, R, RTL, RTR, RBR, RBL);
-        Brush := TGPSolidBrush.Create(MakeGPColor(FHoverColor));
-        try
-          G.FillPath(Brush, Path);
-        finally
-          Brush.Free;
-        end;
-      finally
-        Path.Free;
-      end;
-    end;
   finally
     G.Free;
   end;
@@ -1195,6 +1256,7 @@ begin
   Canvas.Brush.Color := GetParentBgColor;
   Canvas.Brush.Style := bsSolid;
   Canvas.FillRect(ClientRect);
+  DrawParentBackground(Canvas.Handle, Scale(FCornerRadius));
   DrawHeader;
 end;
 

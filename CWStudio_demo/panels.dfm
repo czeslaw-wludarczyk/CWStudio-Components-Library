@@ -175,6 +175,7 @@ object frmPanels: TfrmPanels
       Title = 'CWSOptionsPanel'
       Subtitle = 'Collapsible options card with stacked sections'
       Expanded = True
+      CornerRadius = 4
       TitleFont.Charset = DEFAULT_CHARSET
       TitleFont.Color = 1776411
       TitleFont.Height = -13
@@ -186,6 +187,8 @@ object frmPanels: TfrmPanels
       SubtitleFont.Name = 'Segoe UI'
       SubtitleFont.Style = []
       ImageIndex = 0
+      IconFontName = 'Segoe MDL2 Assets'
+      RoundLastSection = True
       object sectOpt1: TCWSOptionsSection
         Left = 1
         Top = 60

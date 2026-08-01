@@ -241,6 +241,7 @@ type
     procedure EnsureBuffer;
 
     function GetParentBgColor: TColor;
+    procedure DrawParentBackground(DC: HDC; ARadius: Single);
     function MakeGPColor(AColor: TColor; Alpha: Byte = 255): Cardinal;
     function CreateBorderPath(X, Y, W, H, R: Single; TL, TR, BR, BL: Boolean): TGPGraphicsPath;
     function CreateRoundRectPath(X, Y, W, H, R: Single): TGPGraphicsPath;
@@ -1122,6 +1123,46 @@ begin
     Result := clBtnFace;
 end;
 
+procedure TCWSStringGrid.DrawParentBackground(DC: HDC; ARadius: Single);
+var
+  SaveIdx: Integer;
+  Rgn: HRGN;
+  D: Integer;
+begin
+  { The GetParentBgColor fill done by the caller is only a correct guess when the
+    parent paints itself as a flat fill of that very color. A container drawing a
+    gradient/card background, a VCL-styled form, or a parent whose Color is out
+    of sync with what it actually paints all leave visible wrong-colored
+    triangles outside our rounded corners — so let the parent render its real
+    background here instead.
+    Skipped at design time: a form's PaintWindow draws the designer dot grid,
+    which would then bleed into the corners. }
+  if (Parent = nil) or (csDesigning in ComponentState) then
+    Exit;
+  SaveIdx := SaveDC(DC);
+  try
+    { Clip to the sliver outside the rounded body (inset by 1 px so the
+      antialiased edge blends against real parent pixels). Keeps the parent's
+      paint cheap — it is repeated on every hover/focus repaint. Region
+      coordinates are device units, so this must happen before MoveWindowOrg. }
+    D := Round(ARadius) * 2;
+    Rgn := CreateRoundRectRgn(1, 1, Width, Height, D, D);
+    try
+      ExtSelectClipRgn(DC, Rgn, RGN_DIFF);
+    finally
+      DeleteObject(Rgn);
+    end;
+    { Shift the origin so the parent paints in its own coordinate system. }
+    MoveWindowOrg(DC, -Left, -Top);
+    Parent.Perform(WM_ERASEBKGND, WPARAM(DC), 0);
+    { Parents that swallow WM_ERASEBKGND and paint in WM_PAINT (all the CWStudio
+      containers do) only respond to this one. }
+    Parent.Perform(WM_PRINTCLIENT, WPARAM(DC), PRF_CLIENT);
+  finally
+    RestoreDC(DC, SaveIdx);
+  end;
+end;
+
 function TCWSStringGrid.MakeGPColor(AColor: TColor; Alpha: Byte): Cardinal;
 var
   C: TColor;
@@ -1234,6 +1275,7 @@ begin
 
   FBuffer.Canvas.Brush.Color := GetParentBgColor;
   FBuffer.Canvas.FillRect(Rect(0, 0, Width, Height));
+  DrawParentBackground(FBuffer.Canvas.Handle, R);
 
   G := TGPGraphics.Create(FBuffer.Canvas.Handle);
   try

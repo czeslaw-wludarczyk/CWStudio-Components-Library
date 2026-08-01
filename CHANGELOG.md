@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.7.0] — 2026-08
+
+- **Changed** — the password button on `TCWSEdit` and `TCWSEditMask` (`ebsPassword` / `embsPassword`) is now a **hold-to-reveal** button, like the WinUI 3 `PasswordBox`: the text is visible only while the button is held down and is masked again on release. Previously a click toggled it and the password stayed on screen. Masking is also restored when the release lands outside the button, and when the mouse capture is cancelled without a release (modal dialog, Alt+Tab, Esc). Reveal keeps the edit's font, caret and selection — changing `PasswordChar` recreates the edit handle, which drops all three. `OnButtonClick` still fires as before; the other button styles are unchanged.
+- **Fix** — rounded corners no longer show a wrong-colored triangle when the parent does not paint itself as a flat fill of its own `Color`: a container drawing a card / gradient background, a VCL-styled form, or a parent whose `Color` is out of sync with what it actually paints. The area outside the rounding is now rendered by asking the parent for its real background (clipped to that sliver) instead of guessing from `Parent.Color`, which stays as the fallback. Applies to `TCWSEdit`, `TCWSEditMask`, `TCWSMemo`, `TCWSComboBox`, `TCWSDatePicker`, `TCWSListBox`, `TCWSStringGrid`, `TCWSDBGrid`, `TCWSSettingsPanel` and `TCWSOptionsPanel`. On `TCWSListBox` this only applies when the corners are set to blend with the parent — an explicit `CornerColor` or `Color` still wins. Design time keeps the flat fill so the designer's dot grid cannot bleed into the corners.
+- **Fix** `TCWSOptionsPanel`: hovering the header no longer tints the card border. The hover wash runs along the same half-pixel geometry as the border stroke, so filling it on top blended half of `HoverColor` into every border pixel; it is now painted before the outline.
+- **Fix** `TCWSOptionsPanel`: with a border edge switched off (`BorderTop` / `BorderRight` / `BorderBottom` / `BorderLeft`), the rounded corners showed a third color that was neither the fill nor the background. The outline was stroked whole and the hidden parts painted over — which cancels exactly on a straight edge, but not on an antialiased corner arc, leaving a `BorderColor` ghost. Only the visible edges are stroked now.
+
 ## [1.6.9] — 2026-07
 
 - New on `TCWSStringGrid` and `TCWSDBGrid`: **alternating (zebra) row colors** — `AlternatingRowColors` (off by default, so existing forms are unchanged) plus `OddRowColor` / `EvenRowColor`. Rows are numbered from 1, so the first data row is the odd one; fixed rows / columns and the highlighted (current) row keep their own colors.
@@ -17,7 +24,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Fix `TCWSListBox`: the scrollbar now appears/disappears correctly after a title-bar **maximize / restore** (double-click). Visibility is recalculated from the target height *before* resizing the inner list, instead of from its stale pre-resize size — previously the scrollbar only refreshed once the mouse entered the list.
 - Fix `TCWSListBox`: the focus / hover / normal background (and the selection highlight) now fills the **whole item row** in owner-draw mode (`lbOwnerDrawFixed` and `lbOwnerDrawVariable`), matching the empty area — including under a custom `OnDrawItem` that draws transparently. The state background is painted before the item content. *(Note: a handler that fills its own opaque background still wins; fill with the brush the component pre-sets, or with `Sender.Color`, to follow the focus colour.)*
 - New `Constraints` property on `TCWSSettingsPanel` — set minimum / maximum width and height, exactly like the stock VCL controls.
-- added Visible property to CWSStoreButton and CWSMenuButton
 
 ## [1.6.7] — 2026-07
 

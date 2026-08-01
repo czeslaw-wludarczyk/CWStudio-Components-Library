@@ -161,6 +161,7 @@ type
     procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
     procedure WMPaint(var Msg: TWMPaint); message WM_PAINT;
     procedure WMLButtonDown(var Msg: TWMLButtonDown); message WM_LBUTTONDOWN;
+    procedure WMCancelMode(var Msg: TMessage); message WM_CANCELMODE;
     procedure SyncEditFont;
     procedure ApplyDefaultFont;
     procedure UpdateEditPosition;
@@ -173,6 +174,7 @@ type
     procedure EnsureBuffer;
     function GetText: string;
     function GetParentBgColor: TColor;
+    procedure DrawParentBackground(DC: HDC; ARadius: Single);
     procedure AdjustHeight;
     function GetSelStart: Integer;
     procedure SetSelStart(const Value: Integer);
@@ -182,6 +184,7 @@ type
     procedure SetSelText(const Value: string);
     function GetButtonRect: TRect;
     procedure HandleButtonClick;
+    procedure SetPasswordReveal(Reveal: Boolean);
     function Scale(Value: Integer): Integer;
     function ScaleF(Value: Single): Single;
     function MakeGPColor(AColor: TColor; Alpha: Byte = 255): Cardinal;
@@ -542,6 +545,34 @@ begin
   Result := Rect(Width - BtnSize - Pad, Pad, Width - Pad, Height - Pad);
 end;
 
+procedure TCWSEdit.SetPasswordReveal(Reveal: Boolean);
+var
+  NewChar: Char;
+  OldSelStart, OldSelLength: Integer;
+begin
+  { Reveal/mask the text for the ebsPassword button. Nothing to do when no
+    PasswordChar is configured — the text is plain anyway. }
+  if (FEdit = nil) or (FButtonStyle <> ebsPassword) or (FPasswordChar = #0) then
+    Exit;
+  if Reveal then
+    NewChar := #0
+  else
+    NewChar := FPasswordChar;
+  if FEdit.PasswordChar = NewChar then
+    Exit;
+
+  // Setting PasswordChar does a RecreateWnd, which drops the edit's font and
+  // its caret/selection — restore both, exactly like SetPasswordChar does.
+  OldSelStart := FEdit.SelStart;
+  OldSelLength := FEdit.SelLength;
+  FEdit.PasswordChar := NewChar;
+  FEdit.Font.Assign(Font);
+  FEdit.SelStart := OldSelStart;
+  FEdit.SelLength := OldSelLength;
+  UpdateEditPosition;
+  Invalidate; // the eye icon draws the slash based on PasswordChar
+end;
+
 procedure TCWSEdit.HandleButtonClick;
 begin
   case FButtonStyle of
@@ -553,14 +584,9 @@ begin
     ebsSearch: if Assigned(FOnSearchClick) then
         FOnSearchClick(Self);
     ebsPassword:
-      begin
-        if FEdit.PasswordChar = #0 then
-          FEdit.PasswordChar := FPasswordChar
-        else
-          FEdit.PasswordChar := #0;
-        FEdit.SetFocus;
-        Invalidate;
-      end;
+      { Reveal/mask is driven by MouseDown/MouseUp (hold-to-reveal), so here
+        we only return the caret to the edit. }
+      FEdit.SetFocus;
   end;
   if Assigned(FOnButtonClick) then
     FOnButtonClick(Self);
@@ -703,6 +729,7 @@ begin
   R := ScaleF(FCornerRadius);
   FBuffer.Canvas.Brush.Color := GetParentBgColor;
   FBuffer.Canvas.FillRect(Rect(0, 0, Width, Height));
+  DrawParentBackground(FBuffer.Canvas.Handle, R);
   G := TGPGraphics.Create(FBuffer.Canvas.Handle);
   try
     G.SetSmoothingMode(SmoothingModeAntiAlias);
@@ -874,6 +901,9 @@ begin
       mouse so we still receive MouseUp if the cursor drifts off the button. }
     FButtonPressed := True;
     MouseCapture := True;
+    { ebsPassword works like the WinUI 3 reveal button: the text is visible only
+      while the button is held down and gets masked again on release. }
+    SetPasswordReveal(True);
     Invalidate;
     Exit;
   end;
@@ -892,6 +922,8 @@ begin
   begin
     FButtonPressed := False;
     MouseCapture := False;
+    { Mask again on release — also when the release lands outside the button }
+    SetPasswordReveal(False);
     { Keep the hover state in sync now that capture is released }
     FButtonHovered := PtInRect(GetButtonRect, Point(X, Y));
     Invalidate;
@@ -911,6 +943,19 @@ begin
   inherited;
   if (FEdit <> nil) and FEdit.CanFocus and not FEdit.Focused then
     FEdit.SetFocus;
+end;
+
+// Capture can be cancelled without a MouseUp (modal dialog, Alt+Tab, ESC).
+// Without this the revealed password would stay visible.
+procedure TCWSEdit.WMCancelMode(var Msg: TMessage);
+begin
+  inherited;
+  if FButtonPressed then
+  begin
+    FButtonPressed := False;
+    SetPasswordReveal(False);
+    Invalidate;
+  end;
 end;
 
 procedure TCWSEdit.SetButtonStyle(const Value: TCWSEditButtonStyle);
@@ -1151,6 +1196,46 @@ begin
     Result := TControlAccess(Parent).Color
   else
     Result := clBtnFace;
+end;
+
+procedure TCWSEdit.DrawParentBackground(DC: HDC; ARadius: Single);
+var
+  SaveIdx: Integer;
+  Rgn: HRGN;
+  D: Integer;
+begin
+  { The GetParentBgColor fill done by the caller is only a correct guess when the
+    parent paints itself as a flat fill of that very color. A container drawing a
+    gradient/card background, a VCL-styled form, or a parent whose Color is out
+    of sync with what it actually paints all leave visible wrong-colored
+    triangles outside our rounded corners — so let the parent render its real
+    background here instead.
+    Skipped at design time: a form's PaintWindow draws the designer dot grid,
+    which would then bleed into the corners. }
+  if (Parent = nil) or (csDesigning in ComponentState) then
+    Exit;
+  SaveIdx := SaveDC(DC);
+  try
+    { Clip to the sliver outside the rounded body (inset by 1 px so the
+      antialiased edge blends against real parent pixels). Keeps the parent's
+      paint cheap — it is repeated on every hover/focus repaint. Region
+      coordinates are device units, so this must happen before MoveWindowOrg. }
+    D := Round(ARadius) * 2;
+    Rgn := CreateRoundRectRgn(1, 1, Width, Height, D, D);
+    try
+      ExtSelectClipRgn(DC, Rgn, RGN_DIFF);
+    finally
+      DeleteObject(Rgn);
+    end;
+    { Shift the origin so the parent paints in its own coordinate system. }
+    MoveWindowOrg(DC, -Left, -Top);
+    Parent.Perform(WM_ERASEBKGND, WPARAM(DC), 0);
+    { Parents that swallow WM_ERASEBKGND and paint in WM_PAINT (all the CWStudio
+      containers do) only respond to this one. }
+    Parent.Perform(WM_PRINTCLIENT, WPARAM(DC), PRF_CLIENT);
+  finally
+    RestoreDC(DC, SaveIdx);
+  end;
 end;
 
 procedure TCWSEdit.EnsureBuffer;

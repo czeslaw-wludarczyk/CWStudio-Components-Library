@@ -51,7 +51,7 @@ begin
   CWSStringGrid1.CellTextColor := flNeutralForeground1;
   CWSStringGrid1.Font.Color:= flNeutralForeground1;
   CWSStringGrid1.AlternatingRowColors := True;
-  CWSStringGrid1.EvenRowColor:= flNeutralBackground5;
+  CWSStringGrid1.EvenRowColor:= flNeutralBackground3;
 
   CWSEdit1.BackgroundColor := flNeutralBackground2;
   CWSEdit1.BackgroundHoverColor := flNeutralBackground4;

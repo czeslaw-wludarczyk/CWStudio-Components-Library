@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.6.9](https://img.shields.io/badge/version-1.6.9-blue.svg)](CHANGELOG.md)
+[![Version: 1.7.0](https://img.shields.io/badge/version-1.7.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -217,7 +217,14 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Historia wersji
 
-**Najnowsza wersja — 1.6.9:**
+**Najnowsza wersja — 1.7.0:**
+
+- **Zmiana** — przycisk hasła w `TCWSEdit` i `TCWSEditMask` (`ebsPassword` / `embsPassword`) działa teraz jak w WinUI 3: hasło jest widoczne **tylko podczas trzymania** przycisku, a po puszczeniu wraca maskowanie (wcześniej klik przełączał i hasło zostawało na ekranie). Maskowanie wraca też, gdy puścisz przycisk poza nim oraz przy utracie capture bez puszczenia (okno modalne, Alt+Tab, Esc). Odsłanianie zachowuje czcionkę, karetkę i zaznaczenie pola. `OnButtonClick` odpala się jak dotąd, pozostałe style przycisku bez zmian.
+- **Poprawka** — zaokrąglone narożniki nie pokazują już trójkąta w złym kolorze, gdy rodzic nie maluje się jednolitym wypełnieniem własnego `Color` (kontener rysujący kartę / gradient, formatka ze stylem VCL, rodzic z `Color` rozjechanym z tym, co faktycznie maluje). Obszar poza zaokrągleniem jest teraz malowany prawdziwym tłem rodzica zamiast zgadywany z `Parent.Color` (który zostaje jako fallback). Dotyczy `TCWSEdit`, `TCWSEditMask`, `TCWSMemo`, `TCWSComboBox`, `TCWSDatePicker`, `TCWSListBox`, `TCWSStringGrid`, `TCWSDBGrid`, `TCWSSettingsPanel` i `TCWSOptionsPanel`. W `TCWSListBox` tylko wtedy, gdy narożniki mają zlewać się z rodzicem — jawny `CornerColor` lub `Color` nadal wygrywa.
+- **Poprawka** `TCWSOptionsPanel` — najechanie na nagłówek nie przebarwia już ramki karty (podświetlenie hover malowane jest przed obrysem).
+- **Poprawka** `TCWSOptionsPanel` — przy wyłączonej krawędzi ramki (`BorderTop` / `BorderRight` / `BorderBottom` / `BorderLeft`) narożniki nie pokazują już trzeciego koloru: rysowany jest tylko obrys widocznych krawędzi, zamiast całego i zamalowywania ukrytych.
+
+**Wersja 1.6.9:**
 
 - `TCWSStringGrid` i `TCWSDBGrid` — nowe **naprzemienne kolorowanie wierszy**: `AlternatingRowColors` (domyślnie wyłączone) oraz `OddRowColor` / `EvenRowColor`. Wiersze liczone są od 1, więc pierwszy wiersz danych jest nieparzysty; wiersze / kolumny *fixed* i wiersz podświetlony zachowują własne kolory.
 - Oba kolory pasów mają domyślnie `clNone` = *wylicz z `CellColor`*: wiersz nieparzysty bierze `CellColor`, parzysty jego lekko przycieniowany wariant (ciemniejszy na jasnym motywie, jaśniejszy na ciemnym). Dzięki temu pasy same podążają za zmianą motywu `CWSFluentColors` — aplikacja przestawia tylko `CellColor`, tak jak dotąd. Jawnie przypisany kolor przypina pas na sztywno.
@@ -461,7 +468,14 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ Version history
 
-**Latest release — 1.6.9:**
+**Latest release — 1.7.0:**
+
+- **Changed** — the password button on `TCWSEdit` and `TCWSEditMask` (`ebsPassword` / `embsPassword`) is now **hold-to-reveal**, like the WinUI 3 `PasswordBox`: the text shows only while the button is held down and is masked again on release (previously a click toggled it and the password stayed on screen). Masking is also restored when the release lands outside the button and when the mouse capture is cancelled without a release (modal dialog, Alt+Tab, Esc). Revealing keeps the edit's font, caret and selection. `OnButtonClick` fires as before; the other button styles are unchanged.
+- **Fix** — rounded corners no longer show a wrong-colored triangle when the parent does not paint itself as a flat fill of its own `Color` (a container drawing a card / gradient background, a VCL-styled form, a parent whose `Color` is out of sync with what it paints). The area outside the rounding now renders the parent's real background instead of guessing from `Parent.Color`, which stays as the fallback. Applies to `TCWSEdit`, `TCWSEditMask`, `TCWSMemo`, `TCWSComboBox`, `TCWSDatePicker`, `TCWSListBox`, `TCWSStringGrid`, `TCWSDBGrid`, `TCWSSettingsPanel` and `TCWSOptionsPanel`. On `TCWSListBox` only when the corners are set to blend with the parent — an explicit `CornerColor` or `Color` still wins.
+- **Fix** `TCWSOptionsPanel` — hovering the header no longer tints the card border (the hover wash is painted before the outline).
+- **Fix** `TCWSOptionsPanel` — with a border edge switched off (`BorderTop` / `BorderRight` / `BorderBottom` / `BorderLeft`) the rounded corners no longer show a third color: only the visible edges are stroked, instead of stroking the whole outline and painting the hidden parts over.
+
+**Release 1.6.9:**
 
 - `TCWSStringGrid` and `TCWSDBGrid` — new **alternating (zebra) row colors**: `AlternatingRowColors` (off by default) plus `OddRowColor` / `EvenRowColor`. Rows are numbered from 1, so the first data row is the odd one; fixed rows / columns and the highlighted row keep their own colors.
 - Both band colors default to `clNone` = *derive from `CellColor`*: odd rows take `CellColor` itself, even rows a slightly shaded variant (darker on a light theme, lighter on a dark one). Left that way the striping follows a `CWSFluentColors` theme switch on its own — the application only re-assigns `CellColor`, as it already does. An explicit color pins a band to a fixed value.

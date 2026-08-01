@@ -177,7 +177,7 @@ object frmEdits: TfrmEdits
         Height = 29
         Cursor = crIBeam
         ButtonStyle = ebsClear
-        ButtonIconSize = 12
+        ButtonIconSize = 10
         Text = ''
         CornerRadius = 4.000000000000000000
         TabOrder = 1
@@ -190,7 +190,7 @@ object frmEdits: TfrmEdits
         Height = 29
         Cursor = crIBeam
         ButtonStyle = ebsSearch
-        ButtonIconSize = 14
+        ButtonIconSize = 10
         OnButtonClick = CWSEdit8ButtonClick
         Text = ''
         CornerRadius = 4.000000000000000000
@@ -204,7 +204,7 @@ object frmEdits: TfrmEdits
         Height = 29
         Cursor = crIBeam
         ButtonStyle = ebsPassword
-        ButtonIconSize = 16
+        ButtonIconSize = 10
         Text = ''
         CornerRadius = 4.000000000000000000
         PasswordChar = '*'
@@ -218,7 +218,7 @@ object frmEdits: TfrmEdits
         Height = 29
         Cursor = crIBeam
         ButtonStyle = ebsCustom
-        ButtonIconSize = 18
+        ButtonIconSize = 14
         Images = SVGIconImageList1
         ImageIndex = 0
         Text = ''
@@ -496,7 +496,7 @@ object frmEdits: TfrmEdits
       object lblTitle5: TLabel
         Left = 16
         Top = 16
-        Width = 122
+        Width = 123
         Height = 25
         Caption = 'CWSEditMask'
         Font.Charset = DEFAULT_CHARSET
@@ -512,10 +512,12 @@ object frmEdits: TfrmEdits
         Width = 280
         Height = 47
         Cursor = crIBeam
-        LabelText = 'Date'
         EditMask = '0000-00-00;1;_'
+        Text = '    -  -  '
+        LabelText = 'Date'
         CornerRadius = 4.000000000000000000
         TabOrder = 0
+        TabStop = True
       end
       object CWSEditMask2: TCWSEditMask
         Left = 312
@@ -523,10 +525,12 @@ object frmEdits: TfrmEdits
         Width = 280
         Height = 47
         Cursor = crIBeam
-        LabelText = 'Phone'
         EditMask = '000-000-000;1;_'
+        Text = '   -   -   '
+        LabelText = 'Phone'
         CornerRadius = 4.000000000000000000
         TabOrder = 1
+        TabStop = True
       end
       object CWSEditMask3: TCWSEditMask
         Left = 608
@@ -534,10 +538,12 @@ object frmEdits: TfrmEdits
         Width = 280
         Height = 47
         Cursor = crIBeam
-        LabelText = 'Postal code'
         EditMask = '00-000;1;_'
+        Text = '  -   '
+        LabelText = 'Postal code'
         CornerRadius = 4.000000000000000000
         TabOrder = 2
+        TabStop = True
       end
     end
   end

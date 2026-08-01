@@ -39,6 +39,7 @@ type
     procedure SetCornerRadius(const Value: Integer);
     procedure SetInnerCornerRadius(const Value: Integer);
     function GetParentBgColor: TColor;
+    procedure DrawParentBackground(DC: HDC; ARadius: Single);
     function MakeGPColor(AColor: TColor): Cardinal;
     { Builds the inner-border clip shape (the 1px-inset rounded rectangle) in the
       coordinate system whose origin is offset by (OffsetX, OffsetY). Pass a child
@@ -257,6 +258,45 @@ begin
     Result := clBtnFace;
 end;
 
+procedure TCWSSettingsPanel.DrawParentBackground(DC: HDC; ARadius: Single);
+var
+  SaveIdx: Integer;
+  Rgn: HRGN;
+  D: Integer;
+begin
+  { The GetParentBgColor fill done by the caller is only a correct guess when the
+    parent paints itself as a flat fill of that very color. A container drawing a
+    gradient/card background, a VCL-styled form, or a parent whose Color is out
+    of sync with what it actually paints all leave visible wrong-colored
+    triangles outside our rounded corners — so let the parent render its real
+    background here instead.
+    Skipped at design time: a form's PaintWindow draws the designer dot grid,
+    which would then bleed into the corners. }
+  if (Parent = nil) or (csDesigning in ComponentState) then
+    Exit;
+  SaveIdx := SaveDC(DC);
+  try
+    { Clip to the sliver outside the rounded body (inset by 1 px so the
+      antialiased edge blends against real parent pixels). Region coordinates
+      are device units, so this must happen before MoveWindowOrg. }
+    D := Round(ARadius) * 2;
+    Rgn := CreateRoundRectRgn(1, 1, Width, Height, D, D);
+    try
+      ExtSelectClipRgn(DC, Rgn, RGN_DIFF);
+    finally
+      DeleteObject(Rgn);
+    end;
+    { Shift the origin so the parent paints in its own coordinate system. }
+    MoveWindowOrg(DC, -Left, -Top);
+    Parent.Perform(WM_ERASEBKGND, WPARAM(DC), 0);
+    { Parents that swallow WM_ERASEBKGND and paint in WM_PAINT (all the CWStudio
+      containers do) only respond to this one. }
+    Parent.Perform(WM_PRINTCLIENT, WPARAM(DC), PRF_CLIENT);
+  finally
+    RestoreDC(DC, SaveIdx);
+  end;
+end;
+
 function TCWSSettingsPanel.MakeGPColor(AColor: TColor): Cardinal;
 var
   C: TColor;
@@ -280,6 +320,7 @@ begin
   W := Width;
   H := Height;
   R := MulDiv(FCornerRadius, CurrentPPI, 96);
+  DrawParentBackground(Canvas.Handle, R);
 
   G := TGPGraphics.Create(Canvas.Handle);
   try

@@ -154,6 +154,7 @@ object frmButtons: TfrmButtons
         Top = 72
         Width = 63
         Height = 57
+        OnClick = CWSStoreButton4Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -176,13 +177,13 @@ object frmButtons: TfrmButtons
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
-        OnClick = CWSStoreButton4Click
       end
       object CWSStoreButton5: TCWSStoreButton
         Left = 408
         Top = 72
         Width = 63
         Height = 57
+        OnClick = CWSStoreButton5Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -205,13 +206,13 @@ object frmButtons: TfrmButtons
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
-        OnClick = CWSStoreButton5Click
       end
       object CWSStoreButton6: TCWSStoreButton
         Left = 328
         Top = 152
         Width = 97
         Height = 89
+        OnClick = CWSStoreButton6Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -235,13 +236,13 @@ object frmButtons: TfrmButtons
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
-        OnClick = CWSStoreButton6Click
       end
       object CWSStoreButton7: TCWSStoreButton
         Left = 447
         Top = 152
         Width = 98
         Height = 89
+        OnClick = CWSStoreButton7Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -265,7 +266,6 @@ object frmButtons: TfrmButtons
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
-        OnClick = CWSStoreButton7Click
       end
     end
     object pnlEdits2: TCWSSettingsPanel
@@ -669,7 +669,7 @@ object frmButtons: TfrmButtons
       object lblTitle4: TLabel
         Left = 16
         Top = 16
-        Width = 383
+        Width = 441
         Height = 25
         Caption = 'CWSCheckBox  /  CWSRadioButton  /  CWSSwitch'
         Font.Charset = DEFAULT_CHARSET
@@ -682,7 +682,7 @@ object frmButtons: TfrmButtons
       object Label4: TLabel
         Left = 24
         Top = 52
-        Width = 74
+        Width = 68
         Height = 17
         Caption = 'CheckBoxes'
         Font.Charset = DEFAULT_CHARSET
@@ -695,7 +695,7 @@ object frmButtons: TfrmButtons
       object Label5: TLabel
         Left = 264
         Top = 52
-        Width = 82
+        Width = 77
         Height = 17
         Caption = 'RadioButtons'
         Font.Charset = DEFAULT_CHARSET
@@ -708,7 +708,7 @@ object frmButtons: TfrmButtons
       object Label6: TLabel
         Left = 504
         Top = 52
-        Width = 51
+        Width = 49
         Height = 17
         Caption = 'Switches'
         Font.Charset = DEFAULT_CHARSET
@@ -721,54 +721,114 @@ object frmButtons: TfrmButtons
       object CWSCheckBox1: TCWSCheckBox
         Left = 24
         Top = 80
-        Width = 130
-        Height = 22
+        Width = 110
+        Height = 18
         Caption = 'Enable feature'
         Checked = True
+        BoxColorNormal = 9079434
+        BoxColorChecked = 12413967
+        BoxColorDisabled = 13092807
+        FillColorNormal = clWhite
+        FillColorDisabled = 15790320
+        CheckColor = clWhite
+        FontColorNormal = 2368548
+        FontColorChecked = 2368548
+        FontColorDisabled = 12434877
         TabOrder = 0
       end
       object CWSCheckBox2: TCWSCheckBox
         Left = 24
         Top = 116
-        Width = 130
-        Height = 22
+        Width = 98
+        Height = 18
         Caption = 'Auto update'
+        BoxColorNormal = 9079434
+        BoxColorChecked = 12413967
+        BoxColorDisabled = 13092807
+        FillColorNormal = clWhite
+        FillColorDisabled = 15790320
+        CheckColor = clWhite
+        FontColorNormal = 2368548
+        FontColorChecked = 2368548
+        FontColorDisabled = 12434877
         TabOrder = 1
       end
       object CWSRadioButton1: TCWSRadioButton
         Left = 264
         Top = 80
-        Width = 130
-        Height = 22
+        Width = 76
+        Height = 18
         Caption = 'Option A'
         Checked = True
         GroupIndex = 1
+        RadioSize = 18
+        TextSpacing = 6
+        RadioColorNormal = 9079434
+        RadioColorChecked = 12413967
+        RadioColorDisabled = 13092807
+        FillColorNormal = clWhite
+        FillColorDisabled = 15790320
+        DotColor = clWhite
+        FontColorNormal = 2368548
+        FontColorChecked = 2368548
+        FontColorDisabled = 12434877
         TabOrder = 2
       end
       object CWSRadioButton2: TCWSRadioButton
         Left = 264
         Top = 116
-        Width = 130
-        Height = 22
+        Width = 75
+        Height = 18
         Caption = 'Option B'
         GroupIndex = 1
+        RadioSize = 18
+        TextSpacing = 6
+        RadioColorNormal = 9079434
+        RadioColorChecked = 12413967
+        RadioColorDisabled = 13092807
+        FillColorNormal = clWhite
+        FillColorDisabled = 15790320
+        DotColor = clWhite
+        FontColorNormal = 2368548
+        FontColorChecked = 2368548
+        FontColorDisabled = 12434877
         TabOrder = 3
       end
       object CWSSwitch1: TCWSSwitch
         Left = 504
         Top = 80
-        Width = 120
-        Height = 22
+        Width = 77
+        Height = 20
         Caption = 'Wi-Fi'
         Checked = True
+        TrackColorChecked = 12413967
+        TrackColorNormal = clWhite
+        BorderColorNormal = 9079434
+        TrackColorDisabled = 14737632
+        KnobColorChecked = clWhite
+        KnobColorNormal = 9079434
+        KnobColorDisabled = 13092807
+        FontColorNormal = 2368548
+        FontColorChecked = 2368548
+        FontColorDisabled = 12434877
         TabOrder = 4
       end
       object CWSSwitch2: TCWSSwitch
         Left = 504
         Top = 116
-        Width = 120
-        Height = 22
+        Width = 103
+        Height = 20
         Caption = 'Bluetooth'
+        TrackColorChecked = 12413967
+        TrackColorNormal = clWhite
+        BorderColorNormal = 9079434
+        TrackColorDisabled = 14737632
+        KnobColorChecked = clWhite
+        KnobColorNormal = 9079434
+        KnobColorDisabled = 13092807
+        FontColorNormal = 2368548
+        FontColorChecked = 2368548
+        FontColorDisabled = 12434877
         TabOrder = 5
       end
       object btnPopup: TCWSButton
@@ -779,7 +839,23 @@ object frmButtons: TfrmButtons
         Color = clBtnFace
         TabOrder = 6
         IconFontName = 'Segoe MDL2 Assets'
+        BckNormalColor = clWhite
+        BckHoverColor = clWhitesmoke
+        BckPressedColor = 14737632
+        BorderColorNormal = 13750737
+        BorderColorHover = 13092807
+        BorderColorPressed = 11776947
         Caption = 'Show menu'
+        IconColorNormal = 2368548
+        IconColorHover = 2368548
+        IconColorPressed = 2368548
+        CaptionColorNormal = 2368548
+        CaptionColorHover = 2368548
+        CaptionColorPressed = 2368548
+        BckDisabledColor = 15790320
+        BorderColorDisabled = 14737632
+        CaptionColorDisabled = 12434877
+        IconColorDisabled = 12434877
         OnClick = btnPopupClick
       end
     end
@@ -914,6 +990,11 @@ object frmButtons: TfrmButtons
     Top = 264
   end
   object CWSPopupMenu1: TCWSPopupMenu
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Style = []
     Left = 776
     Top = 344
     object miNew: TMenuItem
