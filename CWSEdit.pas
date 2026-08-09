@@ -185,6 +185,15 @@ type
     function GetButtonRect: TRect;
     procedure HandleButtonClick;
     procedure SetPasswordReveal(Reveal: Boolean);
+    { Give the inner edit the focus WITHOUT TCustomEdit's AutoSelect kicking in.
+      CM_ENTER calls SelectAll whenever a non-multiline edit becomes the active
+      control, so every SetFocus we issue from our own chrome (the button, the
+      padding around the edit) would select the whole text — on the ebsPassword
+      reveal button that meant the password ended up fully selected instead of
+      keeping the caret where the user left it. Tab-in keeps the standard
+      AutoSelect behaviour: the flag is only suppressed for the duration of our
+      own SetFocus call. }
+    procedure FocusEditKeepCaret;
     function Scale(Value: Integer): Integer;
     function ScaleF(Value: Single): Single;
     function MakeGPColor(AColor: TColor; Alpha: Byte = 255): Cardinal;
@@ -549,6 +558,7 @@ procedure TCWSEdit.SetPasswordReveal(Reveal: Boolean);
 var
   NewChar: Char;
   OldSelStart, OldSelLength: Integer;
+  OldAutoSelect, OldEditAutoSelect: Boolean;
 begin
   { Reveal/mask the text for the ebsPassword button. Nothing to do when no
     PasswordChar is configured — the text is plain anyway. }
@@ -565,12 +575,56 @@ begin
   // its caret/selection — restore both, exactly like SetPasswordChar does.
   OldSelStart := FEdit.SelStart;
   OldSelLength := FEdit.SelLength;
-  FEdit.PasswordChar := NewChar;
-  FEdit.Font.Assign(Font);
-  FEdit.SelStart := OldSelStart;
-  FEdit.SelLength := OldSelLength;
+  { RecreateWnd re-focuses the edit when it was focused (TWinControl.CMRecreateWnd),
+    which runs the whole enter-focus path: TCustomEdit.CMEnter -> SelectAll and our
+    EditEnter -> PostMessage(EM_SETSEL, 0, -1). The posted one lands after the
+    restore below, so revealing the password left it fully selected instead of
+    keeping the caret. Mute both for the duration of the recreate. }
+  OldAutoSelect := FAutoSelect;
+  OldEditAutoSelect := FEdit.AutoSelect;
+  FAutoSelect := False;
+  FEdit.AutoSelect := False;
+  try
+    FEdit.PasswordChar := NewChar;
+    FEdit.Font.Assign(Font);
+    FEdit.SelStart := OldSelStart;
+    FEdit.SelLength := OldSelLength;
+  finally
+    FEdit.AutoSelect := OldEditAutoSelect;
+    FAutoSelect := OldAutoSelect;
+  end;
   UpdateEditPosition;
   Invalidate; // the eye icon draws the slash based on PasswordChar
+end;
+
+procedure TCWSEdit.FocusEditKeepCaret;
+var
+  OldSelStart, OldSelLength: Integer;
+  OldAutoSelect, OldEditAutoSelect: Boolean;
+begin
+  if (FEdit = nil) or not FEdit.CanFocus then
+    Exit;
+  OldSelStart := FEdit.SelStart;
+  OldSelLength := FEdit.SelLength;
+  { Two independent select-all paths have to be muted:
+      FEdit.AutoSelect — TCustomEdit.CMEnter calls SelectAll,
+      Self.FAutoSelect — our EditEnter POSTS EM_SETSEL(0, -1); being posted, it
+                         would arrive AFTER the caret restore below and win. }
+  OldAutoSelect := FAutoSelect;
+  OldEditAutoSelect := FEdit.AutoSelect;
+  FAutoSelect := False;
+  FEdit.AutoSelect := False;
+  try
+    FEdit.SetFocus;
+  finally
+    FEdit.AutoSelect := OldEditAutoSelect;
+    FAutoSelect := OldAutoSelect;
+  end;
+  { Restore the caret explicitly: the focus change can run through a handle
+    recreate (PasswordChar) or through Windows' own focus handling, both of
+    which reset the selection to the start of the text. }
+  FEdit.SelStart := OldSelStart;
+  FEdit.SelLength := OldSelLength;
 end;
 
 procedure TCWSEdit.HandleButtonClick;
@@ -579,14 +633,15 @@ begin
     ebsClear:
       begin
         FEdit.Text := '';
-        FEdit.SetFocus;
+        FocusEditKeepCaret;
       end;
     ebsSearch: if Assigned(FOnSearchClick) then
         FOnSearchClick(Self);
     ebsPassword:
       { Reveal/mask is driven by MouseDown/MouseUp (hold-to-reveal), so here
-        we only return the caret to the edit. }
-      FEdit.SetFocus;
+        we only return the caret to the edit — at the position the user left it
+        and WITHOUT selecting the password (see FocusEditKeepCaret). }
+      FocusEditKeepCaret;
   end;
   if Assigned(FOnButtonClick) then
     FOnButtonClick(Self);
@@ -910,7 +965,7 @@ begin
   inherited;
   // Pass focus to the inner edit after a click anywhere on the component
   if (Button = mbLeft) and (FEdit <> nil) and FEdit.CanFocus then
-    FEdit.SetFocus;
+    FocusEditKeepCaret;
 end;
 
 procedure TCWSEdit.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
@@ -941,8 +996,16 @@ end;
 procedure TCWSEdit.WMLButtonDown(var Msg: TWMLButtonDown);
 begin
   inherited;
+  { NOT for a click on the button: MouseDown (dispatched by the inherited call
+    above) has already started the ebsPassword reveal, and focusing the edit from
+    here would run TCustomEdit's AutoSelect and select the whole password —
+    exactly the selection the reveal button must not make. The button returns the
+    focus itself, caret-preserving, in HandleButtonClick. }
+  if (FButtonStyle <> ebsNone) and
+     PtInRect(GetButtonRect, Point(Msg.XPos, Msg.YPos)) then
+    Exit;
   if (FEdit <> nil) and FEdit.CanFocus and not FEdit.Focused then
-    FEdit.SetFocus;
+    FocusEditKeepCaret;
 end;
 
 // Capture can be cancelled without a MouseUp (modal dialog, Alt+Tab, ESC).

@@ -47,6 +47,44 @@ type
     and content sticking out of the view is clipped by the clip region. }
   TCWSScrollStyle = (cssNone, cssHorizontal, cssVertical, cssBoth);
 
+  { TCWSScrollbarRenderMode — how the overlay scrollbar is put on screen.
+
+    Both modes use a PLAIN child window, composed by Windows together with its
+    parent, so neither can flicker nor lag behind the edge while the form is
+    resized — whatever the drag does, including the worst case of dragging the
+    form by its LEFT edge, where the window's screen origin and the bar's client
+    position move in opposite directions.
+
+    srmShaped  (default)
+        The WinUI 3 / Windows 11 model: the bar owns NO track. Its window is
+        exactly the thumb, clipped by SetWindowRgn to the rounded capsule, and
+        the rest of the lane simply has no window on it, so the content there is
+        untouched, exactly as if the track were transparent.
+        Cheapest mode per scroll step: the thumb window is MOVED, and a pure move
+        needs no repaint at all — the pixels travel with the window and the
+        capsule looks the same wherever the thumb sits.
+        The thumb is opaque: ScrollThumbColor is pre-mixed with BackgroundColor
+        by ScrollThumbAlpha. The rounded ends ARE antialiased: the window region
+        only cuts the corners, while the capsule itself is rendered per pixel
+        with fractional coverage (RenderCapsule) and its fringe is blended into
+        BackgroundColor — so the difference against a truly transparent bar shows
+        only where content of a very different colour passes under the very edge
+        of the thumb.
+
+    srmBlended
+        The window is the whole lane: an opaque track in BackgroundColor with the
+        capsule drawn inside it, in ScrollThumbColor mixed with that background
+        according to ScrollThumbAlpha. Trade-off: content that lies under the bar
+        is covered by the strip instead of showing through — with the usual setup
+        (scrollbox background = content background) there is no visible
+        difference.
+        When both bars are up, the vertical one also owns the corner square
+        between them, so the two strips join into one continuous L instead of
+        leaving a hole at the bottom right.
+        Per scroll step only the union of the old and the new thumb rectangle is
+        repainted, not the whole lane. }
+  TCWSScrollbarRenderMode = (srmBlended, srmShaped);
+
   { TCWSScrollContent — internal content host. All user
     controls land here. Scrolling = moving this window. }
   TCWSScrollContent = class(TCustomControl)
@@ -57,11 +95,16 @@ type
     procedure AlignControls(AControl: TControl; var Rect: TRect); override;
     procedure Paint; override;
     procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
+    { Double buffering bounded by the UPDATE rectangle — see the implementation.
+      This is the hot path of the whole component: FContent is as large as the
+      CONTENT, not as the view, and the VCL's own DoubleBuffered would allocate
+      (and blit) a bitmap that size on every single paint. }
+    procedure WMPaint(var Msg: TWMPaint); message WM_PAINT;
   public
     constructor Create(AOwner: TComponent); override;
   end;
 
-  { TCWSScrollOverlay — overlay scrollbar (layered child window). }
+  { TCWSScrollOverlay — overlay scrollbar (plain child window). }
   TCWSScrollOverlay = class(TCustomControl)
   private
     FScrollBox: TCWSScrollBox;
@@ -70,15 +113,72 @@ type
     FDragging: Boolean;
     FDragStart: Integer;
     FDragStartOffset: Integer;
-    FThumbRect: TRect;
+    FThumbRect: TRect;              { thumb, in STRIP coordinates }
+    { The strip is the logical bar lane along the edge — the rectangle the thumb
+      math lives in. It is the window's own rectangle in srmBlended, but NOT in
+      srmShaped, where the window is only the thumb; so the lane has to be
+      remembered separately instead of being read off Width/Height. }
+    FStrip: TRect;
+    FShapeW, FShapeH: Integer;      { size the srmShaped region was built for }
     FLastDesignThumb: TRect;        { last design-time thumb rect (region cache) }
     FHasDesignRgn: Boolean;         { a design region has already been applied }
+    { What the window currently SHOWS: the thumb it was last painted with and the
+      hover state it was painted in. Together they answer "does this refresh need
+      a repaint at all, and if so, of how much?" — which is what keeps a scroll
+      step down to a window move (srmShaped) or to the two thumb rectangles
+      (srmBlended) instead of a full redraw of the bar. }
+    FPaintedThumb: TRect;
+    FPaintedHot: Boolean;
+    { Reusable 32-bit top-down DIB the capsule is composed in, kept for the life
+      of the bar instead of being created per WM_PAINT. }
+    FBufDC: HDC;
+    FBufBmp, FBufOldBmp: HBITMAP;
+    FBufBits: PByte;
+    FBufW, FBufH: Integer;
+    { Pixels at the FAR end of the window that are not part of the track: the
+      square where the two bars meet. srmBlended paints an opaque strip, so one
+      of the bars has to own that square — otherwise the two strips leave a hole
+      at the bottom right corner. The thumb must stay out of it. }
+    FEndInset: Integer;
     procedure SetHot(Value: Boolean);
-    procedure ApplyLayered;
+    { The mode the bar is rendered with — the box's ScrollbarRenderMode. }
+    function RenderMode: TCWSScrollbarRenderMode;
+    function ThumbColorNow: TColor;
+    function ThumbAlphaNow: Byte;
+    { srmShaped: put the thumb window exactly on the thumb and clip it to the
+      rounded capsule. This is the whole bar — there is no track window.
+      AForce repaints even when only the position changed (a property that
+      changes how the thumb LOOKS, not where it sits). }
+    procedure ApplyShape(AForce: Boolean);
+    { srmBlended: mark for repaint just the part of the lane that can have
+      changed — the old thumb, the new one, and the fringe around them. }
+    procedure InvalidateThumbArea(AForce: Boolean);
+    { Composing buffer for PaintCapsule: (re)allocated only when the bar's client
+      area changes size, so a scroll step allocates nothing. }
+    procedure EnsureBuffer(AW, AH: Integer);
+    procedure FreeBuffer;
+    { Paint the antialiased capsule AThumb (client coordinates) over a
+      BackgroundColor field. Both modes paint through this, so the rounded ends
+      come out smooth instead of stepped. Only the canvas' clip box is composed
+      and blitted — the rest of the lane keeps the pixels it already has. }
+    procedure PaintCapsule(const AThumb: TRect);
+    { Strip geometry (see FStrip): length along the scroll axis and thickness
+      across it. }
+    function StripLen: Integer;
+    function StripCross: Integer;
+    { cThumbEdgeGap in device pixels — the sliver between the thumb and the edge
+      of the box, which is part of the bar rather than a dead zone. }
+    function EdgeGap: Integer;
+    { Usable track length along the scroll axis: the strip may be longer than
+      the track when it owns the corner square between the two bars
+      (FEndInset), and both ends keep a small margin. }
+    function TrackLength: Integer;
+    { Mouse position translated into STRIP coordinates — the frame FThumbRect and
+      all the scroll math are expressed in. }
+    function ToStrip(X, Y: Integer): TPoint;
     procedure JumpToPoint(X, Y: Integer);
     function OnThumb(X, Y: Integer): Boolean;
   protected
-    procedure CreateParams(var Params: TCreateParams); override;
     procedure CreateWnd; override;
     procedure Paint; override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
@@ -89,7 +189,18 @@ type
     procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
   public
     constructor CreateOverlay(AScrollBox: TCWSScrollBox; AKind: TCWSScrollKind);
+    destructor Destroy; override;
     procedure RecalcThumb;
+    { Put the thumb where RecalcThumb says it belongs. This is the per-scroll-step
+      path, so it does the LEAST the mode allows: srmShaped moves the window,
+      srmBlended invalidates the two thumb rectangles. AForce = repaint no matter
+      what, for a property that changed the bar's appearance. }
+    procedure RefreshBar(AForce: Boolean = False);
+    { Give the bar its new STRIP (the lane along the edge). What that means for
+      the window itself depends on the mode:
+        srmShaped  — the window is moved onto the thumb inside that lane;
+        srmBlended — plain SetBounds, the window IS the lane. }
+    procedure SetBarBounds(ALeft, ATop, AWidth, AHeight: Integer);
     { Design time only: clip the (always-visible, brought-to-front) overlay window
       to the rounded thumb shape — so the thumb floats ON TOP of inner controls,
       no opaque track covers content, and the window never hides/moves (no IDE
@@ -114,6 +225,9 @@ type
     FInDesignScroll: Boolean;                   { reentrancy guard for design scroll }
     FDsgnNeedV, FDsgnNeedH: Boolean;            { last design-time scrollbar need state }
     FDsgnLayoutInit: Boolean;                   { design overlay layout ran at least once }
+    FOverlayZOK: Boolean;                       { overlays are known to be on top (runtime) }
+    FContentClip: TRect;                        { clip region FContent currently carries }
+    FHasContentClip: Boolean;
 
     FBackgroundColor: TColor;
     FBorderColor: TColor;
@@ -127,6 +241,7 @@ type
     FScrollThumbHoverAlpha: Byte;
     FWheelStep: Integer;
     FScrollStyle: TCWSScrollStyle;
+    FScrollbarRenderMode: TCWSScrollbarRenderMode;
 
     FOnScroll: TNotifyEvent;
 
@@ -136,7 +251,11 @@ type
     procedure UpdateThumbs;
     procedure ApplyOffsets;
     procedure InvalidateOverlays;
-    procedure UpdateContentClip;
+    { Keep FContent off the border. ARedraw = False on the scroll path: the clip
+      rectangle follows the window's own move there, so what is visible on screen
+      does not change and forcing a redraw would repaint the whole content —
+      every bitmap, every child — on every wheel tick. }
+    procedure UpdateContentClip(ARedraw: Boolean);
     function BorderSize: Integer;
     { Current scroll offset / scroll command for a given axis, transparently
       mapped to the design-time (FDesignOffset / DesignScrollTo) or the runtime
@@ -155,6 +274,7 @@ type
     procedure SetScrollThumbAlpha(const Value: Byte);
     procedure SetScrollThumbHoverAlpha(const Value: Byte);
     procedure SetScrollStyle(const Value: TCWSScrollStyle);
+    procedure SetScrollbarRenderMode(const Value: TCWSScrollbarRenderMode);
 
     procedure CMControlChange(var Msg: TCMControlChange); message CM_CONTROLCHANGE;
     procedure CMControlListChange(var Msg: TMessage); message CM_CONTROLLISTCHANGE;
@@ -169,7 +289,7 @@ type
     procedure WMNCPaint(var Msg: TWMNCPaint); message WM_NCPAINT;
     { Design-time native scrolling. At design time user controls are direct
       children of the scrollbox (so the IDE nests them correctly); they are
-      scrolled with real OS scrollbars. Runtime uses the layered overlays. }
+      scrolled with real OS scrollbars. Runtime uses the overlay bars. }
     procedure UpdateDesignScrollInfo;
     procedure DesignScrollTo(NewX, NewY: Integer);
   protected
@@ -177,6 +297,7 @@ type
     procedure GetChildren(Proc: TGetChildProc; Root: TComponent); override;
     procedure CreateParams(var Params: TCreateParams); override;
     procedure CreateWnd; override;
+    procedure DestroyWnd; override;
     procedure Loaded; override;
     procedure Resize; override;
     procedure Paint; override;
@@ -221,6 +342,9 @@ type
     property ScrollThumbHoverAlpha: Byte read FScrollThumbHoverAlpha write SetScrollThumbHoverAlpha default 225;
     property WheelStep: Integer read FWheelStep write FWheelStep default 48;
     property ScrollStyle: TCWSScrollStyle read FScrollStyle write SetScrollStyle default cssBoth;
+    { How the bar is composed on screen — see TCWSScrollbarRenderMode. }
+    property ScrollbarRenderMode: TCWSScrollbarRenderMode read FScrollbarRenderMode
+      write SetScrollbarRenderMode default srmShaped;
     property OnScroll: TNotifyEvent read FOnScroll write FOnScroll;
 
     property Align;
@@ -248,9 +372,102 @@ type
 implementation
 
 const
-  cColorKey = clFuchsia;          { color-key for track transparency }
   cThumbMinLen = 24;              { minimum thumb length (px @96 dpi) }
   cTrackMargin = 2;               { track end margin (px @96 dpi) }
+  { Gap between the thumb and the edge the bar lives on — the right edge for the
+    vertical bar, the bottom one for the horizontal. The thumb hugs its edge
+    instead of floating in the middle of the lane, and the gap BELONGS to the
+    bar: it is inside the bar's window in both modes, so the cursor entering
+    those pixels already counts as hovering the scrollbar. }
+  cThumbEdgeGap = 1;              { px @96 dpi }
+
+{ Distance from a pixel centre to the thumb's spine — the thumb is a capsule (a
+  rounded rect whose radius is half its thickness), so "within radius of the
+  spine" describes it exactly, and the fractional part gives the coverage that
+  antialiases the rounded ends. }
+function DistToSpine(PX, PY, X1, Y1, X2, Y2: Single): Single;
+var
+  DX, DY, T: Single;
+begin
+  DX := X2 - X1;
+  DY := Y2 - Y1;
+  if (DX = 0) and (DY = 0) then
+    T := 0
+  else
+  begin
+    T := ((PX - X1) * DX + (PY - Y1) * DY) / (DX * DX + DY * DY);
+    if T < 0 then T := 0 else if T > 1 then T := 1;
+  end;
+  Result := Sqrt(Sqr(PX - (X1 + T * DX)) + Sqr(PY - (Y1 + T * DY)));
+end;
+
+{ Draw the antialiased thumb capsule AThumb into a top-down 32-bit buffer whose
+  rows are ABufW pixels apart and which holds ABufH rows. There is no alpha
+  channel to composite with later, so a partially covered edge pixel is resolved
+  here against ABack — the assumption both modes make (scrollbox background =
+  content background). Those fractional pixels come out as a gradient instead of
+  a hard step, which is what smooths the rounded ends.
+
+  Pixels the capsule does not touch are left as they were, so the caller decides
+  what the surroundings are. }
+procedure RenderCapsule(ABits: PByte; ABufW, ABufH: Integer; const AThumb: TRect;
+  AVertical: Boolean; AColor: TColor; AAlpha: Byte; ABack: TColor);
+var
+  X, Y: Integer;
+  Row: PByte;
+  Rad, X1, Y1, X2, Y2, Cov: Single;
+  ForeCol, BackCol: Cardinal;
+  CR, CG, CB, BR, BG, BB: Byte;
+begin
+  if AThumb.IsEmpty or (ABits = nil) then
+    Exit;
+  ForeCol := ColorToRGB(AColor);
+  CR := GetRValue(ForeCol);
+  CG := GetGValue(ForeCol);
+  CB := GetBValue(ForeCol);
+  BackCol := ColorToRGB(ABack);
+  BR := GetRValue(BackCol);
+  BG := GetGValue(BackCol);
+  BB := GetBValue(BackCol);
+  if AVertical then
+  begin
+    Rad := AThumb.Width / 2;
+    X1 := AThumb.Left + Rad;
+    X2 := X1;
+    Y1 := AThumb.Top + Rad;
+    Y2 := AThumb.Bottom - Rad;
+  end
+  else
+  begin
+    Rad := AThumb.Height / 2;
+    Y1 := AThumb.Top + Rad;
+    Y2 := Y1;
+    X1 := AThumb.Left + Rad;
+    X2 := AThumb.Right - Rad;
+  end;
+  if Y2 < Y1 then Y2 := Y1;
+  if X2 < X1 then X2 := X1;
+  { One pixel of slack around the capsule: that ring is where coverage is
+    fractional, and it is exactly what makes the ends look round. }
+  for Y := Max(0, AThumb.Top - 1) to Min(ABufH - 1, AThumb.Bottom) do
+  begin
+    Row := ABits + (Y * ABufW + Max(0, AThumb.Left - 1)) * 4;
+    for X := Max(0, AThumb.Left - 1) to Min(ABufW - 1, AThumb.Right) do
+    begin
+      Cov := Rad - DistToSpine(X + 0.5, Y + 0.5, X1, Y1, X2, Y2) + 0.5;
+      if Cov > 0 then
+      begin
+        if Cov > 1 then Cov := 1;
+        Cov := Cov * AAlpha / 255;
+        Row[0] := Round(CB * Cov + BB * (1 - Cov));
+        Row[1] := Round(CG * Cov + BG * (1 - Cov));
+        Row[2] := Round(CR * Cov + BR * (1 - Cov));
+        Row[3] := 255;
+      end;
+      Inc(Row, 4);
+    end;
+  end;
+end;
 
 { ===================== TCWSScrollContent ==================================== }
 
@@ -264,7 +481,12 @@ begin
     FContent and become invisible / unselectable in the form designer. }
   if (AOwner <> nil) and (csDesigning in AOwner.ComponentState) then
     ControlStyle := ControlStyle - [csAcceptsControls];
-  DoubleBuffered := True;
+  { NOT the VCL's DoubleBuffered — WMPaint below buffers the same picture, but in
+    a bitmap the size of the UPDATE rectangle instead of the whole client area.
+    ParentDoubleBuffered has to go too, or the scrollbox would hand its own
+    setting back to us. }
+  ParentDoubleBuffered := False;
+  DoubleBuffered := False;
 end;
 
 procedure TCWSScrollContent.CreateParams(var Params: TCreateParams);
@@ -291,7 +513,65 @@ begin
     Canvas.Brush.Color := FScrollBox.BackgroundColor
   else
     Canvas.Brush.Color := clWhite;
-  Canvas.FillRect(ClientRect);
+  { ClipRect, not ClientRect: this window is as tall as the CONTENT, and a scroll
+    step only ever invalidates a band of it. Filling the whole thing would make
+    every wheel tick cost the full content area. }
+  Canvas.FillRect(Canvas.ClipRect);
+end;
+
+procedure TCWSScrollContent.WMPaint(var Msg: TWMPaint);
+var
+  PS: TPaintStruct;
+  DC, MemDC: HDC;
+  Bmp, OldBmp: HBITMAP;
+  W, H: Integer;
+begin
+  { Someone else's DC (a parent painting us, PrintWindow, …) — nothing to buffer. }
+  if Msg.DC <> 0 then
+  begin
+    inherited;
+    Exit;
+  end;
+  DC := BeginPaint(Handle, PS);
+  try
+    W := PS.rcPaint.Right - PS.rcPaint.Left;
+    H := PS.rcPaint.Bottom - PS.rcPaint.Top;
+    if (W <= 0) or (H <= 0) then
+      Exit;
+    MemDC := CreateCompatibleDC(DC);
+    if MemDC = 0 then
+      Exit;
+    try
+      Bmp := CreateCompatibleBitmap(DC, W, H);
+      if Bmp = 0 then
+        Exit;
+      OldBmp := SelectObject(MemDC, Bmp);
+      try
+        { Drawing happens in CLIENT coordinates (Paint, and every graphic child
+          the VCL renders through PaintControls), while the buffer covers only
+          the update rectangle — so move the DC's origin instead of translating
+          every drawing call. The clip on top of it is what makes the VCL skip
+          graphic controls outside the band: PaintControls tests each one with
+          RectVisible, so a scroll no longer redraws every image in the box. }
+        SetWindowOrgEx(MemDC, PS.rcPaint.Left, PS.rcPaint.Top, nil);
+        IntersectClipRect(MemDC, PS.rcPaint.Left, PS.rcPaint.Top,
+          PS.rcPaint.Right, PS.rcPaint.Bottom);
+        Msg.DC := MemDC;
+        inherited;                    { paints self + graphic children }
+        Msg.DC := 0;
+        BitBlt(DC, PS.rcPaint.Left, PS.rcPaint.Top, W, H,
+          MemDC, PS.rcPaint.Left, PS.rcPaint.Top, SRCCOPY);
+      finally
+        SelectObject(MemDC, OldBmp);
+        DeleteObject(Bmp);
+      end;
+    finally
+      DeleteDC(MemDC);
+    end;
+  finally
+    EndPaint(Handle, PS);
+  end;
+  Msg.Result := 0;
 end;
 
 procedure TCWSScrollContent.WMEraseBkgnd(var Msg: TWMEraseBkgnd);
@@ -308,27 +588,137 @@ begin
   FScrollBox := AScrollBox;
   FKind := AKind;
   ControlStyle := ControlStyle + [csOpaque];
-  DoubleBuffered := True;
+  { PaintCapsule composes into its own DIB and blits the result in one go, so the
+    VCL's buffer would only be a second copy of the same picture. }
+  ParentDoubleBuffered := False;
+  DoubleBuffered := False;
   Width := 14;
   Height := 14;
 end;
 
-procedure TCWSScrollOverlay.CreateParams(var Params: TCreateParams);
+destructor TCWSScrollOverlay.Destroy;
 begin
+  FreeBuffer;
   inherited;
-  { WS_EX_LAYERED only at runtime. At design-time the IDE does not trigger a full
-    DWM recomposition after hiding/moving a layered child window,
-    so the old scrollbar pixels stay visible even when
-    FVScroll/FHScroll.Visible := False (e.g. after removing/moving
-    inner controls to the left). At design-time we paint opaquely. }
-  if not (csDesigning in ComponentState) then
-    Params.ExStyle := Params.ExStyle or WS_EX_LAYERED;
+end;
+
+function TCWSScrollOverlay.RenderMode: TCWSScrollbarRenderMode;
+begin
+  if FScrollBox <> nil then
+    Result := FScrollBox.ScrollbarRenderMode
+  else
+    Result := srmShaped;
+end;
+
+procedure TCWSScrollOverlay.EnsureBuffer(AW, AH: Integer);
+var
+  Info: TBitmapInfo;
+begin
+  if (AW <= 0) or (AH <= 0) then
+    Exit;
+  if (FBufBits <> nil) and (FBufW = AW) and (FBufH = AH) then
+    Exit;
+  FreeBuffer;
+  FBufDC := CreateCompatibleDC(0);
+  if FBufDC = 0 then
+    Exit;
+  FillChar(Info, SizeOf(Info), 0);
+  Info.bmiHeader.biSize := SizeOf(TBitmapInfoHeader);
+  Info.bmiHeader.biWidth := AW;
+  Info.bmiHeader.biHeight := -AH;            { top-down }
+  Info.bmiHeader.biPlanes := 1;
+  Info.bmiHeader.biBitCount := 32;
+  Info.bmiHeader.biCompression := BI_RGB;
+  FBufBits := nil;
+  FBufBmp := CreateDIBSection(FBufDC, Info, DIB_RGB_COLORS, Pointer(FBufBits), 0, 0);
+  if (FBufBmp = 0) or (FBufBits = nil) then
+  begin
+    FreeBuffer;
+    Exit;
+  end;
+  FBufOldBmp := SelectObject(FBufDC, FBufBmp);
+  FBufW := AW;
+  FBufH := AH;
+end;
+
+procedure TCWSScrollOverlay.FreeBuffer;
+begin
+  if FBufDC <> 0 then
+  begin
+    if FBufOldBmp <> 0 then
+      SelectObject(FBufDC, FBufOldBmp);
+    DeleteDC(FBufDC);
+  end;
+  if FBufBmp <> 0 then
+    DeleteObject(FBufBmp);
+  FBufDC := 0;
+  FBufBmp := 0;
+  FBufOldBmp := 0;
+  FBufBits := nil;
+  FBufW := 0;
+  FBufH := 0;
+end;
+
+function TCWSScrollOverlay.ThumbColorNow: TColor;
+begin
+  if FHot or FDragging then
+    Result := FScrollBox.ScrollThumbHoverColor
+  else
+    Result := FScrollBox.ScrollThumbColor;
+end;
+
+function TCWSScrollOverlay.ThumbAlphaNow: Byte;
+begin
+  if FHot or FDragging then
+    Result := FScrollBox.ScrollThumbHoverAlpha
+  else
+    Result := FScrollBox.ScrollThumbAlpha;
+end;
+
+function TCWSScrollOverlay.StripLen: Integer;
+begin
+  if FKind = skVertical then
+    Result := FStrip.Height
+  else
+    Result := FStrip.Width;
+end;
+
+function TCWSScrollOverlay.StripCross: Integer;
+begin
+  if FKind = skVertical then
+    Result := FStrip.Width
+  else
+    Result := FStrip.Height;
+end;
+
+function TCWSScrollOverlay.EdgeGap: Integer;
+var
+  Cross: Integer;
+begin
+  Result := MulDiv(cThumbEdgeGap, CurrentPPI, 96);
+  { Never let the gap eat the whole lane on an absurdly narrow ScrollbarAreaWidth. }
+  Cross := StripCross;
+  if Result > Cross - 1 then
+    Result := Max(0, Cross - 1);
+end;
+
+function TCWSScrollOverlay.TrackLength: Integer;
+var
+  M: Integer;
+begin
+  M := MulDiv(cTrackMargin, CurrentPPI, 96);
+  Result := StripLen - FEndInset - 2 * M;
 end;
 
 procedure TCWSScrollOverlay.CreateWnd;
 begin
   inherited;
-  ApplyLayered;
+  FShapeW := -1;        { the fresh window carries no region yet }
+  FShapeH := -1;
+  FPaintedThumb := TRect.Empty;   { and no pixels either }
+  RecalcThumb;
+  if RenderMode = srmShaped then
+    ApplyShape(True);
   { The freshly (re)created window has no region yet — invalidate the cache so
     ApplyDesignRegion below actually re-applies it instead of short-circuiting. }
   FHasDesignRgn := False;
@@ -340,48 +730,237 @@ procedure TCWSScrollOverlay.ApplyDesignRegion;
 var
   Rgn: HRGN;
   Dia: Integer;
+  Want: TRect;
+  WholeStrip: Boolean;
 begin
   if not (csDesigning in ComponentState) or not HandleAllocated then
     Exit;
-  { Skip the SetWindowRgn churn when the thumb shape is unchanged — a per-keystroke
-    relayout (e.g. editing Label.Caption) would otherwise re-clip the window on
-    every character for no visual change. }
-  if FHasDesignRgn and EqualRect(FThumbRect, FLastDesignThumb) then
+  { What the designer must show depends on the render mode, so that switching
+    ScrollbarRenderMode is visible right there in the form designer:
+      srmShaped  — only the rounded thumb is opaque, the track is clipped away
+                   and the content shows through it, which IS what runtime does
+                   (there the window itself is clipped to the capsule);
+      srmBlended — the WHOLE strip belongs to the bar (no clipping) because that
+                   is what runtime paints: an opaque track in BackgroundColor,
+                   including the corner square between the two bars.
+    A bar that is not needed is clipped to nothing in BOTH modes — the window
+    itself stays visible so the IDE never leaves a ghost behind. }
+  WholeStrip := (RenderMode = srmBlended) and not FThumbRect.IsEmpty;
+  if WholeStrip then
+    Want := ClientRect
+  else
+    Want := FThumbRect;
+  { Skip the SetWindowRgn churn when nothing changed — a per-keystroke relayout
+    (e.g. editing Label.Caption) would otherwise re-clip the window on every
+    character for no visual change. }
+  if FHasDesignRgn and EqualRect(Want, FLastDesignThumb) then
     Exit;
-  if FThumbRect.IsEmpty then
-    Rgn := CreateRectRgn(0, 0, 0, 0)            { nothing visible — content shows through }
+  if WholeStrip then
+    SetWindowRgn(Handle, 0, True)                 { no clipping at all }
   else
   begin
-    if FKind = skVertical then Dia := FThumbRect.Width else Dia := FThumbRect.Height;
-    if Dia < 2 then Dia := 2;
-    Rgn := CreateRoundRectRgn(FThumbRect.Left, FThumbRect.Top,
-      FThumbRect.Right + 1, FThumbRect.Bottom + 1, Dia, Dia);
+    if Want.IsEmpty then
+      Rgn := CreateRectRgn(0, 0, 0, 0)            { nothing visible — content shows through }
+    else
+    begin
+      if FKind = skVertical then Dia := Want.Width else Dia := Want.Height;
+      if Dia < 2 then Dia := 2;
+      { Same one pixel of slack at the ends as ApplyShape reserves at runtime, so
+        the antialiased fringe of the capsule survives the clip here too. }
+      Rgn := CreateRoundRectRgn(
+        Want.Left   - IfThen(FKind = skHorizontal, 1, 0),
+        Want.Top    - IfThen(FKind = skVertical,   1, 0),
+        Want.Right  + IfThen(FKind = skHorizontal, 1, 0) + 1,
+        Want.Bottom + IfThen(FKind = skVertical,   1, 0) + 1, Dia, Dia);
+    end;
+    if SetWindowRgn(Handle, Rgn, True) = 0 then
+      DeleteObject(Rgn);
   end;
-  if SetWindowRgn(Handle, Rgn, True) = 0 then
-    DeleteObject(Rgn);
-  FLastDesignThumb := FThumbRect;
+  FLastDesignThumb := Want;
   FHasDesignRgn := True;
 end;
 
-procedure TCWSScrollOverlay.ApplyLayered;
+procedure TCWSScrollOverlay.SetBarBounds(ALeft, ATop, AWidth, AHeight: Integer);
 var
-  A: Byte;
+  NewStrip: TRect;
 begin
-  if not HandleAllocated then
+  NewStrip := Rect(ALeft, ATop, ALeft + AWidth, ATop + AHeight);
+  { Design time (and the handle-less window) always take the plain path: there
+    the window really is the whole lane, region-clipped to the thumb for the
+    preview by ApplyDesignRegion. }
+  if (csDesigning in ComponentState) or not HandleAllocated then
+  begin
+    FStrip := NewStrip;
+    SetBounds(ALeft, ATop, AWidth, AHeight);
     Exit;
-  { In the designer the window has no WS_EX_LAYERED — SetLayeredWindowAttributes
-    would return an error. }
-  if csDesigning in ComponentState then
+  end;
+  if EqualRect(NewStrip, FStrip) then
     Exit;
-  if FHot or FDragging then
-    A := FScrollBox.ScrollThumbHoverAlpha
+  FStrip := NewStrip;
+  RecalcThumb;
+  if RenderMode = srmShaped then
+    { The lane moved, so the thumb inside it moved too — one SetWindowPos on a
+      small ordinary window, composed with the parent like every other child. }
+    ApplyShape(False)
   else
-    A := FScrollBox.ScrollThumbAlpha;
-  { LWA_COLORKEY — pixels in color cColorKey become fully transparent
-    (the scrollbox content shows through).
-    LWA_ALPHA   — remaining pixels (the thumb) are dimmed to opacity A. }
-  SetLayeredWindowAttributes(Handle, ColorToRGB(cColorKey), A,
-    LWA_COLORKEY or LWA_ALPHA);
+  begin
+    { The window IS the lane. A resize does not necessarily invalidate all of it
+      (Windows blits what it can keep), which would leave the old thumb behind —
+      so repaint the strip whole. Lane changes are a layout event, not a scroll
+      step, so this costs nothing per frame. }
+    SetBounds(ALeft, ATop, AWidth, AHeight);
+    if HandleAllocated then
+    begin
+      FPaintedThumb := TRect.Empty;
+      InvalidateRect(Handle, nil, False);
+    end;
+  end;
+end;
+
+procedure TCWSScrollOverlay.ApplyShape(AForce: Boolean);
+var
+  R: TRect;
+  Dia, Gap: Integer;
+  Rgn, GapRgn: HRGN;
+  Resized: Boolean;
+begin
+  if (csDesigning in ComponentState) or not HandleAllocated or
+     FThumbRect.IsEmpty then
+    Exit;
+  { FThumbRect is in strip coordinates; the window lives in the box's client
+    coordinates, so shift it onto the lane. }
+  R := FThumbRect;
+  R.Offset(FStrip.Left, FStrip.Top);
+  { One pixel of room at BOTH ENDS — and only there. That is where the capsule's
+    arcs are, and the pixels the arcs cover only fractionally are what makes a
+    rounded end look round instead of stepped; a region that ended exactly at the
+    capsule would clip them all away (it cuts at roughly half coverage). Across
+    the bar the capsule's straight sides are already pixel-aligned, so widening
+    there would only draw a BackgroundColor hairline down the whole thumb. }
+  Gap := EdgeGap;
+  if FKind = skVertical then
+  begin
+    R.Inflate(0, 1);
+    Inc(R.Right, Gap);          { out to the right edge of the box }
+  end
+  else
+  begin
+    R.Inflate(1, 0);
+    Inc(R.Bottom, Gap);         { out to the bottom edge of the box }
+  end;
+  Resized := (R.Width <> Width) or (R.Height <> Height);
+  SetBounds(R.Left, R.Top, R.Width, R.Height);
+  { A window region is expressed in window coordinates and does NOT follow a
+    resize — it has to be rebuilt whenever the size changes. It does follow a
+    MOVE, though, which is why scrolling (thumb slides, size constant) costs
+    nothing but the SetBounds above.
+    The region is the capsule PLUS the edge gap: those pixels have to be inside
+    the window's shape, or the cursor sliding onto the very edge of the box would
+    fall through to the content and the bar would not light up. }
+  if (FShapeW <> R.Width) or (FShapeH <> R.Height) then
+  begin
+    if FKind = skVertical then Dia := R.Width - Gap else Dia := R.Height - Gap;
+    if Dia < 2 then Dia := 2;
+    if FKind = skVertical then
+      Rgn := CreateRoundRectRgn(0, 0, R.Width - Gap + 1, R.Height + 1, Dia, Dia)
+    else
+      Rgn := CreateRoundRectRgn(0, 0, R.Width + 1, R.Height - Gap + 1, Dia, Dia);
+    if Gap > 0 then
+    begin
+      if FKind = skVertical then
+        GapRgn := CreateRectRgn(R.Width - Gap, 0, R.Width, R.Height)
+      else
+        GapRgn := CreateRectRgn(0, R.Height - Gap, R.Width, R.Height);
+      CombineRgn(Rgn, Rgn, GapRgn, RGN_OR);
+      DeleteObject(GapRgn);
+    end;
+    if SetWindowRgn(Handle, Rgn, True) = 0 then
+      DeleteObject(Rgn)
+    else
+    begin
+      FShapeW := R.Width;
+      FShapeH := R.Height;
+    end;
+  end;
+  { A pure MOVE needs no repaint at all: the window's pixels travel with it and
+    the capsule looks the same wherever the thumb sits. This is the scroll path,
+    so that saved WM_PAINT — and the repaint of the content it uncovers — is the
+    whole point of srmShaped. Only a resize (hover thickness, a shorter thumb) or
+    a change of colour/opacity really needs new pixels. }
+  if AForce or Resized or (FPaintedHot <> (FHot or FDragging)) then
+    InvalidateRect(Handle, nil, False);
+end;
+
+procedure TCWSScrollOverlay.InvalidateThumbArea(AForce: Boolean);
+var
+  R: TRect;
+begin
+  if AForce or FPaintedThumb.IsEmpty or FThumbRect.IsEmpty or
+     (FPaintedHot <> (FHot or FDragging)) then
+  begin
+    InvalidateRect(Handle, nil, False);
+    Exit;
+  end;
+  if EqualRect(FPaintedThumb, FThumbRect) then
+    Exit;                       { the lane already shows exactly this thumb }
+  { Where the thumb was plus where it is going — everything else in the lane is
+    flat BackgroundColor and already correct. One pixel of slack for the
+    antialiased fringe around the capsule. }
+  UnionRect(R, FPaintedThumb, FThumbRect);
+  R.Inflate(1, 1);
+  InvalidateRect(Handle, @R, False);
+end;
+
+procedure TCWSScrollOverlay.PaintCapsule(const AThumb: TRect);
+var
+  Upd: TRect;
+  W, H, X, Y: Integer;
+  Px: PCardinal;
+  Back, BGRBack: Cardinal;
+begin
+  W := ClientWidth;
+  H := ClientHeight;
+  if (W <= 0) or (H <= 0) then
+    Exit;
+  { Compose the whole client area in the buffer but touch only the part that is
+    actually invalid — in srmBlended a scroll step invalidates just the two thumb
+    rectangles (InvalidateThumbArea), so the rest of the lane is neither refilled
+    nor blitted. }
+  if not IntersectRect(Upd, Canvas.ClipRect, Rect(0, 0, W, H)) then
+    Exit;
+  EnsureBuffer(W, H);
+  if FBufBits = nil then
+    Exit;
+  { The field the capsule is antialiased against. In srmBlended it is the track
+    the bar really paints; in srmShaped the window region clips it away and only
+    the fringe of the capsule keeps a trace of it — which is exactly the blend a
+    rounded end needs to stop looking like a staircase. }
+  Back := ColorToRGB(FScrollBox.BackgroundColor);
+  BGRBack := ((Back and $FF) shl 16) or (Back and $FF00) or
+             ((Back shr 16) and $FF);
+  for Y := Upd.Top to Upd.Bottom - 1 do
+  begin
+    Px := PCardinal(FBufBits + (Y * W + Upd.Left) * 4);
+    for X := Upd.Left to Upd.Right - 1 do
+    begin
+      Px^ := BGRBack;
+      Inc(Px);
+    end;
+  end;
+  RenderCapsule(FBufBits, W, H, AThumb, FKind = skVertical,
+    ThumbColorNow, ThumbAlphaNow, FScrollBox.BackgroundColor);
+  BitBlt(Canvas.Handle, Upd.Left, Upd.Top, Upd.Width, Upd.Height,
+    FBufDC, Upd.Left, Upd.Top, SRCCOPY);
+end;
+
+procedure TCWSScrollOverlay.RefreshBar(AForce: Boolean);
+begin
+  if not HandleAllocated or (csDesigning in ComponentState) then
+    Exit;
+  if RenderMode = srmShaped then
+    ApplyShape(AForce)            { the window IS the thumb — move it }
+  else
+    InvalidateThumbArea(AForce);  { the window is the lane — repaint the thumb }
 end;
 
 procedure TCWSScrollOverlay.SetHot(Value: Boolean);
@@ -389,29 +968,27 @@ begin
   if FHot = Value then
     Exit;
   FHot := Value;
-  ApplyLayered;          { opacity change }
-  RecalcThumb;           { thumb thickness changed }
-  Invalidate;
+  RecalcThumb;           { thumb thickness and opacity changed }
+  RefreshBar;
 end;
 
 procedure TCWSScrollOverlay.RecalcThumb;
 var
   M, TrackLen, ThumbLen, ThumbThick, MaxOff, Off, Pos, Cross: Integer;
-  ViewLen, ContentLen, CrossDim: Integer;
+  ViewLen, ContentLen, CrossDim, Gap: Integer;
 begin
   M := MulDiv(cTrackMargin, CurrentPPI, 96);
+  TrackLen := TrackLength;
   if FKind = skVertical then
   begin
     ViewLen    := FScrollBox.ViewHeight;
     ContentLen := FScrollBox.ContentHeight;
-    TrackLen   := Height - 2 * M;
     MaxOff     := FScrollBox.MaxOffsetY;
   end
   else
   begin
     ViewLen    := FScrollBox.ViewWidth;
     ContentLen := FScrollBox.ContentWidth;
-    TrackLen   := Width - 2 * M;
     MaxOff     := FScrollBox.MaxOffsetX;
   end;
   Off := FScrollBox.AxisOffset(FKind);   { design or runtime offset }
@@ -442,78 +1019,70 @@ begin
   if ThumbThick < 2 then
     ThumbThick := 2;
 
-  { Centre the thumb exactly: (CrossDim - ThumbThick) div 2 truncates, so when
-    that difference is odd the thumb is biased toward the left/top and the spare
-    pixel lands on the right/bottom. After DPI scaling the normal (4) and hover
-    (6) widths can land on different parities than the track, so the thumb grows
-    unevenly — ~2 px on the right/bottom, ~0-1 px on the other side, and the
-    off-centre edge feels like it reacts late. Snapping the thickness to the
-    track's cross parity makes the division exact and the hover-grow symmetric. }
-  if FKind = skVertical then CrossDim := Width else CrossDim := Height;
-  if Odd(CrossDim - ThumbThick) then
-    Inc(ThumbThick);
-
+  { The thumb HUGS the edge the bar lives on — the right one for a vertical bar,
+    the bottom one for a horizontal — leaving exactly cThumbEdgeGap between it
+    and the end of the box, instead of floating in the middle of the lane. The
+    position is therefore exact whatever the parities of the lane and of the
+    thumb are, and growing on hover extends the thumb INWARD only, so the edge
+    the eye follows never moves. }
+  CrossDim := StripCross;
+  Gap := EdgeGap;
+  if ThumbThick > CrossDim - Gap then
+    ThumbThick := Max(1, CrossDim - Gap);
+  Cross := Max(0, CrossDim - ThumbThick - Gap);
   if FKind = skVertical then
-  begin
-    Cross := (Width - ThumbThick) div 2;
-    FThumbRect := Rect(Cross, Pos, Cross + ThumbThick, Pos + ThumbLen);
-  end
+    FThumbRect := Rect(Cross, Pos, Cross + ThumbThick, Pos + ThumbLen)
   else
-  begin
-    Cross := (Height - ThumbThick) div 2;
     FThumbRect := Rect(Pos, Cross, Pos + ThumbLen, Cross + ThumbThick);
-  end;
 end;
 
 procedure TCWSScrollOverlay.Paint;
 var
   R: TRect;
-  Dia: Integer;
-  TrackColor: TColor;
 begin
-  if csDesigning in ComponentState then
-  begin
-    { The window is region-clipped to the rounded thumb shape (ApplyDesignRegion),
-      so just fill it solidly with the thumb color — the region gives the rounded
-      shape and lets content show through everywhere else. }
-    if FThumbRect.IsEmpty then
-      Exit;
-    if FHot or FDragging then
-      Canvas.Brush.Color := FScrollBox.ScrollThumbHoverColor
-    else
-      Canvas.Brush.Color := FScrollBox.ScrollThumbColor;
-    Canvas.Brush.Style := bsSolid;
-    Canvas.FillRect(ClientRect);
-    Exit;
-  end;
-  { Runtime: color-key (track fully transparent under the layer). }
-  TrackColor := cColorKey;
-  Canvas.Brush.Style := bsSolid;
-  Canvas.Brush.Color := TrackColor;
-  Canvas.Pen.Style := psClear;
-  Canvas.FillRect(ClientRect);
+  { Both modes draw the same picture — an antialiased capsule over a
+    BackgroundColor field — at a rectangle that differs per mode:
 
+      srmShaped (runtime)   the window IS the thumb, so the capsule fills the
+                            client area; the window region cuts the corners away
+                            and the content stays visible around it;
+      srmBlended (runtime)  the window is the whole lane: the field IS the opaque
+                            track and the capsule sits at FThumbRect in it;
+      design time           the window is the lane too, and ApplyDesignRegion
+                            either leaves it whole (srmBlended) or clips it to
+                            the capsule (srmShaped), so the same drawing previews
+                            both modes.
+
+    The capsule is antialiased against BackgroundColor rather than against what
+    lies underneath — a plain child window cannot know that — and at one fringe
+    pixel wide it is what turns a stepped rounded end into a smooth one. }
   if FThumbRect.IsEmpty then
-    Exit;
-
-  R := FThumbRect;
-  if FKind = skVertical then
-    Dia := R.Width
+    Exit;                       { nothing to scroll — nothing to draw }
+  { Remember what the window now shows, so the next refresh knows whether it has
+    to repaint anything and, in srmBlended, how little. }
+  FPaintedThumb := FThumbRect;
+  FPaintedHot := FHot or FDragging;
+  if not (csDesigning in ComponentState) and (RenderMode = srmShaped) then
+  begin
+    { The window IS the thumb, plus the one pixel ApplyShape reserved at each end
+      for the antialiased fringe and the edge gap on the far side — so the capsule
+      itself is the client area shortened by both. The gap keeps the plain
+      BackgroundColor PaintCapsule fills it with. }
+    R := ClientRect;
+    if FKind = skVertical then
+    begin
+      R.Inflate(0, -1);
+      Dec(R.Right, EdgeGap);
+    end
+    else
+    begin
+      R.Inflate(-1, 0);
+      Dec(R.Bottom, EdgeGap);
+    end;
+    PaintCapsule(R);
+  end
   else
-    Dia := R.Height;
-  if Dia < 2 then
-    Dia := 2;
-
-  { GDI RoundRect (no antialiasing) — no colored halo border
-    that would appear from blending AA edges with the color key. }
-  if FHot or FDragging then
-    Canvas.Brush.Color := FScrollBox.ScrollThumbHoverColor
-  else
-    Canvas.Brush.Color := FScrollBox.ScrollThumbColor;
-  Canvas.Pen.Style := psSolid;
-  Canvas.Pen.Width := 1;
-  Canvas.Pen.Color := Canvas.Brush.Color;
-  Canvas.RoundRect(R.Left, R.Top, R.Right, R.Bottom, Dia, Dia);
+    PaintCapsule(FThumbRect);   { the window is the lane }
 end;
 
 procedure TCWSScrollOverlay.JumpToPoint(X, Y: Integer);
@@ -521,17 +1090,16 @@ var
   M, TrackLen, ThumbLen, MaxOff, Coord, Target: Integer;
 begin
   M := MulDiv(cTrackMargin, CurrentPPI, 96);
+  TrackLen := TrackLength;
   if FKind = skVertical then
   begin
     Coord    := Y;
-    TrackLen := Height - 2 * M;
     ThumbLen := FThumbRect.Height;
     MaxOff   := FScrollBox.MaxOffsetY;
   end
   else
   begin
     Coord    := X;
-    TrackLen := Width - 2 * M;
     ThumbLen := FThumbRect.Width;
     MaxOff   := FScrollBox.MaxOffsetX;
   end;
@@ -542,11 +1110,22 @@ begin
   FScrollBox.ScrollAxisTo(FKind, Target);
 end;
 
+function TCWSScrollOverlay.ToStrip(X, Y: Integer): TPoint;
+begin
+  { In srmBlended the window IS the strip, so this is the identity.
+    In srmShaped the window is only the thumb AND a drag moves it under the
+    cursor — window-local coordinates would then stand still and the drag would
+    go nowhere. Going through the box's client area gives an absolute position
+    that the moving window cannot skew. }
+  Result := ClientToParent(Point(X, Y), FScrollBox);
+  Result.Offset(-FStrip.Left, -FStrip.Top);
+end;
+
 function TCWSScrollOverlay.OnThumb(X, Y: Integer): Boolean;
 begin
   { Hit-test only the scroll axis — the thumb is thinner than the track and
     centred across it, so the cross-axis position is irrelevant once the cursor
-    is inside the overlay window (which spans the whole track). }
+    is inside the overlay window. X/Y are strip coordinates (ToStrip). }
   if FThumbRect.IsEmpty then
     Exit(False);
   if FKind = skVertical then
@@ -557,44 +1136,47 @@ end;
 
 procedure TCWSScrollOverlay.MouseDown(Button: TMouseButton; Shift: TShiftState;
   X, Y: Integer);
+var
+  P: TPoint;
 begin
   inherited;
   if (Button <> mbLeft) or FThumbRect.IsEmpty then
     Exit;
-  if OnThumb(X, Y) then
+  P := ToStrip(X, Y);
+  if OnThumb(P.X, P.Y) then
   begin
     FDragging := True;
     if FKind = skVertical then
-      FDragStart := Y
+      FDragStart := P.Y
     else
-      FDragStart := X;
+      FDragStart := P.X;
     FDragStartOffset := FScrollBox.AxisOffset(FKind);
-    ApplyLayered;
-    Invalidate;
+    RecalcThumb;
+    RefreshBar;
   end
   else
-    JumpToPoint(X, Y);   { click on the track — jump }
+    JumpToPoint(P.X, P.Y);   { click on the track — jump }
 end;
 
 procedure TCWSScrollOverlay.MouseMove(Shift: TShiftState; X, Y: Integer);
 var
-  M, TrackLen, ThumbLen, MaxOff, Coord, Delta, NewOff: Integer;
+  TrackLen, ThumbLen, MaxOff, Coord, Delta, NewOff: Integer;
+  P: TPoint;
 begin
   inherited;
   if not FDragging then
     Exit;
-  M := MulDiv(cTrackMargin, CurrentPPI, 96);
+  TrackLen := TrackLength;
+  P := ToStrip(X, Y);
   if FKind = skVertical then
   begin
-    Coord    := Y;
-    TrackLen := Height - 2 * M;
+    Coord    := P.Y;
     ThumbLen := FThumbRect.Height;
     MaxOff   := FScrollBox.MaxOffsetY;
   end
   else
   begin
-    Coord    := X;
-    TrackLen := Width - 2 * M;
+    Coord    := P.X;
     ThumbLen := FThumbRect.Width;
     MaxOff   := FScrollBox.MaxOffsetX;
   end;
@@ -613,9 +1195,8 @@ begin
   begin
     FDragging := False;
     FHot := PtInRect(ClientRect, Point(X, Y));
-    ApplyLayered;
     RecalcThumb;
-    Invalidate;
+    RefreshBar;
   end;
 end;
 
@@ -663,6 +1244,7 @@ begin
   FScrollThumbHoverAlpha  := 225;
   FWheelStep              := 48;
   FScrollStyle            := cssBoth;
+  FScrollbarRenderMode    := srmShaped;
 
   { Create FContent in the constructor (before the IDE runs hit-test on
     control drop) — it fills the area and is the topmost window,
@@ -780,7 +1362,15 @@ begin
   inherited;
   FRelayoutPending := False;   { any posted relayout for the old HWND is moot now }
   FDsgnLayoutInit := False;    { force one overlay re-front on the new HWND }
+  FOverlayZOK := False;        { runtime: raise the bars once on the new HWND }
+  FHasContentClip := False;    { the fresh FContent window carries no region }
   UpdateLayout;
+end;
+
+procedure TCWSScrollBox.DestroyWnd;
+begin
+  FHasContentClip := False;    { the region goes away with the handle }
+  inherited;
 end;
 
 procedure TCWSScrollBox.Loaded;
@@ -887,6 +1477,7 @@ begin
     finally
       FContent.EnableAlign;
     end;
+    FOverlayZOK := False;   { children were reparented — raise the bars once }
   end;
   UpdateLayout;
 end;
@@ -1073,7 +1664,7 @@ procedure TCWSScrollBox.UpdateLayout;
 const
   cFullRedraw = RDW_INVALIDATE or RDW_ERASE or RDW_ALLCHILDREN or RDW_UPDATENOW;
 var
-  VW, VH, AreaW: Integer;
+  VW, VH, AreaW, VCorner: Integer;
   NeedV, NeedH, AllowV, AllowH: Boolean;
   WasVVisible, WasHVisible: Boolean;
   VOldRect, HOldRect: TRect;
@@ -1129,12 +1720,28 @@ begin
         FContent would overlap the border and hide it. }
       FContent.Visible := True;
       FContent.SetBounds(-FOffsetX, -FOffsetY, FContentW, FContentH);
-      UpdateContentClip;
+      UpdateContentClip(True);
     end;
 
     NeedV := AllowV and (FContentH > VH);
     NeedH := AllowH and (FContentW > VW);
     AreaW := Scale(FScrollbarAreaWidth);
+
+    { The square where the two bars meet (bottom right) belongs to NOBODY when
+      both are shortened by AreaW. In srmShaped that is invisible — there is no
+      track window there at all, so the content simply shows through. srmBlended
+      paints an opaque strip, so the same gap reads as an empty square notched
+      out of the corner. There, the vertical bar is given the FULL view height
+      and owns that square (its window paints it in BackgroundColor like the rest
+      of the strip); FEndInset keeps the thumb out of it, so the thumb still
+      stops exactly where the horizontal bar starts. Design time gets the same
+      treatment, so the designer previews what runtime will draw. }
+    if (FScrollbarRenderMode = srmBlended) and NeedV and NeedH then
+      VCorner := AreaW
+    else
+      VCorner := 0;
+    FVScroll.FEndInset := VCorner;
+    FHScroll.FEndInset := 0;
 
     if Designing then
     begin
@@ -1143,10 +1750,12 @@ begin
         over the full edge strip — only their window REGION changes (clipped to
         the rounded thumb, empty when not needed; see ApplyDesignRegion). Because
         they never hide or move, the IDE form designer leaves no "ghost", and the
-        clipped-away track never covers content. No WS_EX_LAYERED at design time. }
-      FVScroll.SetBounds(ClientWidth - AreaW, 0, AreaW,
-        VH - IfThen(NeedH, AreaW, 0));
-      FHScroll.SetBounds(0, ClientHeight - AreaW,
+        clipped-away track never covers content. }
+      { SetBarBounds, not SetBounds — at design time it is the plain SetBounds
+        anyway, but it is also what records the STRIP the thumb math works in. }
+      FVScroll.SetBarBounds(ClientWidth - AreaW, 0, AreaW,
+        VH - IfThen(NeedH, AreaW, 0) + VCorner);
+      FHScroll.SetBarBounds(0, ClientHeight - AreaW,
         VW - IfThen(NeedV, AreaW, 0), AreaW);
       FVScroll.Visible := True;
       FHScroll.Visible := True;
@@ -1170,29 +1779,40 @@ begin
     end
     else
     begin
-      { RUNTIME: float the layered overlay scrollbars ABOVE the content (they
-        reserve no client space), so the designer layout matches runtime. }
+      { RUNTIME: float the overlay scrollbars ABOVE the content (they reserve no
+        client space), so the designer layout matches runtime. }
       WasVVisible := FVScroll.Visible;
       WasHVisible := FHScroll.Visible;
-      VOldRect := FVScroll.BoundsRect;
-      HOldRect := FHScroll.BoundsRect;
+      { The rectangle to repaint when a bar disappears is the LANE it occupied,
+        not the window — in srmShaped the window is only the thumb. }
+      VOldRect := FVScroll.FStrip;
+      HOldRect := FHScroll.FStrip;
 
       FVScroll.Visible := NeedV;
       if NeedV then
-        FVScroll.SetBounds(ClientWidth - AreaW, 0, AreaW,
-          VH - IfThen(NeedH, AreaW, 0));
+        { SetBarBounds, not SetBounds: the lane and the window are the same
+          rectangle only in srmBlended — in srmShaped the window is the thumb
+          inside that lane. }
+        FVScroll.SetBarBounds(ClientWidth - AreaW, 0, AreaW,
+          VH - IfThen(NeedH, AreaW, 0) + VCorner);
 
       FHScroll.Visible := NeedH;
       if NeedH then
-        FHScroll.SetBounds(0, ClientHeight - AreaW,
+        FHScroll.SetBarBounds(0, ClientHeight - AreaW,
           VW - IfThen(NeedV, AreaW, 0), AreaW);
 
-      FVScroll.BringToFront;
-      FHScroll.BringToFront;
+      { Z-order churn is not free either: a SetWindowPos re-clips every sibling
+        it passes. Only re-raise when something could actually have pushed the
+        bars down (fresh handle, control inserted, bar just shown). }
+      if (not FOverlayZOK) or (NeedV <> WasVVisible) or (NeedH <> WasHVisible) then
+      begin
+        FVScroll.BringToFront;
+        FHScroll.BringToFront;
+        FOverlayZOK := True;
+      end;
 
-      { Belt-and-suspenders: if an overlay just disappeared, force an immediate
-        repaint of the area it occupied and of FContent. Windows usually does
-        this for plain child windows, but for WS_EX_LAYERED it was inconsistent. }
+      { If an overlay just disappeared, repaint the area it occupied and the
+        content under it — the lane it used to cover has no window on it now. }
       if (WasVVisible and not NeedV) or (WasHVisible and not NeedH) then
       begin
         if HandleAllocated then
@@ -1236,43 +1856,48 @@ begin
     end;
     Exit;
   end;
+  { RUNTIME. This is the per-scroll-step path: RefreshBar does the minimum the
+    mode allows — a window move in srmShaped, the two thumb rectangles in
+    srmBlended — so a wheel tick never costs a full redraw of a bar. }
   if (FVScroll <> nil) and FVScroll.Visible then
   begin
     FVScroll.RecalcThumb;
-    if FVScroll.HandleAllocated then
-      InvalidateRect(FVScroll.Handle, nil, True);
+    FVScroll.RefreshBar;
   end;
   if (FHScroll <> nil) and FHScroll.Visible then
   begin
     FHScroll.RecalcThumb;
-    if FHScroll.HandleAllocated then
-      InvalidateRect(FHScroll.Handle, nil, True);
+    FHScroll.RefreshBar;
   end;
 end;
 
 procedure TCWSScrollBox.InvalidateOverlays;
 begin
-  { After moving content we force a refresh of the layered overlays
-    so the transparent track shows the newly-shifted content. }
-  if (FVScroll <> nil) and FVScroll.Visible and FVScroll.HandleAllocated then
-    InvalidateRect(FVScroll.Handle, nil, True);
-  if (FHScroll <> nil) and FHScroll.Visible and FHScroll.HandleAllocated then
-    InvalidateRect(FHScroll.Handle, nil, True);
+  { A property that changed how the bars LOOK — repaint them whatever their
+    geometry says. The per-scroll-step path is UpdateThumbs, not this one. }
+  if (FVScroll <> nil) and FVScroll.Visible then
+    FVScroll.RefreshBar(True);
+  if (FHScroll <> nil) and FHScroll.Visible then
+    FHScroll.RefreshBar(True);
 end;
 
 procedure TCWSScrollBox.ApplyOffsets;
 begin
   if FContent = nil then
     Exit;
-  { We change ONLY FContent's position (size unchanged) — a single
-    SetWindowPos moves all content atomically: no flicker. }
+  { The clip region FIRST, then the move. The region lives in FContent's own
+    coordinates, so it travels with the window: shifting it by the new offset and
+    then moving the window by minus that offset leaves the visible rectangle
+    exactly where it was. Doing it in this order means the single SetWindowPos
+    below does all the invalidation accounting against the FINAL clip, and the
+    region change itself needs no redraw of its own — which is what keeps a wheel
+    tick from repainting the entire content. }
+  UpdateContentClip(False);
+  { We change ONLY FContent's position (size unchanged) — a single SetWindowPos
+    moves all content atomically: no flicker, and Windows blits what it can keep
+    and invalidates just the band that scrolled into view. }
   FContent.SetBounds(-FOffsetX, -FOffsetY, FContentW, FContentH);
-  { The clip region (in FContent's local coords) shifts
-    along with FOffsetX/Y so the visible rect always lines up
-    with the area inside the border. }
-  UpdateContentClip;
   UpdateThumbs;
-  InvalidateOverlays;
   if Assigned(FOnScroll) then
     FOnScroll(Self);
 end;
@@ -1419,10 +2044,12 @@ begin
   { Background of the client area (the border is drawn in WM_NCPAINT). At runtime
     FContent covers this; at design time it is the visible backdrop. The design-
     time scrollbar thumbs are drawn by the region-clipped overlay child windows
-    (see UpdateLayout / TCWSScrollOverlay), so they float above inner controls. }
+    (see UpdateLayout / TCWSScrollOverlay), so they float above inner controls.
+    ClipRect, not ClientRect — a bar that moved off a few pixels invalidates only
+    those, and there is no reason to refill the whole box for them. }
   Canvas.Brush.Style := bsSolid;
   Canvas.Brush.Color := FBackgroundColor;
-  Canvas.FillRect(ClientRect);
+  Canvas.FillRect(Canvas.ClipRect);
 end;
 
 procedure TCWSScrollBox.WMNCCalcSize(var Msg: TWMNCCalcSize);
@@ -1620,6 +2247,7 @@ begin
   if csLoading in ComponentState then
     Exit;
   Msg.Control.Parent := FContent;
+  FOverlayZOK := False;   { a control was inserted — raise the bars once more }
 end;
 
 procedure TCWSScrollBox.CMControlListChange(var Msg: TMessage);
@@ -1656,9 +2284,10 @@ begin
   UpdateDesignScrollInfo;
 end;
 
-procedure TCWSScrollBox.UpdateContentClip;
+procedure TCWSScrollBox.UpdateContentClip(ARedraw: Boolean);
 var
   Rgn: HRGN;
+  Clip: TRect;
   VW, VH, ClipW, ClipH, AreaW: Integer;
   AllowV, AllowH, NeedV, NeedH: Boolean;
 begin
@@ -1694,12 +2323,19 @@ begin
     clip, FContent overlaps the border strip (WS_CLIPCHILDREN on Self
     prevents overwriting the border) — the border "disappears" on scroll. }
   if (ClipW <= 0) or (ClipH <= 0) then
-    Rgn := CreateRectRgn(0, 0, 0, 0)
+    Clip := TRect.Empty
   else
-    Rgn := CreateRectRgn(FOffsetX, FOffsetY,
-      FOffsetX + ClipW, FOffsetY + ClipH);
-  if SetWindowRgn(FContent.Handle, Rgn, True) = 0 then
-    DeleteObject(Rgn);
+    Clip := Rect(FOffsetX, FOffsetY, FOffsetX + ClipW, FOffsetY + ClipH);
+  if FHasContentClip and EqualRect(Clip, FContentClip) then
+    Exit;                       { the window already carries exactly this region }
+  Rgn := CreateRectRgn(Clip.Left, Clip.Top, Clip.Right, Clip.Bottom);
+  if SetWindowRgn(FContent.Handle, Rgn, ARedraw) = 0 then
+    DeleteObject(Rgn)
+  else
+  begin
+    FContentClip := Clip;
+    FHasContentClip := True;
+  end;
 end;
 
 procedure TCWSScrollBox.WMEraseBkgnd(var Msg: TWMEraseBkgnd);
@@ -1798,8 +2434,6 @@ begin
   if FScrollThumbAlpha <> Value then
   begin
     FScrollThumbAlpha := Value;
-    if FVScroll <> nil then FVScroll.ApplyLayered;
-    if FHScroll <> nil then FHScroll.ApplyLayered;
     InvalidateOverlays;
   end;
 end;
@@ -1809,9 +2443,59 @@ begin
   if FScrollThumbHoverAlpha <> Value then
   begin
     FScrollThumbHoverAlpha := Value;
-    if FVScroll <> nil then FVScroll.ApplyLayered;
-    if FHScroll <> nil then FHScroll.ApplyLayered;
     InvalidateOverlays;
+  end;
+end;
+
+procedure TCWSScrollBox.SetScrollbarRenderMode(const Value: TCWSScrollbarRenderMode);
+
+  procedure Reload(Bar: TCWSScrollOverlay);
+  begin
+    if Bar = nil then
+      Exit;
+    if csDesigning in ComponentState then
+      { Only the cached region decision has to be dropped, so ApplyDesignRegion
+        re-clips (thumb only for srmShaped, whole strip for srmBlended) and the
+        change is visible in the form designer straight away. }
+      Bar.FHasDesignRgn := False
+    else if Bar.HandleAllocated then
+      { Both modes are plain child windows — nothing in CreateParams differs, so
+        the window survives the switch. What does NOT survive is the srmShaped
+        region: leaving that mode, the window has to become the whole lane again,
+        and a leftover capsule region would clip it to a thumb-shaped sliver. }
+      SetWindowRgn(Bar.Handle, 0, False);
+    { Forget the strip: leaving srmShaped means the window has to grow from the
+      thumb back to the whole lane, and SetBarBounds skips a strip it believes is
+      already applied. The UpdateLayout below re-establishes it. }
+    Bar.FStrip := TRect.Empty;
+    Bar.FShapeW := -1;
+    Bar.FShapeH := -1;
+    Bar.FPaintedThumb := TRect.Empty;
+    Bar.RecalcThumb;
+    if Bar.HandleAllocated then
+      InvalidateRect(Bar.Handle, nil, True);
+  end;
+
+begin
+  if FScrollbarRenderMode = Value then
+    Exit;
+  FScrollbarRenderMode := Value;
+  Reload(FVScroll);
+  Reload(FHScroll);
+  { Re-runs the bar geometry (the corner square moves between the two modes) and,
+    through UpdateThumbs, re-applies the design-time region. }
+  UpdateLayout;
+  if HandleAllocated then
+  begin
+    { A strip that was opaque and is not any more (or the other way round)
+      uncovers content underneath, so repaint the box together with its children
+      once. This is a property change, not a per-frame path — the full redraw
+      costs nothing here. }
+    RedrawWindow(Handle, nil, 0,
+      RDW_INVALIDATE or RDW_ERASE or RDW_ALLCHILDREN);
+    if (FContent <> nil) and FContent.HandleAllocated then
+      RedrawWindow(FContent.Handle, nil, 0,
+        RDW_INVALIDATE or RDW_ERASE or RDW_ALLCHILDREN);
   end;
 end;
 
