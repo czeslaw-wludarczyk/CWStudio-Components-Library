@@ -25,7 +25,8 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI, Winapi.GDIPOBJ,
-  System.SysUtils, System.Classes, System.Types, System.Math,
+  System.SysUtils, System.Classes, System.Types, System.Math, System.TypInfo,
+  System.Rtti,
   Vcl.Controls, Vcl.Graphics, Vcl.Grids, Vcl.DBGrids, Vcl.StdCtrls, Vcl.Forms,
   Vcl.ExtCtrls, Data.DB, System.UITypes;
 
@@ -77,6 +78,81 @@ const
   dgThumbTracking         = Vcl.DBGrids.dgThumbTracking;
 
 type
+  { *** Sorting ***
+
+    Clicking a column title sorts the grid by that column. The sorted titles
+    show a triangle (up = ascending, down = descending) and, when several
+    columns are sorted at once, the 1-based number of the sort level. }
+
+  TCWSSortDirection = (sdNone, sdAscending, sdDescending);
+
+  { How the values of a sorted column are ordered. The interesting one is
+    svkDateTimeText: a *string* field whose values are date/time stamps
+    ('05.12.2026 09:30'). A plain text index orders those alphabetically —
+    01.02.2025 lands before 20.07.2024 — so the grid builds a chronological
+    sort key for them instead (see BuildDateTextKeyExpr). }
+  TCWSSortValueKind = (svkText, svkNumeric, svkDateTime, svkDateTimeText);
+
+  { What a plain title click does while other columns are already sorted.
+      msmCtrlClick — a plain click starts a new single-column sort and
+                     Ctrl+click adds the column as the next sort level (the
+                     Windows Explorer feel);
+      msmAlways    — every click on an unsorted column appends a level, up to
+                     MaxSortColumns. }
+  TCWSMultiSortMode = (msmCtrlClick, msmAlways);
+
+  { When the small sequence number is painted next to the arrow. }
+  TCWSSortNumberMode = (snmMultiColumn, snmAlways, snmNever);
+
+  { One sorted column, as reported by SortColumns[]. }
+  TCWSSortColumnInfo = record
+    FieldName: string;
+    Direction: TCWSSortDirection;
+    Kind: TCWSSortValueKind;
+  end;
+
+  { Character positions of one date/time component inside a fixed-layout
+    date string. Len = 0 means the component is absent. }
+  TCWSDateTextPart = record
+    Pos: Integer;
+    Len: Integer;
+  end;
+
+  { The runs of digits of one value — a date/time stamp has at most six
+    (y, m, d, h, n, s), the extra slots only serve to recognise a non-date. }
+  TCWSDigitGroups = array[0..7] of TCWSDateTextPart;
+
+  { What probing the data revealed about a text column that holds date/time
+    stamps — see DetectDateTextLayout.
+      LooksLikeDate — the values are date/time stamps;
+      Valid         — and they all share one fixed layout, so the components sit
+                      at known offsets and a sort key can address them. Values
+                      written without leading zeros ('1.2.2026' next to
+                      '10.12.2026') are LooksLikeDate but not Valid. }
+  TCWSDateTextLayout = record
+    LooksLikeDate: Boolean;
+    Valid: Boolean;
+    GroupCount: Integer;
+    YearIdx, MonthIdx, DayIdx: Integer;   { which digit run holds what }
+    Year, Month, Day, Hour, Min, Sec: TCWSDateTextPart;
+  end;
+
+  { Internal sort state of one column. }
+  TCWSSortEntry = record
+    FieldName: string;
+    Direction: TCWSSortDirection;
+    Kind: TCWSSortValueKind;
+    Layout: TCWSDateTextLayout;
+    Resolved: Boolean;
+  end;
+
+  { Fired before the grid touches the dataset, with a ready-made ORDER BY body
+    ('PRICE ASC, NAME DESC' — empty when the sort was cleared). Set AHandled to
+    True after re-issuing the query yourself; the grid then leaves the dataset
+    alone and only repaints the indicators. }
+  TCWSSortApplyEvent = procedure(Sender: TObject; const AOrderBy: string;
+    var AHandled: Boolean) of object;
+
   TCWSDBGrid = class;
 
   { Internal native DB grid — fully owner-drawn, flat (no 3D) }
@@ -84,8 +160,10 @@ type
   private
     FOwner: TCWSDBGrid;
     FDrawRow: Integer;        { grid row currently being painted (see DrawCell) }
+    FSortShift: TShiftState;  { modifiers of the click that leads to TitleClick }
     function DataRowNumber: Integer;
   protected
+    procedure TitleClick(Column: TColumn); override;
     procedure DrawCell(ACol, ARow: Longint; ARect: TRect;
       AState: TGridDrawState); override;
     procedure DrawColumnCell(const Rect: TRect; DataCol: Integer;
@@ -180,6 +258,24 @@ type
     FOddRowColor: TColor;
     FEvenRowColor: TColor;
 
+    { Sorting }
+    FSortEntries: TArray<TCWSSortEntry>;
+    FSortEnabled: Boolean;
+    FSortAutoApply: Boolean;
+    FMaxSortColumns: Integer;
+    FMultiSortMode: TCWSMultiSortMode;
+    FSortNumberMode: TCWSSortNumberMode;
+    FSortArrowColor: TColor;
+    FSortNumberColor: TColor;
+    FSortIndicatorSize: Integer;
+    FSortIndexApplied: Boolean;   { the dataset currently carries OUR index }
+    FSortIsExact: Boolean;
+    { The dataset's own ordering, kept aside while ours is in force so that
+      clearing the sort puts the application's index back instead of blanking it. }
+    FSortSaved: Boolean;
+    FSortSavedIndexFieldNames: string;
+    FSortSavedIndexName: string;
+
     { Scrollbar appearance }
     FScrollThumbColor: TColor;
     FScrollThumbHoverColor: TColor;
@@ -241,6 +337,43 @@ type
     FOnMouseWheel: TMouseWheelEvent;
     FOnMouseWheelDown: TMouseWheelUpDownEvent;
     FOnMouseWheelUp: TMouseWheelUpDownEvent;
+    FOnSortChanged: TNotifyEvent;
+    FOnSortApply: TCWSSortApplyEvent;
+
+    { Sorting — state }
+    function IndexOfSortColumn(const AFieldName: string): Integer;
+    procedure AddSortEntry(const AFieldName: string; ADirection: TCWSSortDirection);
+    procedure RemoveSortEntry(AIndex: Integer);
+    procedure SetSortEnabled(const Value: Boolean);
+    procedure SetMaxSortColumns(const Value: Integer);
+    procedure SetSortArrowColor(const Value: TColor);
+    procedure SetSortNumberColor(const Value: TColor);
+    procedure SetSortIndicatorSize(const Value: Integer);
+    procedure SetSortNumberMode(const Value: TCWSSortNumberMode);
+    function GetSortColumnCount: Integer;
+    function GetSortColumn(Index: Integer): TCWSSortColumnInfo;
+
+    { Sorting — painting }
+    function SortNumberText(ALevel: Integer): string;
+    procedure PrepareSortNumberFont(C: TCanvas);
+    function SortIndicatorWidth(C: TCanvas; ALevel: Integer): Integer;
+    procedure DrawSortIndicator(C: TCanvas; const ACell: TRect;
+      ALevel: Integer; ADirection: TCWSSortDirection);
+
+    { Sorting — applying to the dataset }
+    procedure ResolveSortKinds(DS: TDataSet);
+    function DetectDateTextLayout(AField: TField;
+      out ALayout: TCWSDateTextLayout): Boolean;
+    function BuildDateTextKeyExpr(const AEntry: TCWSSortEntry): string;
+    function VerifyDateTextOrder(DS: TDataSet; const AEntry: TCWSSortEntry): Boolean;
+    function DataSetHasExpressionIndexes(DS: TDataSet): Boolean;
+    function ApplyExpressionSortIndex(DS: TDataSet; const AExpression: string): Boolean;
+    function ApplyAddIndexSort(DS: TDataSet): Boolean;
+    procedure DropSortIndex(DS: TDataSet);
+    procedure SaveDataSetOrder(DS: TDataSet);
+    procedure ClearDataSetSort(DS: TDataSet);
+    procedure ApplySortToDataSet;
+    procedure ResetSortState;
 
     { Forwarded property access }
     function GetDataSource: TDataSource;
@@ -314,6 +447,8 @@ type
     function FixedWidth: Integer;
     function ScrolledOffWidth: Integer;
     function ColIndexForOffset(TargetPx: Integer): Integer;
+    function MaxLeftColumn: Integer;
+    procedure ClampLeftColumn;
     function Scale(Value: Integer): Integer;
     function ScaleF(Value: Single): Single;
     function GridInset: Integer;
@@ -401,6 +536,7 @@ type
     procedure CompositeMouseEnter;
     procedure CompositeMouseCheckLeave;
     procedure UpdateFocusState;
+    procedure HandleTitleClickSort(Column: TColumn; Shift: TShiftState);
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -421,6 +557,35 @@ type
       CellCanvas is kept as a backwards-compatible alias. }
     property Canvas: TCanvas read GetCellCanvas;
     property CellCanvas: TCanvas read GetCellCanvas;
+
+    { *** Sorting — runtime API ***
+      The sort state is a runtime concept (it depends on live data) and is never
+      streamed to the DFM. }
+
+    { Sort by one column. AAppend adds it as the next sort level instead of
+      replacing the current sort; the level is dropped again if MaxSortColumns
+      is already reached. ADirection = sdNone removes the column from the sort. }
+    procedure SortBy(const AFieldName: string; ADirection: TCWSSortDirection;
+      AAppend: Boolean = False);
+    { The asc -> desc -> off cycle a title click performs, exposed for keyboard
+      or menu driven sorting. }
+    procedure ToggleSortColumn(const AFieldName: string; AAppend: Boolean = False);
+    procedure ClearSort;
+    { Re-issues the current sort — call it after re-opening the dataset. }
+    procedure ApplySort;
+    { The current sort as an ORDER BY body: 'PRICE ASC, NAME DESC' (empty when
+      nothing is sorted). Also what OnSortApply receives. }
+    function SortOrderBy: string;
+    function SortLevelOf(const AFieldName: string): Integer;   { 1-based, 0 = unsorted }
+    function SortDirectionOf(const AFieldName: string): TCWSSortDirection;
+
+    property SortColumnCount: Integer read GetSortColumnCount;
+    property SortColumns[Index: Integer]: TCWSSortColumnInfo read GetSortColumn;
+    { False when the automatic dataset sort could not honour the request in full
+      — a descending level on a dataset whose index has no descending support,
+      or a text column holding date/time stamps on a dataset that cannot sort by
+      an expression. Handle OnSortApply (ORDER BY) for those cases. }
+    property SortIsExact: Boolean read FSortIsExact;
 
     property SelectedField: TField read GetSelectedField write SetSelectedField;
     property SelectedIndex: Integer read GetSelectedIndex write SetSelectedIndex;
@@ -478,6 +643,31 @@ type
     property AlternatingRowColors: Boolean read FAlternatingRowColors write SetAlternatingRowColors default False;
     property OddRowColor: TColor read FOddRowColor write SetOddRowColor default clNone;
     property EvenRowColor: TColor read FEvenRowColor write SetEvenRowColor default clNone;
+
+    { *** Sorting ***
+      Off by default, so an existing grid keeps behaving exactly as before.
+      Switched on, a click on a column title sorts by that column and cycles
+      ascending -> descending -> unsorted. No dgTitleClick needed. }
+    property SortEnabled: Boolean read FSortEnabled write SetSortEnabled default False;
+    { How many columns may take part in the sort at once. Clicking one more
+      column than this replaces the last (least significant) level, so a click
+      is never simply ignored. }
+    property MaxSortColumns: Integer read FMaxSortColumns write SetMaxSortColumns default 3;
+    { Whether a plain click extends the sort or starts a new one — see
+      TCWSMultiSortMode. }
+    property MultiSortMode: TCWSMultiSortMode read FMultiSortMode write FMultiSortMode default msmCtrlClick;
+    { The triangle drawn in a sorted title: up for ascending, down for
+      descending. }
+    property SortArrowColor: TColor read FSortArrowColor write SetSortArrowColor default $707070;
+    { The small 1, 2, 3 … next to the triangle, telling which column sorts
+      first. By default it only appears once more than one column is sorted. }
+    property SortNumberColor: TColor read FSortNumberColor write SetSortNumberColor default $707070;
+    property ShowSortNumber: TCWSSortNumberMode read FSortNumberMode write SetSortNumberMode default snmMultiColumn;
+    { Triangle width in logical (96 DPI) pixels; the height follows from it. }
+    property SortIndicatorSize: Integer read FSortIndicatorSize write SetSortIndicatorSize default 9;
+    { Let the grid order the dataset itself (through its index). Turn it off to
+      drive the sorting entirely from OnSortApply — the indicators still work. }
+    property SortAutoApply: Boolean read FSortAutoApply write FSortAutoApply default True;
 
     { Border }
     property ShowBorder: Boolean read FShowBorder write SetShowBorder default True;
@@ -541,6 +731,12 @@ type
     property OnMouseWheel: TMouseWheelEvent read FOnMouseWheel write FOnMouseWheel;
     property OnMouseWheelDown: TMouseWheelUpDownEvent read FOnMouseWheelDown write FOnMouseWheelDown;
     property OnMouseWheelUp: TMouseWheelUpDownEvent read FOnMouseWheelUp write FOnMouseWheelUp;
+    { Fires after the sort state changed and was applied — repaint a status bar,
+      persist the sort, … }
+    property OnSortChanged: TNotifyEvent read FOnSortChanged write FOnSortChanged;
+    { Fires *before* the grid touches the dataset; set AHandled to take over
+      (re-run the query with your own ORDER BY). See TCWSSortApplyEvent. }
+    property OnSortApply: TCWSSortApplyEvent read FOnSortApply write FOnSortApply;
   end;
 
 implementation
@@ -675,6 +871,8 @@ var
   Flags: Cardinal;
   R: TRect;
   Col: TColumn;
+  SortLevel, IndicatorW: Integer;
+  SortDir: TCWSSortDirection;
 begin
   if FOwner = nil then
   begin
@@ -695,6 +893,23 @@ begin
       if (DataCol >= 0) and (DataCol < Columns.Count) then
       begin
         Col := Columns[DataCol];
+
+        { Sort indicator: reserve room for it on the right first, so a long
+          caption is ellipsised against the triangle instead of running under
+          it. Painted after the caption — see below. }
+        SortLevel := 0;
+        SortDir := sdNone;
+        IndicatorW := 0;
+        if FOwner.FSortEnabled then
+        begin
+          SortLevel := FOwner.SortLevelOf(Col.FieldName);
+          if SortLevel > 0 then
+          begin
+            SortDir := FOwner.SortDirectionOf(Col.FieldName);
+            IndicatorW := FOwner.SortIndicatorWidth(Canvas, SortLevel);
+          end;
+        end;
+
         Cap := Col.Title.Caption;
         if Cap <> '' then
         begin
@@ -703,16 +918,20 @@ begin
           SetBkMode(Canvas.Handle, TRANSPARENT);
           R := ARect;
           Inc(R.Left, FOwner.Scale(4));
-          Dec(R.Right, FOwner.Scale(2));
+          Dec(R.Right, FOwner.Scale(2) + IndicatorW);
           case Col.Title.Alignment of
             taRightJustify: Flags := DT_RIGHT;
             taCenter:       Flags := DT_CENTER;
           else
             Flags := DT_LEFT;
           end;
-          DrawText(Canvas.Handle, PChar(Cap), -1, R,
-            Flags or DT_VCENTER or DT_SINGLELINE or DT_NOPREFIX or DT_END_ELLIPSIS);
+          if R.Right > R.Left then
+            DrawText(Canvas.Handle, PChar(Cap), -1, R,
+              Flags or DT_VCENTER or DT_SINGLELINE or DT_NOPREFIX or DT_END_ELLIPSIS);
         end;
+
+        if SortLevel > 0 then
+          FOwner.DrawSortIndicator(Canvas, ARect, SortLevel, SortDir);
       end;
     end;
 
@@ -856,12 +1075,27 @@ end;
 procedure TCWSInternalDBGrid.MouseDown(Button: TMouseButton; Shift: TShiftState;
   X, Y: Integer);
 begin
+  { TitleClick carries no modifier state, and it is raised from MouseUp — so
+    remember the modifiers of the click that started it. }
+  FSortShift := Shift;
   inherited;
   if FOwner <> nil then
   begin
     FOwner.UpdateFocusState;
     FOwner.GridMouseDown(Button, Shift, X, Y);
   end;
+end;
+
+procedure TCWSInternalDBGrid.TitleClick(Column: TColumn);
+begin
+  { TCustomDBGrid calls this from MouseUp whenever a title cell was clicked,
+    regardless of dgTitleClick (that option only gates the OnTitleClick event),
+    so sorting works without the application having to enable it. Sort first,
+    then let the inherited method raise OnTitleClick — a handler then already
+    sees the new sort state. }
+  if (FOwner <> nil) and FOwner.FSortEnabled then
+    FOwner.HandleTitleClickSort(Column, FSortShift);
+  inherited;
 end;
 
 procedure TCWSInternalDBGrid.MouseUp(Button: TMouseButton; Shift: TShiftState;
@@ -1002,6 +1236,16 @@ begin
   FOddRowColor := clNone;
   FEvenRowColor := clNone;
 
+  FSortEnabled := False;
+  FSortAutoApply := True;
+  FMaxSortColumns := 3;
+  FMultiSortMode := msmCtrlClick;
+  FSortNumberMode := snmMultiColumn;
+  FSortArrowColor := $707070;
+  FSortNumberColor := $707070;
+  FSortIndicatorSize := 9;
+  FSortIsExact := True;
+
   FScrollThumbColor := $C0C0C0;
   FScrollThumbHoverColor := $909090;
   FScrollbarAreaWidth := 14;
@@ -1040,6 +1284,10 @@ begin
   { Sever every callback path from the internal grid before it (and our buffer)
     are torn down — the grid repaints / updates its scrollbar during teardown
     and must not reach back into a half-destroyed owner. }
+  { Hand the dataset its own ordering back — the grid is going away, its index
+    should not outlive it. }
+  if FSortIndexApplied then
+    ClearDataSetSort(GetDataSet);
   if FGrid <> nil then
   begin
     FGrid.FOwner := nil;
@@ -1382,17 +1630,68 @@ begin
   if Visible < 1 then Visible := 1;
 end;
 
+function TCWSDBGrid.MaxLeftColumn: Integer;
+var
+  Visible, Last, Fixed, I, J, Tail: Integer;
+begin
+  { The furthest right a DBGrid will scroll: the leftmost scrollable column
+    whose tail (that column .. the last one) still fits in the visible width —
+    the flush-right stop. If not even the last column fits on its own, that
+    column is the stop. }
+  Result := 0;
+  if FGrid = nil then
+    Exit;
+  Fixed := FGrid.FixedColCount;
+  Last := FGrid.TotalCols - 1;
+  Result := Fixed;
+  if Last < Fixed then
+    Exit;
+
+  Visible := Max(1, FGrid.GridClientWidth - FixedWidth);
+  Result := Last;
+  for I := Fixed to Last do
+  begin
+    Tail := 0;
+    for J := I to Last do
+      Inc(Tail, FGrid.ColWidthPx(J));
+    if Tail <= Visible then
+    begin
+      Result := I;
+      Break;
+    end;
+  end;
+end;
+
+procedure TCWSDBGrid.ClampLeftColumn;
+var
+  MaxLeft: Integer;
+begin
+  { A stock grid re-seats LeftCol from TCustomGrid.UpdateScrollRange, which
+    begins with
+
+        if (ScrollBars = ssNone) or ... then Exit;
+
+    and the inner grid has ScrollBars = ssNone precisely so no native bar ever
+    appears. So the pull-back never happens there and it has to be done here:
+    without it, widening a grid that is scrolled right keeps the left columns
+    hidden and leaves blank space at the right edge, while the thumb correctly
+    reports that there is no more to scroll. }
+  if (FGrid = nil) or (FGrid.TotalCols <= 0) then
+    Exit;
+  MaxLeft := MaxLeftColumn;
+  if FGrid.LeftColumn > MaxLeft then
+    FGrid.SetLeftColumn(MaxLeft);
+end;
+
 function TCWSDBGrid.HScrollMax: Integer;
 var
-  Total, Visible, Last, Fixed, I, J, Tail, MaxLeft: Integer;
+  Total, Visible, Fixed, I: Integer;
 begin
   { Largest scroll offset (in pixels, snapped to a column boundary) that the
-    grid can actually reach. DBGrid scrolls by whole columns via LeftCol and
-    clamps it so the rightmost columns sit flush against the right edge; it
-    will not scroll past LeftCol = last column. So the reachable maximum is the
-    width scrolled off when LeftCol sits at that stop — NOT Total - Visible.
+    grid can actually reach — the width scrolled off once LeftCol sits at the
+    flush-right stop, NOT Total - Visible.
 
-    When the last column is wider than the visible area, that stop is reached
+    When the last column is wider than the visible area that stop is reached
     with LeftCol = last column, i.e. MaxOff = Total - LastColWidth, which is
     smaller than Total - Visible. Using Total - Visible as the range left the
     thumb unable to travel to the right rail — this returns the true maximum so
@@ -1405,29 +1704,8 @@ begin
   Visible := Max(1, FGrid.GridClientWidth - FixedWidth);
   if Total <= Visible then
     Exit;
-
   Fixed := FGrid.FixedColCount;
-  Last := FGrid.TotalCols - 1;
-  if Last < Fixed then
-    Exit;
-
-  { Leftmost scrollable column whose tail (that column .. last) fits in Visible;
-    that is the flush-right stop. If none fits — an oversized trailing column —
-    fall back to LeftCol = last column. }
-  MaxLeft := Last;
-  for I := Fixed to Last do
-  begin
-    Tail := 0;
-    for J := I to Last do
-      Inc(Tail, FGrid.ColWidthPx(J));
-    if Tail <= Visible then
-    begin
-      MaxLeft := I;
-      Break;
-    end;
-  end;
-
-  for I := Fixed to MaxLeft - 1 do
+  for I := Fixed to MaxLeftColumn - 1 do
     Inc(Result, FGrid.ColWidthPx(I));
 end;
 
@@ -1637,6 +1915,11 @@ begin
       GridBottom := Height - Inset;
 
     FGrid.SetBounds(L, T, Max(10, GridRight - L), Max(10, GridBottom - T));
+
+    { The data area has its final width now — pull LeftCol back if the grid grew
+      while it was scrolled right, so the columns re-appear instead of leaving a
+      gap at the right edge. }
+    ClampLeftColumn;
 
     if NeedV then
       FVTrackRect := Rect(GridRight, T, Width - Inset, GridBottom)
@@ -2667,6 +2950,1095 @@ begin
   end;
 end;
 
+{ *** Sorting *** }
+
+const
+  { Name of the index the grid builds in the dataset. Anything else found there
+    belongs to the application and is left untouched. }
+  CWSSortIndexName = 'CWS_SORT_IDX';
+
+function CWSHasProp(AObj: TObject; const AName: string): Boolean;
+begin
+  Result := (AObj <> nil) and (GetPropInfo(AObj, AName) <> nil);
+end;
+
+{ --- state --- }
+
+function TCWSDBGrid.IndexOfSortColumn(const AFieldName: string): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(FSortEntries) do
+    if SameText(FSortEntries[I].FieldName, AFieldName) then
+      Exit(I);
+  Result := -1;
+end;
+
+procedure TCWSDBGrid.AddSortEntry(const AFieldName: string;
+  ADirection: TCWSSortDirection);
+var
+  N: Integer;
+begin
+  N := Length(FSortEntries);
+  SetLength(FSortEntries, N + 1);
+  FSortEntries[N] := Default(TCWSSortEntry);
+  FSortEntries[N].FieldName := AFieldName;
+  FSortEntries[N].Direction := ADirection;
+  FSortEntries[N].Kind := svkText;
+  FSortEntries[N].Resolved := False;
+end;
+
+procedure TCWSDBGrid.RemoveSortEntry(AIndex: Integer);
+var
+  I: Integer;
+begin
+  if (AIndex < 0) or (AIndex > High(FSortEntries)) then
+    Exit;
+  for I := AIndex to High(FSortEntries) - 1 do
+    FSortEntries[I] := FSortEntries[I + 1];
+  SetLength(FSortEntries, Length(FSortEntries) - 1);
+end;
+
+procedure TCWSDBGrid.ResetSortState;
+begin
+  { Drop the sort — used when the DataSource is swapped, where the old field
+    names have become meaningless. The dataset we are leaving gets its own
+    ordering back first. }
+  if FSortIndexApplied then
+    ClearDataSetSort(GetDataSet);
+  SetLength(FSortEntries, 0);
+  FSortIndexApplied := False;
+  FSortSaved := False;
+  FSortIsExact := True;
+  if FGrid <> nil then
+    FGrid.Invalidate;
+  Invalidate;
+end;
+
+function TCWSDBGrid.GetSortColumnCount: Integer;
+begin
+  Result := Length(FSortEntries);
+end;
+
+function TCWSDBGrid.GetSortColumn(Index: Integer): TCWSSortColumnInfo;
+begin
+  Result := Default(TCWSSortColumnInfo);
+  if (Index < 0) or (Index > High(FSortEntries)) then
+    Exit;
+  Result.FieldName := FSortEntries[Index].FieldName;
+  Result.Direction := FSortEntries[Index].Direction;
+  Result.Kind := FSortEntries[Index].Kind;
+end;
+
+function TCWSDBGrid.SortLevelOf(const AFieldName: string): Integer;
+begin
+  Result := IndexOfSortColumn(AFieldName) + 1;
+end;
+
+function TCWSDBGrid.SortDirectionOf(const AFieldName: string): TCWSSortDirection;
+var
+  I: Integer;
+begin
+  I := IndexOfSortColumn(AFieldName);
+  if I < 0 then
+    Result := sdNone
+  else
+    Result := FSortEntries[I].Direction;
+end;
+
+function TCWSDBGrid.SortOrderBy: string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to High(FSortEntries) do
+  begin
+    if Result <> '' then
+      Result := Result + ', ';
+    Result := Result + FSortEntries[I].FieldName;
+    if FSortEntries[I].Direction = sdDescending then
+      Result := Result + ' DESC'
+    else
+      Result := Result + ' ASC';
+  end;
+end;
+
+procedure TCWSDBGrid.HandleTitleClickSort(Column: TColumn; Shift: TShiftState);
+begin
+  if (Column = nil) or (csDesigning in ComponentState) or (Column.FieldName = '') then
+    Exit;
+  ToggleSortColumn(Column.FieldName,
+    (FMultiSortMode = msmAlways) or (ssCtrl in Shift));
+end;
+
+procedure TCWSDBGrid.ToggleSortColumn(const AFieldName: string; AAppend: Boolean);
+var
+  Idx: Integer;
+begin
+  if AFieldName = '' then
+    Exit;
+  Idx := IndexOfSortColumn(AFieldName);
+
+  if not AAppend then
+  begin
+    { Single-column sort: re-clicking the sorted column walks
+      ascending -> descending -> unsorted; any other column starts over. }
+    if (Idx = 0) and (Length(FSortEntries) = 1) then
+    begin
+      if FSortEntries[0].Direction = sdAscending then
+        FSortEntries[0].Direction := sdDescending
+      else
+        SetLength(FSortEntries, 0);
+    end
+    else
+    begin
+      SetLength(FSortEntries, 0);
+      AddSortEntry(AFieldName, sdAscending);
+    end;
+  end
+  else
+  begin
+    if Idx >= 0 then
+    begin
+      { Same cycle, but dropping the level keeps the other columns sorted. }
+      if FSortEntries[Idx].Direction = sdAscending then
+        FSortEntries[Idx].Direction := sdDescending
+      else
+        RemoveSortEntry(Idx);
+    end
+    else
+    begin
+      { At the limit the least significant level makes way, so a click always
+        does something visible. }
+      if Length(FSortEntries) >= FMaxSortColumns then
+        RemoveSortEntry(High(FSortEntries));
+      AddSortEntry(AFieldName, sdAscending);
+    end;
+  end;
+
+  ApplySort;
+end;
+
+procedure TCWSDBGrid.SortBy(const AFieldName: string;
+  ADirection: TCWSSortDirection; AAppend: Boolean);
+var
+  Idx: Integer;
+begin
+  if AFieldName = '' then
+    Exit;
+  Idx := IndexOfSortColumn(AFieldName);
+
+  if ADirection = sdNone then
+  begin
+    if Idx < 0 then
+      Exit;
+    RemoveSortEntry(Idx);
+  end
+  else
+  begin
+    if not AAppend then
+    begin
+      SetLength(FSortEntries, 0);
+      AddSortEntry(AFieldName, ADirection);
+    end
+    else if Idx >= 0 then
+      FSortEntries[Idx].Direction := ADirection
+    else
+    begin
+      if Length(FSortEntries) >= FMaxSortColumns then
+        RemoveSortEntry(High(FSortEntries));
+      AddSortEntry(AFieldName, ADirection);
+    end;
+  end;
+
+  ApplySort;
+end;
+
+procedure TCWSDBGrid.ClearSort;
+begin
+  if Length(FSortEntries) = 0 then
+    Exit;
+  SetLength(FSortEntries, 0);
+  ApplySort;
+end;
+
+procedure TCWSDBGrid.ApplySort;
+var
+  Handled: Boolean;
+begin
+  if csDestroying in ComponentState then
+    Exit;
+  FSortIsExact := True;
+  if not (csLoading in ComponentState) then
+  begin
+    Handled := False;
+    if Assigned(FOnSortApply) then
+      FOnSortApply(Self, SortOrderBy, Handled);
+    if not Handled and FSortAutoApply and not (csDesigning in ComponentState) then
+      ApplySortToDataSet;
+  end;
+  if FGrid <> nil then
+    FGrid.Invalidate;
+  Invalidate;
+  if Assigned(FOnSortChanged) then
+    FOnSortChanged(Self);
+end;
+
+{ --- recognising text columns that hold date/time stamps --- }
+
+{ Positions and lengths of the runs of digits in AText, in order.
+  '2026-08-10 15:33' -> (1,4) (6,2) (9,2) (12,2) (15,2). Returns -1 when there
+  are more runs than a date/time stamp could have. }
+function CWSSplitDigitGroups(const AText: string; var G: TCWSDigitGroups): Integer;
+var
+  P, Start: Integer;
+begin
+  Result := 0;
+  P := 1;
+  while P <= Length(AText) do
+    if CharInSet(AText[P], ['0'..'9']) then
+    begin
+      Start := P;
+      while (P <= Length(AText)) and CharInSet(AText[P], ['0'..'9']) do
+        Inc(P);
+      if Result > High(TCWSDigitGroups) then
+        Exit(-1);
+      G[Result].Pos := Start;
+      G[Result].Len := P - Start;
+      Inc(Result);
+    end
+    else
+      Inc(P);
+end;
+
+function CWSGroupValue(const AText: string; const G: TCWSDateTextPart): Integer;
+begin
+  Result := StrToIntDef(Copy(AText, G.Pos, G.Len), -1);
+end;
+
+{ The chronological key of one value, computed here in Delphi from that value's
+  OWN digit runs — so it is right whatever the widths, unlike the positional key
+  the dataset's index has to use. Used to verify the applied order. }
+function CWSDateTextKey(const AText: string;
+  const ALayout: TCWSDateTextLayout): Int64;
+var
+  G: TCWSDigitGroups;
+  N, Y, M, D, H, Mi, S: Integer;
+begin
+  Result := -1;
+  N := CWSSplitDigitGroups(AText, G);
+  if N <> ALayout.GroupCount then
+    Exit;
+  Y := CWSGroupValue(AText, G[ALayout.YearIdx]);
+  M := CWSGroupValue(AText, G[ALayout.MonthIdx]);
+  D := CWSGroupValue(AText, G[ALayout.DayIdx]);
+  if (Y < 0) or (M < 0) or (D < 0) then
+    Exit;
+  H := 0;
+  Mi := 0;
+  S := 0;
+  if N >= 5 then
+  begin
+    H := CWSGroupValue(AText, G[3]);
+    Mi := CWSGroupValue(AText, G[4]);
+  end;
+  if N = 6 then
+    S := CWSGroupValue(AText, G[5]);
+  if (H < 0) or (Mi < 0) or (S < 0) then
+    Exit;
+  Result := ((((Int64(Y) * 100 + M) * 100 + D) * 100 + H) * 100 + Mi) * 100 + S;
+end;
+
+function TCWSDBGrid.DetectDateTextLayout(AField: TField;
+  out ALayout: TCWSDateTextLayout): Boolean;
+const
+  MaxProbe = 60;
+var
+  DS: TDataSet;
+  Ref, Cur: TCWSDigitGroups;
+  MinV, MaxV: array[0..High(TCWSDigitGroups)] of Integer;
+  MinLen, MaxLen: array[0..High(TCWSDigitGroups)] of Integer;
+  RefCount, CurCount, Probed, I, V: Integer;
+  YearIdx, MonthIdx, DayIdx, DPos, MPos: Integer;
+  S, ShortFmt: string;
+  BM: TBookmark;
+  Ok, Stable: Boolean;
+begin
+  { A text column counts as date/time when every probed value has the same
+    number of digit runs — 3 (date), 5 (with hh:nn) or 6 (with seconds) — in
+    ranges a date allows. The range checks are what keep article codes, version
+    numbers and phone numbers out.
+
+    Whether the runs also sit at the SAME offsets in every value is a separate
+    question, answered by ALayout.Valid: only then can the sort key address the
+    components by position. Values written without leading zeros ('1.2.2026'
+    beside '10.12.2026') are dates, but not addressable that way. }
+  Result := False;
+  ALayout := Default(TCWSDateTextLayout);
+  DS := GetDataSet;
+  if (DS = nil) or not DS.Active or (AField = nil) then
+    Exit;
+
+  RefCount := 0;
+  Probed := 0;
+  Ok := True;
+  Stable := True;
+  BM := nil;
+  DS.DisableControls;
+  try
+    try
+      BM := DS.Bookmark;
+      DS.First;
+      while Ok and not DS.Eof and (Probed < MaxProbe) do
+      begin
+        S := Trim(AField.AsString);
+        if S <> '' then
+        begin
+          CurCount := CWSSplitDigitGroups(S, Cur);
+          if not (CurCount in [3, 5, 6]) then
+            Ok := False
+          else if Probed = 0 then
+          begin
+            Ref := Cur;
+            RefCount := CurCount;
+            for I := 0 to RefCount - 1 do
+            begin
+              MinV[I] := CWSGroupValue(S, Ref[I]);
+              MaxV[I] := MinV[I];
+              MinLen[I] := Ref[I].Len;
+              MaxLen[I] := Ref[I].Len;
+              if MinV[I] < 0 then
+                Ok := False;
+            end;
+          end
+          else if CurCount <> RefCount then
+            Ok := False
+          else
+            for I := 0 to RefCount - 1 do
+            begin
+              if (Cur[I].Pos <> Ref[I].Pos) or (Cur[I].Len <> Ref[I].Len) then
+                Stable := False;
+              V := CWSGroupValue(S, Cur[I]);
+              if V < 0 then
+              begin
+                Ok := False;
+                Break;
+              end;
+              if V < MinV[I] then MinV[I] := V;
+              if V > MaxV[I] then MaxV[I] := V;
+              if Cur[I].Len < MinLen[I] then MinLen[I] := Cur[I].Len;
+              if Cur[I].Len > MaxLen[I] then MaxLen[I] := Cur[I].Len;
+            end;
+          Inc(Probed);
+        end;
+        DS.Next;
+      end;
+    except
+      { a dataset that refuses to be walked simply isn't probed }
+      Ok := False;
+    end;
+  finally
+    try
+      if Length(BM) > 0 then
+        DS.Bookmark := BM;
+    except
+      { bookmark no longer valid — leave the cursor where it is }
+    end;
+    DS.EnableControls;
+  end;
+
+  if not Ok or (Probed = 0) or (RefCount < 3) then
+    Exit;
+
+  { The four-digit run is the year; it must lead (ISO) or trail the date part.
+    A two-digit year is not accepted — it cannot be told from a day or month. }
+  YearIdx := -1;
+  for I := 0 to 2 do
+    if (MinLen[I] = 4) and (MaxLen[I] = 4) then
+    begin
+      if YearIdx >= 0 then
+        Exit;
+      YearIdx := I;
+    end;
+  if not (YearIdx in [0, 2]) then
+    Exit;
+
+  if YearIdx = 0 then
+  begin
+    MonthIdx := 1;
+    DayIdx := 2;
+  end
+  else
+  begin
+    { Day/month order: the data settles it whenever a run exceeds 12, because
+      only a day can; otherwise the locale's short date format decides. }
+    if MaxV[0] > 12 then
+    begin
+      DayIdx := 0;
+      MonthIdx := 1;
+    end
+    else if MaxV[1] > 12 then
+    begin
+      MonthIdx := 0;
+      DayIdx := 1;
+    end
+    else
+    begin
+      ShortFmt := UpperCase(FormatSettings.ShortDateFormat);
+      DPos := Pos('D', ShortFmt);
+      MPos := Pos('M', ShortFmt);
+      if (DPos > 0) and ((MPos = 0) or (DPos < MPos)) then
+      begin
+        DayIdx := 0;
+        MonthIdx := 1;
+      end
+      else
+      begin
+        MonthIdx := 0;
+        DayIdx := 1;
+      end;
+    end;
+  end;
+
+  if (MinV[YearIdx] < 1) or (MaxV[YearIdx] > 9999) then Exit;
+  if (MaxLen[MonthIdx] > 2) or (MinV[MonthIdx] < 1) or (MaxV[MonthIdx] > 12) then Exit;
+  if (MaxLen[DayIdx] > 2) or (MinV[DayIdx] < 1) or (MaxV[DayIdx] > 31) then Exit;
+  if RefCount >= 5 then
+  begin
+    if (MaxLen[3] > 2) or (MaxV[3] > 23) then Exit;
+    if (MaxLen[4] > 2) or (MaxV[4] > 59) then Exit;
+  end;
+  if (RefCount = 6) and ((MaxLen[5] > 2) or (MaxV[5] > 59)) then
+    Exit;
+
+  ALayout.LooksLikeDate := True;
+  ALayout.GroupCount := RefCount;
+  ALayout.YearIdx := YearIdx;
+  ALayout.MonthIdx := MonthIdx;
+  ALayout.DayIdx := DayIdx;
+  ALayout.Year := Ref[YearIdx];
+  ALayout.Month := Ref[MonthIdx];
+  ALayout.Day := Ref[DayIdx];
+  if RefCount >= 5 then
+  begin
+    ALayout.Hour := Ref[3];
+    ALayout.Min := Ref[4];
+  end;
+  if RefCount = 6 then
+    ALayout.Sec := Ref[5];
+  ALayout.Valid := Stable;
+  Result := True;
+end;
+
+function TCWSDBGrid.VerifyDateTextOrder(DS: TDataSet;
+  const AEntry: TCWSSortEntry): Boolean;
+const
+  MaxCheck = 20000;
+var
+  F: TField;
+  Prev, Cur: Int64;
+  Checked: Integer;
+  BM: TBookmark;
+begin
+  { The positional key the dataset sorts by was derived from a sample. Walk the
+    result and confirm it really is chronological, comparing keys computed here
+    from each value's own digit runs. A layout that does not hold for every row
+    is caught here instead of silently producing a wrong order. }
+  Result := True;
+  F := DS.FindField(AEntry.FieldName);
+  if (F = nil) or not AEntry.Layout.LooksLikeDate then
+    Exit(False);
+  Prev := -1;
+  Checked := 0;
+  BM := nil;
+  DS.DisableControls;
+  try
+    try
+      BM := DS.Bookmark;
+      DS.First;
+      while Result and not DS.Eof and (Checked < MaxCheck) do
+      begin
+        Cur := CWSDateTextKey(Trim(F.AsString), AEntry.Layout);
+        if Cur >= 0 then
+        begin
+          if Prev >= 0 then
+            if AEntry.Direction = sdDescending then
+              Result := Cur <= Prev
+            else
+              Result := Cur >= Prev;
+          Prev := Cur;
+          Inc(Checked);
+        end;
+        DS.Next;
+      end;
+    except
+      Result := False;
+    end;
+  finally
+    try
+      if Length(BM) > 0 then
+        DS.Bookmark := BM;
+    except
+    end;
+    DS.EnableControls;
+  end;
+end;
+
+procedure TCWSDBGrid.ResolveSortKinds(DS: TDataSet);
+var
+  I: Integer;
+  F: TField;
+begin
+  for I := 0 to High(FSortEntries) do
+  begin
+    if FSortEntries[I].Resolved then
+      Continue;
+    FSortEntries[I].Kind := svkText;
+    FSortEntries[I].Layout := Default(TCWSDateTextLayout);
+    F := DS.FindField(FSortEntries[I].FieldName);
+    if F <> nil then
+      case F.DataType of
+        ftDate, ftTime, ftDateTime, ftTimeStamp, ftOraTimeStamp,
+        ftTimeStampOffset:
+          { a real date/time field is stored as a number — any index orders it
+            chronologically already }
+          FSortEntries[I].Kind := svkDateTime;
+        ftSmallint, ftInteger, ftWord, ftFloat, ftCurrency, ftBCD, ftLargeint,
+        ftSingle, ftExtended, ftLongWord, ftShortint, ftByte, ftFMTBcd:
+          FSortEntries[I].Kind := svkNumeric;
+        ftString, ftWideString, ftFixedChar, ftFixedWideChar, ftMemo, ftWideMemo:
+          if DetectDateTextLayout(F, FSortEntries[I].Layout) then
+            FSortEntries[I].Kind := svkDateTimeText;
+      end;
+    FSortEntries[I].Resolved := True;
+  end;
+end;
+
+function TCWSDBGrid.BuildDateTextKeyExpr(const AEntry: TCWSSortEntry): string;
+
+  function IsPlainName(const S: string): Boolean;
+  var
+    I: Integer;
+  begin
+    Result := False;
+    if (S = '') or not CharInSet(S[1], ['A'..'Z', 'a'..'z', '_']) then
+      Exit;
+    for I := 2 to Length(S) do
+      if not CharInSet(S[I], ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+        Exit;
+    Result := True;
+  end;
+
+  function Term(const P: TCWSDateTextPart; AMul: Int64): string;
+  var
+    Sub: string;
+  begin
+    Result := '';
+    if P.Len <= 0 then
+      Exit;
+    Sub := Format('SUBSTRING(%s,%d,%d)', [AEntry.FieldName, P.Pos, P.Len]);
+    { The IIF does double duty: it keeps an empty value out of the arithmetic,
+      and — because the evaluator takes an IIF's static type from its second
+      argument — it types the digits as a number, so the terms add up into one
+      chronological key instead of being concatenated as text. }
+    Result := Format('IIF(%s='''',0,%s)*%d', [Sub, Sub, AMul]);
+  end;
+
+  procedure Push(var Acc: string; const ATerm: string);
+  begin
+    if ATerm = '' then
+      Exit;
+    if Acc <> '' then
+      Acc := Acc + '+';
+    Acc := Acc + ATerm;
+  end;
+
+var
+  Acc: string;
+begin
+  { Turns '05.12.2026 09:30' into 202612050930 — a single number that orders
+    chronologically whatever the textual format. }
+  Result := '';
+  if not AEntry.Layout.Valid or not IsPlainName(AEntry.FieldName) then
+    Exit;
+  Acc := '';
+  Push(Acc, Term(AEntry.Layout.Year,  10000000000));
+  Push(Acc, Term(AEntry.Layout.Month, 100000000));
+  Push(Acc, Term(AEntry.Layout.Day,   1000000));
+  Push(Acc, Term(AEntry.Layout.Hour,  10000));
+  Push(Acc, Term(AEntry.Layout.Min,   100));
+  Push(Acc, Term(AEntry.Layout.Sec,   1));
+  if Acc = '' then
+    Exit;
+  Result := '(' + Acc + ')';
+  { An expression index is always compared ascending — the descending sort
+    option is only honoured for plain field indexes — so a descending sort
+    negates the key instead. A leading unary minus is rejected by the parser,
+    '0 - x' is not. }
+  if AEntry.Direction = sdDescending then
+    Result := '0 - ' + Result;
+end;
+
+{ --- pushing the sort into the dataset --- }
+
+function TCWSDBGrid.DataSetHasExpressionIndexes(DS: TDataSet): Boolean;
+var
+  Coll: TObject;
+  ItemClass: TClass;
+begin
+  { True for the FireDAC datasets: an Indexes collection whose items carry an
+    Expression. It doubles as the marker for 'IndexFieldNames understands the
+    FieldName:D descending suffix'. Recognised through RTTI so this unit needs
+    no FireDAC in its uses clause. }
+  Result := False;
+  if not CWSHasProp(DS, 'Indexes') or not CWSHasProp(DS, 'IndexName') then
+    Exit;
+  Coll := GetObjectProp(DS, 'Indexes');
+  if not (Coll is TCollection) then
+    Exit;
+  ItemClass := TCollection(Coll).ItemClass;
+  Result := (ItemClass <> nil) and
+            (GetPropInfo(ItemClass, 'Expression') <> nil) and
+            (GetPropInfo(ItemClass, 'DescFields') <> nil);
+end;
+
+function TCWSDBGrid.ApplyExpressionSortIndex(DS: TDataSet;
+  const AExpression: string): Boolean;
+var
+  Coll: TObject;
+  Items: TCollection;
+  Item: TCollectionItem;
+begin
+  Result := False;
+  Coll := GetObjectProp(DS, 'Indexes');
+  if not (Coll is TCollection) then
+    Exit;
+  Items := TCollection(Coll);
+  try
+    DropSortIndex(DS);
+    { A leftover IndexFieldNames from a previous, field-based sort would compete
+      with the named index — put the dataset's own value back first. }
+    if CWSHasProp(DS, 'IndexFieldNames') and
+       (GetStrProp(DS, 'IndexFieldNames') <> FSortSavedIndexFieldNames) then
+      SetStrProp(DS, 'IndexFieldNames', FSortSavedIndexFieldNames);
+    Item := Items.Add;
+    try
+      SetStrProp(Item, 'Name', CWSSortIndexName);
+      SetStrProp(Item, 'Expression', AExpression);
+      SetOrdProp(Item, 'Active', 1);
+      SetStrProp(DS, 'IndexName', CWSSortIndexName);
+      Result := True;
+    except
+      { a malformed expression must not leave a half-built index behind }
+      Item.Free;
+      raise;
+    end;
+  except
+    Result := False;
+  end;
+end;
+
+function TCWSDBGrid.ApplyAddIndexSort(DS: TDataSet): Boolean;
+var
+  Ctx: TRttiContext;
+  T: TRttiType;
+  MAdd, MDel: TRttiMethod;
+  Fields, Desc: string;
+  I: Integer;
+begin
+  { The ClientDataSet family: IndexFieldNames sorts ascending only, but
+    AddIndex(Name, Fields, Options, DescFields, …) can do both. Called through
+    RTTI so this unit keeps its Data.DB-only dependency. }
+  Result := False;
+  if not CWSHasProp(DS, 'IndexName') then
+    Exit;
+  Ctx := TRttiContext.Create;
+  try
+    T := Ctx.GetType(DS.ClassType);
+    if T = nil then
+      Exit;
+    MAdd := T.GetMethod('AddIndex');
+    if (MAdd = nil) or (Length(MAdd.GetParameters) <> 6) then
+      Exit;
+
+    Fields := '';
+    Desc := '';
+    for I := 0 to High(FSortEntries) do
+    begin
+      if Fields <> '' then
+        Fields := Fields + ';';
+      Fields := Fields + FSortEntries[I].FieldName;
+      if FSortEntries[I].Direction = sdDescending then
+      begin
+        if Desc <> '' then
+          Desc := Desc + ';';
+        Desc := Desc + FSortEntries[I].FieldName;
+      end;
+    end;
+
+    try
+      SetStrProp(DS, 'IndexName', '');
+      MDel := T.GetMethod('DeleteIndex');
+      if (MDel <> nil) and (Length(MDel.GetParameters) = 1) then
+        try
+          MDel.Invoke(DS, [CWSSortIndexName]);
+        except
+          { nothing to delete yet }
+        end;
+      MAdd.Invoke(DS, [CWSSortIndexName, Fields, TValue.From<TIndexOptions>([]),
+        Desc, '', 0]);
+      SetStrProp(DS, 'IndexName', CWSSortIndexName);
+      Result := True;
+    except
+      Result := False;
+    end;
+  finally
+    Ctx.Free;
+  end;
+end;
+
+procedure TCWSDBGrid.DropSortIndex(DS: TDataSet);
+var
+  Coll: TObject;
+  Items: TCollection;
+  I: Integer;
+begin
+  if DS = nil then
+    Exit;
+  try
+    if CWSHasProp(DS, 'IndexName') and
+       SameText(GetStrProp(DS, 'IndexName'), CWSSortIndexName) then
+      SetStrProp(DS, 'IndexName', '');
+  except
+  end;
+  { Collection-based indexes (FireDAC) — remove only the one we created. }
+  try
+    if CWSHasProp(DS, 'Indexes') then
+    begin
+      Coll := GetObjectProp(DS, 'Indexes');
+      if Coll is TCollection then
+      begin
+        Items := TCollection(Coll);
+        for I := Items.Count - 1 downto 0 do
+          if CWSHasProp(Items.Items[I], 'Name') and
+             SameText(GetStrProp(Items.Items[I], 'Name'), CWSSortIndexName) then
+            Items.Items[I].Free;
+      end;
+    end;
+  except
+  end;
+end;
+
+procedure TCWSDBGrid.SaveDataSetOrder(DS: TDataSet);
+begin
+  { Taken once, just before we override the dataset's ordering for the first
+    time, so ClearDataSetSort can hand it back. }
+  if FSortSaved or (DS = nil) then
+    Exit;
+  FSortSavedIndexFieldNames := '';
+  FSortSavedIndexName := '';
+  try
+    if CWSHasProp(DS, 'IndexFieldNames') then
+      FSortSavedIndexFieldNames := GetStrProp(DS, 'IndexFieldNames');
+    if CWSHasProp(DS, 'IndexName') then
+      FSortSavedIndexName := GetStrProp(DS, 'IndexName');
+  except
+  end;
+  FSortSaved := True;
+end;
+
+procedure TCWSDBGrid.ClearDataSetSort(DS: TDataSet);
+begin
+  if DS = nil then
+    Exit;
+  DropSortIndex(DS);
+  try
+    if CWSHasProp(DS, 'IndexFieldNames') and
+       (GetStrProp(DS, 'IndexFieldNames') <> FSortSavedIndexFieldNames) then
+      SetStrProp(DS, 'IndexFieldNames', FSortSavedIndexFieldNames);
+    if (FSortSavedIndexName <> '') and CWSHasProp(DS, 'IndexName') and
+       (GetStrProp(DS, 'IndexName') <> FSortSavedIndexName) then
+      SetStrProp(DS, 'IndexName', FSortSavedIndexName);
+  except
+  end;
+  FSortSaved := False;
+  FSortSavedIndexFieldNames := '';
+  FSortSavedIndexName := '';
+end;
+
+procedure TCWSDBGrid.ApplySortToDataSet;
+var
+  DS: TDataSet;
+  I: Integer;
+  Names, Expr: string;
+  FireDAC, AnyDesc, AnyDateText: Boolean;
+begin
+  DS := GetDataSet;
+  if (DS = nil) or not DS.Active then
+    Exit;
+
+  if Length(FSortEntries) = 0 then
+  begin
+    { Only undo an ordering we imposed ourselves. }
+    if FSortIndexApplied then
+      ClearDataSetSort(DS);
+    FSortIndexApplied := False;
+    Exit;
+  end;
+
+  ResolveSortKinds(DS);
+  SaveDataSetOrder(DS);
+  FireDAC := DataSetHasExpressionIndexes(DS);
+
+  AnyDesc := False;
+  AnyDateText := False;
+  for I := 0 to High(FSortEntries) do
+  begin
+    AnyDesc := AnyDesc or (FSortEntries[I].Direction = sdDescending);
+    AnyDateText := AnyDateText or (FSortEntries[I].Kind = svkDateTimeText);
+  end;
+
+  { A text column holding date/time stamps needs the chronological key — a
+    plain index would put 01.02.2025 before 20.07.2024. The key replaces the
+    whole index, so this covers a single sorted column; in a multi-column sort
+    such a column falls back to plain text ordering (SortIsExact says so). }
+  if AnyDateText and (Length(FSortEntries) = 1) and FireDAC then
+  begin
+    Expr := BuildDateTextKeyExpr(FSortEntries[0]);
+    if (Expr <> '') and ApplyExpressionSortIndex(DS, Expr) then
+      if VerifyDateTextOrder(DS, FSortEntries[0]) then
+      begin
+        FSortIndexApplied := True;
+        Exit;
+      end
+      else
+        { The layout read off the sample did not hold for every row — drop the
+          key and fall through to the plain index rather than leave the data in
+          an order that only looks sorted. }
+        DropSortIndex(DS);
+  end;
+
+  FSortIsExact := not AnyDateText;
+
+  { Descending without FireDAC's FieldName:D suffix — try the ClientDataSet
+    style AddIndex, which supports descending fields explicitly. }
+  if AnyDesc and not FireDAC and ApplyAddIndexSort(DS) then
+  begin
+    FSortIndexApplied := True;
+    Exit;
+  end;
+
+  if not CWSHasProp(DS, 'IndexFieldNames') then
+  begin
+    FSortIsExact := False;
+    Exit;
+  end;
+
+  Names := '';
+  for I := 0 to High(FSortEntries) do
+  begin
+    if Names <> '' then
+      Names := Names + ';';
+    Names := Names + FSortEntries[I].FieldName;
+    if FSortEntries[I].Direction = sdDescending then
+      if FireDAC then
+        Names := Names + ':D'
+      else
+        { the index cannot reverse this level — the arrow still shows the
+          intent, SortIsExact reports that the data does not follow }
+        FSortIsExact := False;
+  end;
+
+  try
+    DropSortIndex(DS);
+    SetStrProp(DS, 'IndexFieldNames', Names);
+    FSortIndexApplied := True;
+  except
+    FSortIsExact := False;
+  end;
+end;
+
+{ --- indicator painting --- }
+
+function TCWSDBGrid.SortNumberText(ALevel: Integer): string;
+begin
+  Result := '';
+  if ALevel <= 0 then
+    Exit;
+  case FSortNumberMode of
+    snmAlways:
+      Result := IntToStr(ALevel);
+    snmMultiColumn:
+      if Length(FSortEntries) > 1 then
+        Result := IntToStr(ALevel);
+  end;
+end;
+
+procedure TCWSDBGrid.PrepareSortNumberFont(C: TCanvas);
+var
+  H: Integer;
+begin
+  { The sequence number rides along with TitleFont — a little smaller, never
+    bold, and in its own color. }
+  C.Font.Assign(FGrid.TitleFont);
+  C.Font.Style := [];
+  C.Font.Color := FSortNumberColor;
+  H := Round(Abs(C.Font.Height) * 0.8);
+  if H < Scale(8) then
+    H := Scale(8);
+  C.Font.Height := -H;
+end;
+
+function TCWSDBGrid.SortIndicatorWidth(C: TCanvas; ALevel: Integer): Integer;
+var
+  Saved: TFont;
+  Txt: string;
+begin
+  Result := Max(Scale(FSortIndicatorSize), 5) + Scale(7);
+  Txt := SortNumberText(ALevel);
+  if Txt = '' then
+    Exit;
+  Saved := TFont.Create;
+  try
+    Saved.Assign(C.Font);
+    PrepareSortNumberFont(C);
+    Inc(Result, C.TextWidth(Txt) + Scale(2));
+    C.Font.Assign(Saved);
+  finally
+    Saved.Free;
+  end;
+end;
+
+procedure TCWSDBGrid.DrawSortIndicator(C: TCanvas; const ACell: TRect;
+  ALevel: Integer; ADirection: TCWSSortDirection);
+var
+  Txt: string;
+  AW, AH, RightEdge, CY, L, T: Integer;
+  Saved: TFont;
+  SavedBrush: TColor;
+  SavedStyle: TBrushStyle;
+begin
+  if ADirection = sdNone then
+    Exit;
+  AW := Max(Scale(FSortIndicatorSize), 5);
+  if not Odd(AW) then
+    Inc(AW);                       { an odd width gives the apex a crisp pixel }
+  AH := Max(3, Round(AW * 0.6));
+  RightEdge := ACell.Right - Scale(4);
+  CY := (ACell.Top + ACell.Bottom) div 2;
+
+  { Number first, hugging the right edge; the triangle then sits to its left. }
+  Txt := SortNumberText(ALevel);
+  if Txt <> '' then
+  begin
+    Saved := TFont.Create;
+    try
+      Saved.Assign(C.Font);
+      PrepareSortNumberFont(C);
+      SetBkMode(C.Handle, TRANSPARENT);
+      Dec(RightEdge, C.TextWidth(Txt));
+      C.TextOut(RightEdge, CY - C.TextHeight(Txt) div 2, Txt);
+      Dec(RightEdge, Scale(2));
+      C.Font.Assign(Saved);
+    finally
+      Saved.Free;
+    end;
+  end;
+
+  L := RightEdge - AW;
+  T := CY - AH div 2;
+  if L < ACell.Left then
+    Exit;
+
+  SavedBrush := C.Brush.Color;
+  SavedStyle := C.Brush.Style;
+  C.Brush.Style := bsSolid;
+  C.Brush.Color := FSortArrowColor;
+  C.Pen.Style := psSolid;
+  C.Pen.Color := FSortArrowColor;
+  if ADirection = sdAscending then
+    C.Polygon([Point(L + AW div 2, T), Point(L + AW, T + AH), Point(L, T + AH)])
+  else
+    C.Polygon([Point(L, T), Point(L + AW, T), Point(L + AW div 2, T + AH)]);
+  C.Brush.Color := SavedBrush;
+  C.Brush.Style := SavedStyle;
+end;
+
+{ --- property setters --- }
+
+procedure TCWSDBGrid.SetSortEnabled(const Value: Boolean);
+begin
+  if FSortEnabled = Value then
+    Exit;
+  FSortEnabled := Value;
+  if not FSortEnabled then
+    ClearSort            { no arrows, no sort — the two must not drift apart }
+  else
+  begin
+    if FGrid <> nil then
+      FGrid.Invalidate;
+    Invalidate;
+  end;
+end;
+
+procedure TCWSDBGrid.SetMaxSortColumns(const Value: Integer);
+var
+  V: Integer;
+begin
+  V := Max(1, Value);
+  if FMaxSortColumns = V then
+    Exit;
+  FMaxSortColumns := V;
+  if Length(FSortEntries) > FMaxSortColumns then
+  begin
+    SetLength(FSortEntries, FMaxSortColumns);
+    ApplySort;
+  end;
+end;
+
+procedure TCWSDBGrid.SetSortArrowColor(const Value: TColor);
+begin
+  if FSortArrowColor = Value then
+    Exit;
+  FSortArrowColor := Value;
+  if FGrid <> nil then
+    FGrid.Invalidate;
+  Invalidate;
+end;
+
+procedure TCWSDBGrid.SetSortNumberColor(const Value: TColor);
+begin
+  if FSortNumberColor = Value then
+    Exit;
+  FSortNumberColor := Value;
+  if FGrid <> nil then
+    FGrid.Invalidate;
+  Invalidate;
+end;
+
+procedure TCWSDBGrid.SetSortIndicatorSize(const Value: Integer);
+var
+  V: Integer;
+begin
+  V := Max(5, Value);
+  if FSortIndicatorSize = V then
+    Exit;
+  FSortIndicatorSize := V;
+  if FGrid <> nil then
+    FGrid.Invalidate;
+  Invalidate;
+end;
+
+procedure TCWSDBGrid.SetSortNumberMode(const Value: TCWSSortNumberMode);
+begin
+  if FSortNumberMode = Value then
+    Exit;
+  FSortNumberMode := Value;
+  if FGrid <> nil then
+    FGrid.Invalidate;
+  Invalidate;
+end;
+
 { *** Pass-through methods *** }
 
 procedure TCWSDBGrid.DefaultDrawColumnCell(const Rect: TRect; DataCol: Integer;
@@ -2682,6 +4054,9 @@ begin Result := FGrid.DataSource; end;
 
 procedure TCWSDBGrid.SetDataSource(const Value: TDataSource);
 begin
+  { The sort refers to field names of the old dataset — drop it (without
+    touching either dataset's index) so no stale arrows survive the switch. }
+  ResetSortState;
   FGrid.DataSource := Value;
   UpdateGridPosition;
   Invalidate;
