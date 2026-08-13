@@ -23,17 +23,18 @@ unit CWSListBox;
 
 { Odkomentuj, aby włączyć log diagnostyczny zaznaczenia (OutputDebugString).
   Podgląd: okno Event Log w IDE albo DebugView od Sysinternals. }
+{.$DEFINE CWSLB_SELDEBUG}
 
 interface
 
 uses
   Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI, Winapi.GDIPOBJ,
-  Winapi.UxTheme, System.SysUtils, System.Classes, System.Types, System.Math,
+  Winapi.UxTheme,
+  System.SysUtils, System.Classes, System.Types, System.Math,
   Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls, Vcl.Forms, Vcl.ExtCtrls;
 
 const
   CM_PPICHANGED = $B080 + 13;
-
 type
   TCWSListBox = class;
 
@@ -57,23 +58,14 @@ type
         zwolnienie w miejscu -> redukcja do klikniętej pozycji.
       Cały gest jest obsługiwany własnym przechwyceniem myszy, więc nie zależy od
       tego, kiedy VCL wywoła DoStartDrag ani czy dostarczy MouseUp. }
-      FHoldTracking: Boolean;   { trwa rozstrzyganie gestu }
+    FHoldTracking: Boolean;   { trwa rozstrzyganie gestu }
     FHoldIdx: Integer;        { indeks wciśniętej pozycji (-1 = brak) }
     FDownPos: TPoint;         { pozycja wciśnięcia, do pomiaru dystansu }
-     { Hak na pętlę komunikatów aplikacji, aktywny wyłącznie na czas przeciągania.
-      Łapie WM_RBUTTONDOWN zanim komunikat trafi do jakiegokolwiek okna, więc nie
-      zależy od tego, której kontrolce VCL przypisał przechwycenie myszy — a to
-      właśnie ta niewiadoma sprawiała, że przechwytywanie w WndProc zawodziło. }
-    FSavedAppOnMessage: TMessageEvent;
-    FAppHookActive: Boolean;
-    function HoldBegin(const Msg: TWMLButtonDown): Boolean;
+    function  HoldBegin(const Msg: TWMLButtonDown): Boolean;
     procedure HoldTrack(const Msg: TWMMouseMove);
     procedure HoldFinish(const Msg: TWMLButtonUp);
     procedure HoldCancel;
     procedure CollapseSelectionTo(AIndex: Integer);
-    procedure AppMessageHook(var Msg: TMsg; var Handled: Boolean);
-    procedure InstallDragHook;
-    procedure RemoveDragHook;
     { Nadaje fokus liście, gdy VCL pominął to przy WM_LBUTTONDOWN (ścieżka auto-draga) }
     procedure EnsureFocused;
     procedure NewWindowProc(var Message: TMessage);
@@ -84,6 +76,28 @@ type
     procedure CMMouseLeave(var Message: TMessage); message CM_MOUSELEAVE;
     procedure CreateParams(var Params: TCreateParams); override;
     procedure CreateWnd; override;
+
+    { *** Przekazywanie zdarzeń do FOwner przez OVERRIDE, nie przez sloty ***
+      Wcześniej komponent zajmował sloty zdarzeń tej listy (FListBox.OnClick := …).
+      Slot mieści jeden handler, więc przypisanie czegokolwiek na ListBox.OnClick
+      z zewnątrz po cichu wyrzucało handler komponentu — razem z pracą, którą on
+      wykonuje (odświeżenie paska, tło stanu, przemalowanie). Override nic nie
+      zajmuje: sloty tej listy zostają wolne dla użytkownika, a komponent i tak
+      dostaje swoje wywołanie.
+      Wyjątki, które MUSZĄ zostać na slotach — VCL nie daje dla nich wirtualnego
+      haka: OnData, OnDataFind, OnDataObject (TCustomListBox.DoGetData i spółka
+      nie są virtual). Ścieżka myszy (MouseDown/MouseMove/MouseUp) też zostaje
+      na slotach — jest spleciona z auto-dragiem VCL i nie ruszamy jej tutaj. }
+    procedure Click; override;
+    procedure DblClick; override;
+    procedure KeyDown(var Key: Word; Shift: TShiftState); override;
+    procedure KeyUp(var Key: Word; Shift: TShiftState); override;
+    procedure KeyPress(var Key: Char); override;
+    procedure DoEnter; override;
+    procedure DoExit; override;
+    procedure DoContextPopup(MousePos: TPoint; var Handled: Boolean); override;
+    procedure DrawItem(Index: Integer; Rect: TRect; State: TOwnerDrawState); override;
+    procedure MeasureItem(Index: Integer; var Height: Integer); override;
     { Auto-drag only when the cursor is over a selected item }
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
@@ -94,7 +108,6 @@ type
     procedure DragDrop(Source: TObject; X, Y: Integer); override;
   public
     constructor Create(AOwner: TComponent); override;
-    destructor Destroy; override;
     function GetItemHeight: Integer;
     function GetVisibleItems: Integer;
     function GetTotalItems: Integer;
@@ -150,7 +163,7 @@ type
 
     { Track-click auto-repeat (holding the button on the track keeps paging
       toward the cursor until the thumb reaches it — the native scrollbar feel) }
-      FRepeatTimer: TTimer;
+    FRepeatTimer: TTimer;
     FRepeatActive: Boolean;
     FRepeatDir: Integer;
     FRepeatStarted: Boolean;
@@ -415,21 +428,13 @@ type
 
 implementation
 
-{ Stan prawego/środkowego przycisku odczytany w czasie rzeczywistym. GetKeyState
-  odzwierciedla stan z chwili bieżącego komunikatu, a ten w trakcie przeciągania
-  należy do innego okna — stąd GetAsyncKeyState. }
-
-function RightOrMiddleButtonDown: Boolean;
-begin
-  Result := (GetAsyncKeyState(VK_RBUTTON) < 0) or (GetAsyncKeyState(VK_MBUTTON) < 0);
-end;
-
 {$IFDEF CWSLB_SELDEBUG}
 procedure SelDbg(ALB: TListBox; const AStage: string; AExtra: Integer = MaxInt);
 var
   S: string;
 begin
-  S := Format('[CWSLB] %-22s SelCount=%d ItemIndex=%d Count=%d Focused=%s', [AStage, ALB.SelCount, ALB.ItemIndex, ALB.Items.Count, BoolToStr(ALB.Focused, True)]);
+  S := Format('[CWSLB] %-22s SelCount=%d ItemIndex=%d Count=%d Focused=%s',
+    [AStage, ALB.SelCount, ALB.ItemIndex, ALB.Items.Count, BoolToStr(ALB.Focused, True)]);
   if AExtra <> MaxInt then
     S := S + Format(' extra=%d', [AExtra]);
   OutputDebugString(PChar(S));
@@ -457,20 +462,13 @@ end;
 { TCWSInternalListBox                                                      }
 { ======================================================================== }
 
-destructor TCWSInternalListBox.Destroy;
-begin
-  RemoveDragHook;
-  inherited;
-end;
-
 constructor TCWSInternalListBox.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   FOwner := TCWSListBox(AOwner);
-  FHoldTracking := False;
-  FHoldIdx := -1;
-  FDownPos := Point(0, 0);
-
+  FHoldTracking       := False;
+  FHoldIdx            := -1;
+  FDownPos            := Point(0, 0);
   BorderStyle := bsNone;
   Self.WindowProc := NewWindowProc;
 end;
@@ -586,52 +584,16 @@ begin
         end;
         inherited WndProc(Message);
       end;
-    { Inny przycisk myszy przerywa nierozstrzygnięty gest, jak w Eksploratorze.
-      Dotyczy wyłącznie fazy, w której przechwycenie myszy mamy my. Gdy przeciąganie
-      już trwa, komunikaty myszy IDZIE OMIJAJĄC ten uchwyt — VCL kieruje je do własnego
-      okna menedżera przeciągania — więc tamtej fazy tu złapać się nie da.
-      Blokada prawego przycisku w trakcie przeciągania siedzi w DragOver/DragDrop. }
-    WM_RBUTTONDOWN, WM_MBUTTONDOWN:
-      begin
-        if FHoldTracking then
-        begin
-          HoldCancel;
-          Message.Result := 0;
-          Exit;
-        end;
-        inherited WndProc(Message);
-      end;
-    { Escape przerywa gest przed rozstrzygnięciem }
-    WM_KEYDOWN:
-      begin
-        if FHoldTracking and (TWMKeyDown(Message).CharCode = VK_ESCAPE) then
-        begin
-          HoldCancel;
-          Message.Result := 0;
-          Exit;
-        end;
-        inherited WndProc(Message);
-        FOwner.UpdateListBoxPosition;
-        FOwner.Invalidate;
-      end;
     { Utrata przechwycenia (Alt+Tab, komunikat systemowy) przerywa gest }
     WM_CAPTURECHANGED:
       begin
         HoldCancel;
         inherited WndProc(Message);
       end;
-    { Windows wysyła to m.in. przy przełączeniu aplikacji. Konwencja systemu mówi,
-      że przeciąganie ma się wtedy anulować — domykamy zarówno nierozstrzygnięty
-      gest, jak i trwające już przeciąganie VCL. }
-    WM_CANCELMODE:
-      begin
-        HoldCancel;
-        if Dragging then
-          CancelDrag;
-        inherited WndProc(Message);
-      end;
 
-    WM_VSCROLL, WM_MOUSEWHEEL, WM_KEYUP, LB_ADDSTRING, LB_INSERTSTRING, LB_DELETESTRING, LB_RESETCONTENT, LB_SETTOPINDEX:
+    WM_VSCROLL, WM_MOUSEWHEEL, WM_KEYDOWN, WM_KEYUP,
+    LB_ADDSTRING, LB_INSERTSTRING, LB_DELETESTRING, LB_RESETCONTENT,
+    LB_SETTOPINDEX:
       begin
         inherited WndProc(Message);
         { Trigger recalculation of position and region in the main component }
@@ -672,25 +634,26 @@ begin
     przechodzi przez SendCancelMode, które przechwycenie by zwolniło }
   EnsureFocused;
 
-  FDownPos := P;
-  FHoldIdx := Idx;
+  FDownPos      := P;
+  FHoldIdx      := Idx;
   FHoldTracking := True;
-  MouseCapture := True;
-{$IFDEF CWSLB_SELDEBUG}  SelDbg(Self, 'HoldBegin', Idx);{$ENDIF}
+  MouseCapture  := True;
+{$IFDEF CWSLB_SELDEBUG}SelDbg(Self, 'HoldBegin', Idx);{$ENDIF}
   Result := True;
 end;
 
 procedure TCWSInternalListBox.HoldTrack(const Msg: TWMMouseMove);
 begin
-  if (Abs(Msg.XPos - FDownPos.X) <= Mouse.DragThreshold) and (Abs(Msg.YPos - FDownPos.Y) <= Mouse.DragThreshold) then
+  if (Abs(Msg.XPos - FDownPos.X) <= Mouse.DragThreshold) and
+     (Abs(Msg.YPos - FDownPos.Y) <= Mouse.DragThreshold) then
     Exit;
 
   { Próg przekroczony — to przeciąganie. Zaznaczenia NIE ruszamy, żeby poszły
     wszystkie zaznaczone pozycje. Przechwycenie oddajemy menedżerowi przeciągania. }
   FHoldTracking := False;
-  FHoldIdx := -1;
-  MouseCapture := False;
-{$IFDEF CWSLB_SELDEBUG}  SelDbg(Self, 'HoldTrack -> drag');{$ENDIF}
+  FHoldIdx      := -1;
+  MouseCapture  := False;
+{$IFDEF CWSLB_SELDEBUG}SelDbg(Self, 'HoldTrack -> drag');{$ENDIF}
   BeginDrag(True, -1);
 end;
 
@@ -700,8 +663,8 @@ var
 begin
   Idx := FHoldIdx;
   FHoldTracking := False;
-  FHoldIdx := -1;
-  MouseCapture := False;
+  FHoldIdx      := -1;
+  MouseCapture  := False;
 
   { Zwolnienie bez ruchu — to było kliknięcie, więc zaznaczenie redukujemy do
     klikniętej pozycji, dokładnie jak zwykły listbox Windows. }
@@ -712,7 +675,7 @@ begin
       OnClick wywołujemy sami i dokładnie raz }
     Click;
   end;
-{$IFDEF CWSLB_SELDEBUG}  SelDbg(Self, 'HoldFinish', Idx);{$ENDIF}
+{$IFDEF CWSLB_SELDEBUG}SelDbg(Self, 'HoldFinish', Idx);{$ENDIF}
 end;
 
 procedure TCWSInternalListBox.HoldCancel;
@@ -720,10 +683,8 @@ begin
   if not FHoldTracking then
     Exit;
   FHoldTracking := False;
-  FHoldIdx := -1;
-  if MouseCapture then
-    MouseCapture := False;
-{$IFDEF CWSLB_SELDEBUG}  SelDbg(Self, 'HoldCancel');{$ENDIF}
+  FHoldIdx      := -1;
+{$IFDEF CWSLB_SELDEBUG}SelDbg(Self, 'HoldCancel');{$ENDIF}
 end;
 
 procedure TCWSInternalListBox.CollapseSelectionTo(AIndex: Integer);
@@ -741,54 +702,6 @@ begin
     FOwner.Invalidate;
 end;
 
-procedure TCWSInternalListBox.InstallDragHook;
-begin
-  if FAppHookActive then
-    Exit;
-  FSavedAppOnMessage := Application.OnMessage;
-  Application.OnMessage := AppMessageHook;
-  FAppHookActive := True;
-end;
-
-procedure TCWSInternalListBox.RemoveDragHook;
-begin
-  if not FAppHookActive then
-    Exit;
-  FAppHookActive := False;
-  Application.OnMessage := FSavedAppOnMessage;
-  FSavedAppOnMessage := nil;
-end;
-
-procedure TCWSInternalListBox.AppMessageHook(var Msg: TMsg; var Handled: Boolean);
-var
-  Prev: TMessageEvent;
-begin
-  { Zapamiętujemy poprzedni handler przed ewentualnym zdjęciem haka — RemoveDragHook
-    zeruje pole, a łańcuch wywołania ma zadziałać także dla tego komunikatu }
-  Prev := FSavedAppOnMessage;
-
-  { Wciśnięty lewy przycisk to warunek konieczny trwającego przeciągania. Gdy go nie
-    ma, żadnego przeciągania być nie może — hak jest zbędny i natychmiast się zdejmuje.
-    To zabezpieczenie jest konieczne, bo VCL wywołuje DoStartDrag także po zwykłym
-    kliknięciu: bez tego hak zostawałby zainstalowany na stałe i połykał prawy przycisk
-    w CAŁEJ aplikacji, wyłączając menu kontekstowe wszędzie. }
-  if GetAsyncKeyState(VK_LBUTTON) >= 0 then
-    RemoveDragHook
-  else if (Msg.message = WM_RBUTTONDOWN) or (Msg.message = WM_MBUTTONDOWN) then
-  begin
-{$IFDEF CWSLB_SELDEBUG}
-    SelDbg(Self, 'CANCEL: AppHook');{$ENDIF}
-    RemoveDragHook;
-    CancelDrag;
-    Handled := True;
-    Exit;
-  end;
-
-  { Nie zjadamy cudzej obsługi — poprzedni handler dostaje swój komunikat }
-  if Assigned(Prev) then
-    Prev(Msg, Handled);
-end;
-
 procedure TCWSInternalListBox.EnsureFocused;
 begin
   { Wchodząc w ścieżkę auto-draga VCL pomija standardowe nadanie fokusu
@@ -796,6 +709,87 @@ begin
     Focused nie pokazuje zaznaczenia, a klawiatura do niej nie trafia. }
   if not Focused and CanFocus and not (csDesigning in ComponentState) then
     SetFocus;
+end;
+
+{ *** Zdarzenia przekazywane do FOwner (patrz komentarz przy deklaracjach) ***
+  Ciała obsługi zostają tam, gdzie były — w TCWSListBox.ListBox*. Zmienia się
+  wyłącznie to, skąd są wołane: z override'u zamiast ze slotu zdarzenia. }
+
+procedure TCWSInternalListBox.Click;
+begin
+  inherited;                       { odpali OnClick tej listy, jeśli ktoś go ustawił }
+  if FOwner <> nil then
+    FOwner.ListBoxClick(Self);
+end;
+
+procedure TCWSInternalListBox.DblClick;
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.ListBoxDblClick(Self);
+end;
+
+procedure TCWSInternalListBox.KeyDown(var Key: Word; Shift: TShiftState);
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.ListBoxKeyDown(Self, Key, Shift);
+end;
+
+procedure TCWSInternalListBox.KeyUp(var Key: Word; Shift: TShiftState);
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.ListBoxKeyUp(Self, Key, Shift);
+end;
+
+procedure TCWSInternalListBox.KeyPress(var Key: Char);
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.ListBoxKeyPress(Self, Key);
+end;
+
+procedure TCWSInternalListBox.DoEnter;
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.ListBoxEnter(Self);
+end;
+
+procedure TCWSInternalListBox.DoExit;
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.ListBoxExit(Self);
+end;
+
+procedure TCWSInternalListBox.DoContextPopup(MousePos: TPoint;
+  var Handled: Boolean);
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.ListBoxContextPopup(Self, MousePos, Handled);
+end;
+
+procedure TCWSInternalListBox.DrawItem(Index: Integer; Rect: TRect;
+  State: TOwnerDrawState);
+begin
+  { Owner-draw w całości należy do komponentu: maluje tło stanu, a potem oddaje
+    rysowanie handlerowi użytkownika (FOwner.OnDrawItem) albo rysuje domyślnie.
+    Dlatego NIE wołamy inherited — dokładnie jak dotąd, gdy nasz handler siedział
+    w slocie OnDrawItem i zastępował domyślne rysowanie TCustomListBox. }
+  if FOwner <> nil then
+    FOwner.ListBoxDrawItem(Self, Index, Rect, State)
+  else
+    inherited;
+end;
+
+procedure TCWSInternalListBox.MeasureItem(Index: Integer; var Height: Integer);
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.ListBoxMeasureItem(Self, Index, Height);
 end;
 
 procedure TCWSInternalListBox.WMNCPaint(var Msg: TMessage);
@@ -828,20 +822,26 @@ begin
   if Assigned(FOwner.FOnMouseWheel) then
   begin
     var Handled := False;
-    FOwner.FOnMouseWheel(FOwner, KeysToShiftState(TWMMouseWheel(Message).Keys), TWMMouseWheel(Message).WheelDelta, SmallPointToPoint(TWMMouseWheel(Message).Pos), Handled);
+    FOwner.FOnMouseWheel(
+      FOwner,
+      KeysToShiftState(TWMMouseWheel(Message).Keys),
+      TWMMouseWheel(Message).WheelDelta,
+      SmallPointToPoint(TWMMouseWheel(Message).Pos),
+      Handled
+    );
   end;
   Message.Result := 0;
 end;
 
 { *** Auto-drag only over a selected item *** }
 
-procedure TCWSInternalListBox.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+procedure TCWSInternalListBox.MouseDown(Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
 var
   Idx: Integer;
   AllowDrag: Boolean;
 begin
-{$IFDEF CWSLB_SELDEBUG}
-  SelDbg(Self, 'MouseDown');{$ENDIF}
+{$IFDEF CWSLB_SELDEBUG}SelDbg(Self, 'MouseDown');{$ENDIF}
   { Uwaga: wciśnięcie na pozycji należącej do wielokrotnego zaznaczenia tu nie
     dociera — przechwytuje je HoldBegin w NewWindowProc. Zostają przypadki
     jednoznaczne, obsługiwane jak dotąd. }
@@ -857,21 +857,22 @@ begin
     AllowDrag := (Idx >= 0) and Selected[Idx];
     if not AllowDrag then
     begin
-      FSavedDragMode := DragMode;
-      DragMode := dmManual;
+      FSavedDragMode  := DragMode;
+      DragMode        := dmManual;
       FDragSuppressed := True;
     end;
   end;
   inherited;
 end;
 
-procedure TCWSInternalListBox.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+procedure TCWSInternalListBox.MouseUp(Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
 begin
   inherited;
-{$IFDEF CWSLB_SELDEBUG}  SelDbg(Self, 'MouseUp');{$ENDIF}
+{$IFDEF CWSLB_SELDEBUG}SelDbg(Self, 'MouseUp');{$ENDIF}
   if FDragSuppressed then
   begin
-    DragMode := FSavedDragMode;
+    DragMode        := FSavedDragMode;
     FDragSuppressed := False;
   end;
 
@@ -884,8 +885,7 @@ end;
 
 procedure TCWSInternalListBox.DoStartDrag(var DragObject: TDragObject);
 begin
-{$IFDEF CWSLB_SELDEBUG}
-  SelDbg(Self, 'DoStartDrag');{$ENDIF}
+{$IFDEF CWSLB_SELDEBUG}SelDbg(Self, 'DoStartDrag');{$ENDIF}
   { UWAGA: VCL wywołuje DoStartDrag także po zwykłym kliknięciu (już po MouseUp),
     domykając wykrywanie auto-draga — to miejsce NIE jest wiarygodnym sygnałem
     "rozpoczęto przeciąganie". Rozstrzygnięcie gestu robi HoldTrack. }
@@ -894,19 +894,16 @@ begin
     This makes the Source parameter in OnDragOver/OnDragDrop on any target
     control = TCWSListBox, not TCWSInternalListBox. }
   DragObject := TDragControlObject.Create(FOwner);
-
-  InstallDragHook;
 end;
 
 procedure TCWSInternalListBox.DoEndDrag(Target: TObject; X, Y: Integer);
 begin
-  RemoveDragHook;
-{$IFDEF CWSLB_SELDEBUG}  SelDbg(Self, 'DoEndDrag');{$ENDIF}
+{$IFDEF CWSLB_SELDEBUG}SelDbg(Self, 'DoEndDrag');{$ENDIF}
   HoldCancel;
   { Asekuracja: gdy MouseUp nie dotarł, DragMode zostałby na stałe w dmManual }
   if FDragSuppressed then
   begin
-    DragMode := FSavedDragMode;
+    DragMode        := FSavedDragMode;
     FDragSuppressed := False;
   end;
 
@@ -919,13 +916,13 @@ begin
     EnsureFocused;
 end;
 
-procedure TCWSInternalListBox.DragOver(Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
+procedure TCWSInternalListBox.DragOver(Source: TObject; X, Y: Integer;
+  State: TDragState; var Accept: Boolean);
 begin
   { TARGET FIX: the VCL sends CM_DRAG to FListBox (since it fills the interior).
     We unwrap Source to the proper control and redirect to FOwner, so that the
     OnDragOver assigned to TCWSListBox fires. }
   Source := UnwrapDragSource(Source);
-
   FOwner.DragOver(Source, X, Y, State, Accept);
 end;
 
@@ -939,12 +936,6 @@ begin
   else
     OutputDebugString(PChar('[CWSLB] DragDrop zrodlo   klasa=' + Source.ClassName));
 {$ENDIF}
-  { Ostatnia linia obrony. Anulowanie robi hak na Application.OnMessage i do tego
-    miejsca z wciśniętym prawym przyciskiem dojść nie powinno — ale przeniesienie
-    pozycji jest nieodwracalne, więc dwie linie asekuracji zostają. }
-  if RightOrMiddleButtonDown then
-    Exit;
-
   FOwner.DragDrop(Source, X, Y);
 end;
 
@@ -990,22 +981,18 @@ begin
 
   FListBox := TCWSInternalListBox.Create(Self);
   FListBox.Parent := Self;
-  FListBox.OnEnter := ListBoxEnter;
-  FListBox.OnExit := ListBoxExit;
-  FListBox.OnClick := ListBoxClick;
-  FListBox.OnDblClick := ListBoxDblClick;
-  FListBox.OnKeyDown := ListBoxKeyDown;
-  FListBox.OnKeyUp := ListBoxKeyUp;
-  FListBox.OnKeyPress := ListBoxKeyPress;
-  FListBox.OnMouseDown := ListBoxMouseDown;
-  FListBox.OnMouseMove := ListBoxMouseMove;
-  FListBox.OnMouseUp := ListBoxMouseUp;
-  FListBox.OnContextPopup := ListBoxContextPopup;
-  FListBox.OnDrawItem := ListBoxDrawItem;
-  FListBox.OnMeasureItem := ListBoxMeasureItem;
-  FListBox.OnData := ListBoxData;
-  FListBox.OnDataFind := ListBoxDataFind;
-  FListBox.OnDataObject := ListBoxDataObject;
+  { Zdarzenia przekazywane przez override'y w TCWSInternalListBox (Click, DblClick,
+    Key*, DoEnter/DoExit, DoContextPopup, DrawItem, MeasureItem) NIE zajmują tu
+    slotów — te pozostają wolne dla użytkownika.
+    Na slotach zostają tylko te, dla których VCL nie daje wirtualnego haka
+    (OnData / OnDataFind / OnDataObject) oraz ścieżka myszy, świadomie nietknięta,
+    bo jest spleciona z auto-dragiem VCL. }
+  FListBox.OnMouseDown    := ListBoxMouseDown;
+  FListBox.OnMouseMove    := ListBoxMouseMove;
+  FListBox.OnMouseUp      := ListBoxMouseUp;
+  FListBox.OnData         := ListBoxData;
+  FListBox.OnDataFind     := ListBoxDataFind;
+  FListBox.OnDataObject   := ListBoxDataObject;
 
   FRepeatTimer := TTimer.Create(Self);
   FRepeatTimer.Enabled := False;
@@ -1529,7 +1516,8 @@ begin
     FOnKeyPress(Self, Key);
 end;
 
-procedure TCWSListBox.ListBoxMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+procedure TCWSListBox.ListBoxMouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
 begin
   { The VCL handles BeginDrag automatically for FListBox.DragMode = dmAutomatic.
     DoStartDrag creates TDragControlObject(Self) — Source is correct. }
@@ -1543,19 +1531,22 @@ begin
     FOnMouseMove(Self, Shift, X, Y);
 end;
 
-procedure TCWSListBox.ListBoxMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+procedure TCWSListBox.ListBoxMouseUp(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
 begin
   if Assigned(FOnMouseUp) then
     FOnMouseUp(Self, Button, Shift, X, Y);
 end;
 
-procedure TCWSListBox.ListBoxContextPopup(Sender: TObject; MousePos: TPoint; var Handled: Boolean);
+procedure TCWSListBox.ListBoxContextPopup(Sender: TObject; MousePos: TPoint;
+  var Handled: Boolean);
 begin
   if Assigned(FOnContextPopup) then
     FOnContextPopup(Self, MousePos, Handled);
 end;
 
-procedure TCWSListBox.ListBoxDrawItem(Control: TWinControl; Index: Integer; Rect: TRect; State: TOwnerDrawState);
+procedure TCWSListBox.ListBoxDrawItem(Control: TWinControl; Index: Integer;
+  Rect: TRect; State: TOwnerDrawState);
 var
   LTextRect: TRect;
 begin
@@ -1572,12 +1563,12 @@ begin
     if odSelected in State then
     begin
       Brush.Color := clHighlight;
-      Font.Color := clHighlightText;
+      Font.Color  := clHighlightText;
     end
     else
     begin
       Brush.Color := GetCurrentBgColor;
-      Font.Color := FListBox.Font.Color;
+      Font.Color  := FListBox.Font.Color;
     end;
     FillRect(Rect);
   end;
@@ -1594,26 +1585,30 @@ begin
       LTextRect.Right := LTextRect.Right - 10;
 
       { Use the safe DrawText for nice text alignment and trimming }
-      Winapi.Windows.DrawText(FListBox.Canvas.Handle, FListBox.Items[Index], -1, LTextRect, DT_LEFT or DT_VCENTER or DT_SINGLELINE or DT_NOPREFIX);
+      Winapi.Windows.DrawText(FListBox.Canvas.Handle, FListBox.Items[Index], -1,
+        LTextRect, DT_LEFT or DT_VCENTER or DT_SINGLELINE or DT_NOPREFIX);
     end;
     if odFocused in State then
       DrawFocusRect(FListBox.Canvas.Handle, Rect);
   end;
 end;
 
-procedure TCWSListBox.ListBoxMeasureItem(Control: TWinControl; Index: Integer; var Height: Integer);
+procedure TCWSListBox.ListBoxMeasureItem(Control: TWinControl; Index: Integer;
+  var Height: Integer);
 begin
   if Assigned(FOnMeasureItem) then
     FOnMeasureItem(FListBox, Index, Height);
 end;
 
-procedure TCWSListBox.ListBoxData(Control: TWinControl; Index: Integer; var Data: string);
+procedure TCWSListBox.ListBoxData(Control: TWinControl; Index: Integer;
+  var Data: string);
 begin
   if Assigned(FOnData) then
     FOnData(FListBox, Index, Data);
 end;
 
-function TCWSListBox.ListBoxDataFind(Control: TWinControl; FindString: string): Integer;
+function TCWSListBox.ListBoxDataFind(Control: TWinControl;
+  FindString: string): Integer;
 begin
   if Assigned(FOnDataFind) then
     Result := FOnDataFind(FListBox, FindString)
@@ -1621,7 +1616,8 @@ begin
     Result := -1;
 end;
 
-procedure TCWSListBox.ListBoxDataObject(Control: TWinControl; Index: Integer; var DataObject: TObject);
+procedure TCWSListBox.ListBoxDataObject(Control: TWinControl; Index: Integer;
+  var DataObject: TObject);
 begin
   if Assigned(FOnDataObject) then
     FOnDataObject(FListBox, Index, DataObject);
@@ -1728,7 +1724,9 @@ begin
 
   H := Height - T - BottomMargin;
 
-  FScrollTrackRect := Rect(Width - Scale(FScrollbarAreaWidth), T, Width - Scale(2), T + Max(10, H));
+  FScrollTrackRect := Rect(
+    Width - Scale(FScrollbarAreaWidth), T,
+    Width - Scale(2), T + Max(10, H));
 
   { Decide scrollbar visibility from the HEIGHT we are about to apply, not from
     the inner list box's current ClientHeight — that still reflects the previous
@@ -1756,18 +1754,18 @@ begin
     RgnRadius := Round(ScaleF(FCornerRadius));
 
     { Decide which corners of the inner ListBox to round }
-    ClipTopLeft := FCornerTopLeft;
-    ClipBottomLeft := FCornerBottomLeft;
+    ClipTopLeft     := FCornerTopLeft;
+    ClipBottomLeft  := FCornerBottomLeft;
 
     { FIX: If the scrollbar is visible, do NOT round the right corners of the inner ListBox }
     if FScrollVisible then
     begin
-      ClipTopRight := False;
+      ClipTopRight    := False;
       ClipBottomRight := False;
     end
     else
     begin
-      ClipTopRight := FCornerTopRight;
+      ClipTopRight    := FCornerTopRight;
       ClipBottomRight := FCornerBottomRight;
     end;
 
@@ -1795,30 +1793,14 @@ begin
         CombineRgn(Rgn, Rgn, TempRgn, RGN_AND);
         DeleteObject(TempRgn);
 
-        if not ClipTopLeft then
-        begin
-          TempRgn := CreateRectRgn(0, 0, RgnRadius, RgnRadius);
-          CombineRgn(Rgn, Rgn, TempRgn, RGN_OR);
-          DeleteObject(TempRgn);
-        end;
-        if not ClipTopRight then
-        begin
-          TempRgn := CreateRectRgn(FListBox.Width - RgnRadius, 0, FListBox.Width + 1, RgnRadius);
-          CombineRgn(Rgn, Rgn, TempRgn, RGN_OR);
-          DeleteObject(TempRgn);
-        end;
-        if not ClipBottomLeft then
-        begin
-          TempRgn := CreateRectRgn(0, FListBox.Height - RgnRadius, RgnRadius, FListBox.Height + 1);
-          CombineRgn(Rgn, Rgn, TempRgn, RGN_OR);
-          DeleteObject(TempRgn);
-        end;
-        if not ClipBottomRight then
-        begin
-          TempRgn := CreateRectRgn(FListBox.Width - RgnRadius, FListBox.Height - RgnRadius, FListBox.Width + 1, FListBox.Height + 1);
-          CombineRgn(Rgn, Rgn, TempRgn, RGN_OR);
-          DeleteObject(TempRgn);
-        end;
+        if not ClipTopLeft then begin
+          TempRgn := CreateRectRgn(0, 0, RgnRadius, RgnRadius); CombineRgn(Rgn, Rgn, TempRgn, RGN_OR); DeleteObject(TempRgn); end;
+        if not ClipTopRight then begin
+          TempRgn := CreateRectRgn(FListBox.Width - RgnRadius, 0, FListBox.Width + 1, RgnRadius); CombineRgn(Rgn, Rgn, TempRgn, RGN_OR); DeleteObject(TempRgn); end;
+        if not ClipBottomLeft then begin
+          TempRgn := CreateRectRgn(0, FListBox.Height - RgnRadius, RgnRadius, FListBox.Height + 1); CombineRgn(Rgn, Rgn, TempRgn, RGN_OR); DeleteObject(TempRgn); end;
+        if not ClipBottomRight then begin
+          TempRgn := CreateRectRgn(FListBox.Width - RgnRadius, FListBox.Height - RgnRadius, FListBox.Width + 1, FListBox.Height + 1); CombineRgn(Rgn, Rgn, TempRgn, RGN_OR); DeleteObject(TempRgn); end;
       end;
 
       if SetWindowRgn(FListBox.Handle, Rgn, True) = 0 then
@@ -1829,12 +1811,13 @@ end;
 
 procedure TCWSListBox.UpdateScrollbarMetrics;
 var
-  TotalItems, VisibleItems, FirstVisible, TrackTop, TrackBottom, TrackH, ThumbH, ThumbP, ThumbW, CenterX, MaxScroll: Integer;
+  TotalItems, VisibleItems, FirstVisible, TrackTop, TrackBottom, TrackH,
+  ThumbH, ThumbP, ThumbW, CenterX, MaxScroll: Integer;
 begin
   if not FListBox.HandleAllocated then
     Exit;
 
-  TotalItems := FListBox.GetTotalItems;
+  TotalItems   := FListBox.GetTotalItems;
   FirstVisible := FListBox.GetTopIndex;
   VisibleItems := FListBox.GetVisibleItems;
   FScrollVisible := TotalItems > VisibleItems;
@@ -1845,11 +1828,11 @@ begin
     Exit;
   end;
 
-  MaxScroll := TotalItems - VisibleItems;
-  TrackTop := FScrollTrackRect.Top + Scale(4);
+  MaxScroll   := TotalItems - VisibleItems;
+  TrackTop    := FScrollTrackRect.Top + Scale(4);
   TrackBottom := FScrollTrackRect.Bottom - Scale(4);
-  TrackH := TrackBottom - TrackTop;
-  ThumbH := Max(Scale(20), Round(TrackH * (VisibleItems / TotalItems)));
+  TrackH      := TrackBottom - TrackTop;
+  ThumbH      := Max(Scale(20), Round(TrackH * (VisibleItems / TotalItems)));
 
   if MaxScroll > 0 then
     ThumbP := TrackTop + Round((FirstVisible / MaxScroll) * (TrackH - ThumbH))
@@ -2000,9 +1983,15 @@ begin
       else
         ThumbColor := MakeGPColor(FScrollThumbColor, ThumbAlpha);
 
-      ThumbGP := MakeRect(FScrollThumbRect.Left + 0.0, FScrollThumbRect.Top + 0.0, FScrollThumbRect.Width + 0.0, FScrollThumbRect.Height + 0.0);
+      ThumbGP := MakeRect(
+        FScrollThumbRect.Left + 0.0,
+        FScrollThumbRect.Top + 0.0,
+        FScrollThumbRect.Width + 0.0,
+        FScrollThumbRect.Height + 0.0);
 
-      Path := CreateRoundRectPath(ThumbGP.X, ThumbGP.Y, ThumbGP.Width, ThumbGP.Height, FScrollThumbRect.Width / 2.0, True);
+      Path := CreateRoundRectPath(
+        ThumbGP.X, ThumbGP.Y, ThumbGP.Width, ThumbGP.Height,
+        FScrollThumbRect.Width / 2.0, True);
       try
         Brush := TGPSolidBrush.Create(ThumbColor);
         G.FillPath(Brush, Path);
@@ -2031,9 +2020,9 @@ var
   TotalItems, VisibleItems, MaxScroll, Target: Integer;
 begin
   { One page step (a visible page of items) in the stored repeat direction. }
-  TotalItems := FListBox.GetTotalItems;
+  TotalItems   := FListBox.GetTotalItems;
   VisibleItems := FListBox.GetVisibleItems;
-  MaxScroll := Max(0, TotalItems - VisibleItems);
+  MaxScroll    := Max(0, TotalItems - VisibleItems);
   Target := FListBox.GetTopIndex + FRepeatDir * Max(1, VisibleItems);
   Target := Max(0, Min(MaxScroll, Target));
   FListBox.SetTopIndex(Target);
@@ -2111,18 +2100,18 @@ begin
         span grabs the thumb (the cursor is already inside the track here). }
       if (P.Y >= FScrollThumbRect.Top) and (P.Y < FScrollThumbRect.Bottom) then
       begin
-        FIsDragging := True;
-        FDragStartY := Y;
+        FIsDragging       := True;
+        FDragStartY       := Y;
         FDragStartTopIndex := FListBox.GetTopIndex;
-        MouseCapture := True;
+        MouseCapture      := True;
       end
       else
         { Page toward the click and keep paging while the button is held until
           the thumb reaches the cursor. }
-            if P.Y < FScrollThumbRect.Top then
-        StartTrackRepeat(-1)
-      else
-        StartTrackRepeat(1);
+        if P.Y < FScrollThumbRect.Top then
+          StartTrackRepeat(-1)
+        else
+          StartTrackRepeat(1);
     end;
     if not FListBox.Focused then
       FListBox.SetFocus;
@@ -2139,7 +2128,8 @@ end;
 
 procedure TCWSListBox.MouseMove(Shift: TShiftState; X, Y: Integer);
 var
-  DeltaY, DeltaItems, TrackH, ThumbH, MaxScroll, TotalItems, VisibleItems, TrackTop, TrackBottom: Integer;
+  DeltaY, DeltaItems, TrackH, ThumbH, MaxScroll, TotalItems, VisibleItems,
+  TrackTop, TrackBottom: Integer;
   WasScrollArea: Boolean;
   P: TPoint;
 begin
@@ -2147,7 +2137,7 @@ begin
   P := Point(X, Y);
   if FScrollVisible then
   begin
-    WasScrollArea := FScrollAreaHovered;
+    WasScrollArea      := FScrollAreaHovered;
     FScrollAreaHovered := FScrollTrackRect.Contains(P);
 
     if FIsDragging then
@@ -2173,16 +2163,16 @@ begin
     end
     else
     begin
-      TotalItems := FListBox.GetTotalItems;
+      TotalItems   := FListBox.GetTotalItems;
       VisibleItems := FListBox.GetVisibleItems;
-      MaxScroll := TotalItems - VisibleItems;
-      TrackTop := FScrollTrackRect.Top + Scale(4);
-      TrackBottom := FScrollTrackRect.Bottom - Scale(4);
-      TrackH := TrackBottom - TrackTop;
-      ThumbH := FScrollThumbRect.Height;
+      MaxScroll    := TotalItems - VisibleItems;
+      TrackTop     := FScrollTrackRect.Top + Scale(4);
+      TrackBottom  := FScrollTrackRect.Bottom - Scale(4);
+      TrackH       := TrackBottom - TrackTop;
+      ThumbH       := FScrollThumbRect.Height;
       if (TrackH - ThumbH) > 0 then
       begin
-        DeltaY := Y - FDragStartY;
+        DeltaY     := Y - FDragStartY;
         DeltaItems := Round((DeltaY / (TrackH - ThumbH)) * MaxScroll);
         FListBox.SetTopIndex(Max(0, Min(MaxScroll, FDragStartTopIndex + DeltaItems)));
         UpdateListBoxPosition;
@@ -2203,15 +2193,16 @@ begin
   end;
   if FIsDragging then
   begin
-    FIsDragging := False;
-    MouseCapture := False;
+    FIsDragging        := False;
+    MouseCapture       := False;
     FScrollAreaHovered := FScrollTrackRect.Contains(Point(X, Y));
     UpdateListBoxPosition;
   end;
   Invalidate;
 end;
 
-function TCWSListBox.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean;
+function TCWSListBox.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
+  MousePos: TPoint): Boolean;
 var
   NewTop, Total, Visible: Integer;
   Handled: Boolean;
@@ -2225,9 +2216,9 @@ begin
 
   if FListBox.HandleAllocated then
   begin
-    Total := FListBox.GetTotalItems;
+    Total   := FListBox.GetTotalItems;
     Visible := FListBox.GetVisibleItems;
-    NewTop := FListBox.GetTopIndex;
+    NewTop  := FListBox.GetTopIndex;
     if WheelDelta > 0 then
       NewTop := Max(0, NewTop - 3)
     else
@@ -2356,7 +2347,7 @@ procedure TCWSListBox.CMMouseLeave(var Msg: TMessage);
 begin
   if not FIsDragging then
   begin
-    FHovered := False;
+    FHovered           := False;
     FScrollAreaHovered := False;
     UpdateListBoxPosition;
     ApplyStateChange;
@@ -2401,19 +2392,14 @@ var
 begin
   Result := TGPGraphicsPath.Create;
   D := R * 2;
-  if D > H then
-    D := H;
-  if D > W then
-    D := W;
+  if D > H then D := H;
+  if D > W then D := W;
 
   { When AForceAllCorners = True (e.g. the scrollbar thumb) we always round
     all four corners, regardless of the component's corner flags. }
   if AForceAllCorners then
   begin
-    TL := True;
-    TR := True;
-    BR := True;
-    BL := True;
+    TL := True; TR := True; BR := True; BL := True;
   end
   else
   begin
@@ -2466,4 +2452,3 @@ begin
 end;
 
 end.
-
