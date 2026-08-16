@@ -780,6 +780,8 @@ type
   TCWSDBGridInplaceEdit = class(TDBGridInplaceEdit)
   protected
     procedure CMShowingChanged(var Message: TMessage); message CM_SHOWINGCHANGED;
+    procedure WMWindowPosChanging(var Message: TWMWindowPosChanging);
+      message WM_WINDOWPOSCHANGING;
   public
     procedure RefreshColors;
   end;
@@ -804,6 +806,39 @@ begin
   inherited;
   if Showing then
     RefreshColors;
+end;
+
+procedure TCWSDBGridInplaceEdit.WMWindowPosChanging(var Message: TWMWindowPosChanging);
+var
+  Host: TCWSDBGrid;
+  LineW: Integer;
+begin
+  { Vcl.Grids places the editor on the *whole* cell rect (CellRect(Col, Row)),
+    which includes the strip the owner paints its grid line into — so the cell's
+    bottom and right line disappear under the editor while the cell is being
+    edited. Trim the requested size by the line width so the editor stops at the
+    line instead of covering it. Done here rather than in a Move/UpdateLoc
+    override because those are not virtual, and this catches every path that
+    positions the editor. }
+  if ((Message.WindowPos^.flags and SWP_NOSIZE) = 0) and
+     (Grid is TCWSInternalDBGrid) then
+  begin
+    Host := TCWSInternalDBGrid(Grid).FOwner;
+    if Host <> nil then
+    begin
+      LineW := Max(0, Host.Scale(Host.FGridLineWidth));
+      if LineW > 0 then
+      begin
+        { A zero size means the grid is hiding the editor (TInplaceEdit.Hide
+          resizes to 0x0) — leave those alone. }
+        if Message.WindowPos^.cx > LineW then
+          Dec(Message.WindowPos^.cx, LineW);
+        if Message.WindowPos^.cy > LineW then
+          Dec(Message.WindowPos^.cy, LineW);
+      end;
+    end;
+  end;
+  inherited;
 end;
 
 function TCWSInternalDBGrid.CreateEditor: TInplaceEdit;
@@ -872,6 +907,7 @@ var
   R: TRect;
   Col: TColumn;
   SortLevel, IndicatorW: Integer;
+  LineW: Integer;
   SortDir: TCWSSortDirection;
 begin
   if FOwner = nil then
@@ -943,7 +979,21 @@ begin
       Remember the row: the base DrawCell routes into DrawColumnCell, which is
       not told which row it is painting but needs it for the zebra striping. }
     FDrawRow := ARow;
-    inherited DrawCell(ACol, ARow, ARect, AState);
+    { Hand the base the cell *interior* — the rect minus the strips our own
+      DrawGridLine paints over afterwards. The base ends DrawCell with
+      DrawFocusRect(ARect) for the current cell, so with the full rect its
+      right and bottom dotted edges land exactly under those strips and get
+      wiped out. Shrinking here keeps the focus rectangle inside the line, so
+      all four sides stay visible; the strips left unpainted by the base are
+      filled by DrawGridLine below. }
+    R := ARect;
+    LineW := Max(0, FOwner.Scale(FOwner.FGridLineWidth));
+    if LineW > 0 then
+    begin
+      Dec(R.Right, Min(LineW, R.Right - R.Left));
+      Dec(R.Bottom, Min(LineW, R.Bottom - R.Top));
+    end;
+    inherited DrawCell(ACol, ARow, R, AState);
     FOwner.DrawGridLine(Canvas, ARect);
   end;
 end;
@@ -1008,10 +1058,28 @@ begin
 end;
 
 procedure TCWSInternalDBGrid.Paint;
+var
+  R: TRect;
 begin
   inherited;
-  if FOwner <> nil then
-    FOwner.GridContentChanged;
+  if FOwner = nil then
+    Exit;
+
+  { Vcl.Grids deliberately skips DrawCell for the cell that is being edited —
+    the in-place editor covers it and the grid window has no WS_CLIPCHILDREN, so
+    painting there would smear over the editor. Side effect: our own grid line
+    is never drawn for that cell, and the row/column separators break at the
+    edited cell. Draw just the two line strips here; they sit outside the
+    editor (WMWindowPosChanging above keeps it a line-width short), so this
+    never touches the editor window. }
+  if EditorMode and (InplaceEditor <> nil) and InplaceEditor.Visible then
+  begin
+    R := CellRect(Col, Row);
+    if not IsRectEmpty(R) then
+      FOwner.DrawGridLine(Canvas, R);
+  end;
+
+  FOwner.GridContentChanged;
 end;
 
 procedure TCWSInternalDBGrid.TopLeftChanged;

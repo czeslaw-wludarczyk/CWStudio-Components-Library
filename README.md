@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.7.5](https://img.shields.io/badge/version-1.7.5-blue.svg)](CHANGELOG.md)
+[![Version: 1.7.6](https://img.shields.io/badge/version-1.7.6-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -217,7 +217,12 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Historia wersji
 
-**Najnowsza wersja — 1.7.5:**
+**Najnowsza wersja — 1.7.6:**
+
+- **Poprawka** `TCWSDBGrid` — **prostokąt fokusu wokół bieżącej komórki nie jest już ucinany od dołu i od prawej.** `TCustomDBGrid.DrawCell` na koniec rysuje tę kropkowaną ramkę na **całym** prostokącie komórki, a komponent zaraz potem maluje własną płaską linię siatki (`GridLineColor`, `GridLineWidth`) — dokładnie po pasku, na który trafiają dolna i prawa krawędź ramki, więc zostawała tylko górna i lewa. Bazowy malarz dostaje teraz **wnętrze** komórki, czyli prostokąt pomniejszony o szerokość linii: ramka fokusu trafia w całości do środka i widać wszystkie cztery boki, a pasek, którego baza już nie wypełnia, wypełnia sama linia siatki — tło komórki i naprzemienne kolorowanie wierszy wyglądają więc tak samo jak dotąd. Przy `GridLineWidth = 0` nic się nie zmienia, a ramka zaznaczenia wiersza (`dgRowSelect`) nigdy nie była tym dotknięta: tę `Vcl.Grids` rysuje po wszystkich komórkach.
+- **Poprawka** `TCWSDBGrid` — **linia siatki nie znika już przy edytowanej komórce.** Nie była zamalowywana przez edytor — nie była w ogóle rysowana: `TCustomGrid` przy włączonym `EditorMode` **celowo pomija `DrawCell`** dla komórki z fokusem, bo okno siatki nie ma `WS_CLIPCHILDREN` (`TCustomGrid.Create` buduje `ControlStyle` bez `csAcceptsControls`) i malowanie tam rozmazałoby okno edytora. Separatory wiersza i kolumny urywały się więc na edytowanej komórce. Komponent dorysowuje teraz dla niej same dwa paski linii, już po przemalowaniu siatki, i utrzymuje edytor o szerokość linii mniejszy od prostokąta komórki (`WM_WINDOWPOSCHANGING`, bo `TInplaceEdit.Move` / `UpdateLoc` nie są wirtualne, a edytor jest pozycjonowany z kilku miejsc) — paski leżą dzięki temu poza oknem edytora i nic ich nie dotyka. Obszar tekstu edytora oraz przycisk listy rozwijanej / wielokropka idą za przyciętym rozmiarem, bo `BoundsChanged` wykonuje się po nim.
+
+**Wersja 1.7.5:**
 
 - **Zmiana** `TCWSStoreButton` — **przycisk nie wymaga już Skii.** W 1.7.4 został przepisany na `TSkCustomControl`, a ten jeden komponent wciągał `Skia.Package.RTL` / `Skia.Package.VCL` do `requires` pakietu runtime — więc Skia4Delphi musiała być obecna w każdej aplikacji linkującej bibliotekę i w każdym IDE, które ją instaluje, niezależnie od tego, czy przycisk był w ogóle używany. Komponent wraca na renderowanie GDI+, z którego korzysta reszta biblioteki (`TCWSShape` na tło i wskaźnik aktywności, `TPaintBox` na ikonę, `TLabel` na opis), a oba pakiety Skii znikają z `requires`. **Biblioteka znów nie ma żadnej zależności poza standardowym VCL.**
 - **Bez zmian** — to zmiana wyłącznie w warstwie rysowania: opublikowane właściwości są identyczne jak w 1.7.4 (te same nazwy, te same wartości domyślne), tak samo animacja wskaźnika aktywności wraz z kierunkiem, z którego rośnie w obrębie `GroupIndex`, i jej czasem. `OnClick` / `OnMouseEnter` / `OnMouseLeave` / `OnMouseDown` / `OnMouseUp` działają jak dotąd. Istniejące pliki `.dfm` wczytują się bez żadnej zmiany.
@@ -515,7 +520,12 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ Version history
 
-**Latest release — 1.7.5:**
+**Latest release — 1.7.6:**
+
+- **Fix** `TCWSDBGrid` — **the focus rectangle around the current cell is no longer cut off along its bottom and right side.** `TCustomDBGrid.DrawCell` ends by drawing that dotted rectangle on the *whole* cell rect, and the component paints its own flat grid line (`GridLineColor`, `GridLineWidth`) right after — over the very strip the rectangle's bottom and right edges land on, so only the top and left ones survived. The base painter is now handed the cell **interior** — the rect less the line width — so the focus rectangle lands inside the line and all four sides stay visible; the strip the base no longer fills is filled by the grid line itself, so nothing about the cell background or the striping changes. Nothing changes at `GridLineWidth = 0`, and the row-select rectangle (`dgRowSelect`) was never affected: `Vcl.Grids` draws that one after all cells.
+- **Fix** `TCWSDBGrid` — **the grid line no longer disappears at the cell being edited.** It was not being painted over by the in-place editor — it was never drawn: `TCustomGrid` deliberately **skips `DrawCell` entirely** for the focused cell while `EditorMode` is on, because a grid window carries no `WS_CLIPCHILDREN` (`TCustomGrid.Create` builds its `ControlStyle` without `csAcceptsControls`) and painting there would smear over the editor window. The row and column separators therefore broke at the edited cell. The component now draws just the two line strips for that cell after the grid has painted, and keeps the editor a line-width short of the cell rect (`WM_WINDOWPOSCHANGING`, since `TInplaceEdit.Move` / `UpdateLoc` are not virtual and the editor is placed from several paths) so the strips lie outside the editor window and are never touched by it. The editor's text rect and the drop-down / ellipsis button follow the trimmed size, as `BoundsChanged` runs after it.
+
+**Version 1.7.5:**
 
 - **Changed** `TCWSStoreButton` — **the button no longer needs Skia.** In 1.7.4 it had been rewritten onto `TSkCustomControl`, and that single component pulled `Skia.Package.RTL` / `Skia.Package.VCL` into the runtime package's `requires` — so every application linking the library, and every IDE installing it, needed Skia4Delphi present whether or not it used the button. The component is back on the GDI+ rendering the rest of the library uses (`TCWSShape` for the background and the activity cursor, a `TPaintBox` for the icon, a `TLabel` for the description), and the two Skia packages are gone from `requires`. **The library once again has no dependency outside the stock VCL.**
 - **Unchanged by the above** — this is a rendering change and nothing else: the published properties are identical to 1.7.4 (same names, same defaults), and so is the activity cursor's animation, including the direction it grows from within a `GroupIndex` and its timing. `OnClick` / `OnMouseEnter` / `OnMouseLeave` / `OnMouseDown` / `OnMouseUp` fire as before. Existing `.dfm` files load without any change.
