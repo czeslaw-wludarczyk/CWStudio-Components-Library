@@ -647,6 +647,74 @@ begin
     FOnButtonClick(Self);
 end;
 
+{ Renders Images[AIndex] into a 32bpp premultiplied DIB that GDI+ can blend.
+
+  An alpha image list (TVirtualImageList over a TImageCollection, SVG lists)
+  blends onto the zeroed surface and leaves a correct alpha channel behind.
+  A classic masked TImageList writes no alpha at all — the glyph would come out
+  fully transparent, i.e. invisible — so its shape is recovered by drawing a
+  second time over a different background: pixels that came out identical in
+  both passes are opaque, the rest are transparent. }
+function RenderImageListGlyph(AImages: TCustomImageList; AIndex: Integer): TBitmap;
+var
+  OnWhite: TBitmap;
+  X, Y, W, H: Integer;
+  PA, PB: PRGBQuad;
+  HasAlpha: Boolean;
+begin
+  W := AImages.Width;
+  H := AImages.Height;
+  Result := TBitmap.Create;
+  try
+    Result.PixelFormat := pf32bit;
+    Result.AlphaFormat := afPremultiplied;
+    Result.SetSize(W, H);
+    ZeroMemory(Result.ScanLine[H - 1], W * H * 4);
+    AImages.Draw(Result.Canvas, 0, 0, AIndex);
+
+    HasAlpha := False;
+    for Y := 0 to H - 1 do
+    begin
+      PA := PRGBQuad(Result.ScanLine[Y]);
+      for X := 0 to W - 1 do
+      begin
+        if PA^.rgbReserved <> 0 then begin HasAlpha := True; Break; end;
+        Inc(PA);
+      end;
+      if HasAlpha then Break;
+    end;
+    if HasAlpha then Exit;
+
+    OnWhite := TBitmap.Create;
+    try
+      OnWhite.PixelFormat := pf32bit;
+      OnWhite.SetSize(W, H);
+      OnWhite.Canvas.Brush.Color := clWhite;
+      OnWhite.Canvas.FillRect(Rect(0, 0, W, H));
+      AImages.Draw(OnWhite.Canvas, 0, 0, AIndex);
+      for Y := 0 to H - 1 do
+      begin
+        PA := PRGBQuad(Result.ScanLine[Y]);
+        PB := PRGBQuad(OnWhite.ScanLine[Y]);
+        for X := 0 to W - 1 do
+        begin
+          if (PA^.rgbRed = PB^.rgbRed) and (PA^.rgbGreen = PB^.rgbGreen) and
+             (PA^.rgbBlue = PB^.rgbBlue) then
+            PA^.rgbReserved := 255
+          else
+            PCardinal(PA)^ := 0;
+          Inc(PA); Inc(PB);
+        end;
+      end;
+    finally
+      OnWhite.Free;
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
 procedure TCWSEdit.DrawIcon(G: TGPGraphics; Rect: TGPRectF; Style: TCWSEditButtonStyle);
 var
   Pen: TGPPen;
@@ -722,16 +790,11 @@ begin
 
       ebsCustom:
         begin
-          if Assigned(FImages) and (FImageIndex >= 0) and (FImageIndex < FImages.Count) then
+          if Assigned(FImages) and (FImageIndex >= 0) and (FImageIndex < FImages.Count)
+             and (FImages.Width > 0) and (FImages.Height > 0) then
           begin
-            TempBmp := TBitmap.Create;
+            TempBmp := RenderImageListGlyph(FImages, FImageIndex);
             try
-              TempBmp.PixelFormat := pf32bit;
-              TempBmp.AlphaFormat := afPremultiplied;
-              TempBmp.SetSize(FImages.Width, FImages.Height);
-              ZeroMemory(TempBmp.ScanLine[TempBmp.Height - 1],
-                TempBmp.Width * TempBmp.Height * 4);
-              FImages.Draw(TempBmp.Canvas, 0, 0, FImageIndex);
               GPBmp := TGPBitmap.Create(TempBmp.Width, TempBmp.Height,
                 -TempBmp.Width * 4, PixelFormat32bppPARGB,
                 TempBmp.ScanLine[0]);

@@ -54,6 +54,7 @@ type
   protected
     procedure DrawCell(ACol, ARow: Longint; ARect: TRect;
       AState: TGridDrawState); override;
+    procedure Paint; override;
     procedure TopLeftChanged; override;
     procedure CreateParams(var Params: TCreateParams); override;
     procedure CreateWnd; override;
@@ -275,6 +276,7 @@ type
     { Hooks called from the internal grid }
     procedure GridScrolled;
     procedure GridPaintCell(ACol, ARow: Integer; ARect: TRect; AState: TGridDrawState);
+    procedure DrawGridLine(C: TCanvas; const R: TRect);
     procedure GridClicked;
     procedure GridDblClicked;
     procedure UpdateFocusState;
@@ -392,6 +394,8 @@ type
   TCWSGridInplaceEdit = class(TInplaceEdit)
   protected
     procedure CMShowingChanged(var Message: TMessage); message CM_SHOWINGCHANGED;
+    procedure WMWindowPosChanging(var Message: TWMWindowPosChanging);
+      message WM_WINDOWPOSCHANGING;
   public
     procedure RefreshColors;
   end;
@@ -418,6 +422,39 @@ begin
   inherited;
   if Showing then
     RefreshColors;
+end;
+
+procedure TCWSGridInplaceEdit.WMWindowPosChanging(var Message: TWMWindowPosChanging);
+var
+  Host: TCWSStringGrid;
+  LineW: Integer;
+begin
+  { Vcl.Grids places the editor on the *whole* cell rect (CellRect(Col, Row)),
+    which includes the strip the owner paints its grid line into — so the cell's
+    bottom and right line disappear under the editor while the cell is being
+    edited. Trim the requested size by the line width so the editor stops at the
+    line instead of covering it. Done here rather than in a Move/UpdateLoc
+    override because those are not virtual, and this catches every path that
+    positions the editor. }
+  if ((Message.WindowPos^.flags and SWP_NOSIZE) = 0) and
+     (Grid is TCWSInternalGrid) then
+  begin
+    Host := TCWSInternalGrid(Grid).FOwner;
+    if Host <> nil then
+    begin
+      LineW := Max(0, Host.Scale(Host.FGridLineWidth));
+      if LineW > 0 then
+      begin
+        { A zero size means the grid is hiding the editor (TInplaceEdit.Hide
+          resizes to 0x0) — leave those alone. }
+        if Message.WindowPos^.cx > LineW then
+          Dec(Message.WindowPos^.cx, LineW);
+        if Message.WindowPos^.cy > LineW then
+          Dec(Message.WindowPos^.cy, LineW);
+      end;
+    end;
+  end;
+  inherited;
 end;
 
 { TCWSInternalGrid }
@@ -478,6 +515,29 @@ procedure TCWSInternalGrid.DrawCell(ACol, ARow: Longint; ARect: TRect;
 begin
   if FOwner <> nil then
     FOwner.GridPaintCell(ACol, ARow, ARect, AState);
+end;
+
+procedure TCWSInternalGrid.Paint;
+var
+  R: TRect;
+begin
+  inherited;
+  if FOwner = nil then
+    Exit;
+
+  { Vcl.Grids deliberately skips DrawCell for the cell that is being edited —
+    the in-place editor covers it and the grid window has no WS_CLIPCHILDREN, so
+    painting there would smear over the editor. Side effect: GridPaintCell never
+    runs for that cell, and the row/column separators break at it. Draw just the
+    two line strips here; they sit outside the editor (WMWindowPosChanging on
+    TCWSGridInplaceEdit keeps it a line-width short), so this never touches the
+    editor window. }
+  if EditorMode and (InplaceEditor <> nil) and InplaceEditor.Visible then
+  begin
+    R := CellRect(Col, Row);
+    if not IsRectEmpty(R) then
+      FOwner.DrawGridLine(Canvas, R);
+  end;
 end;
 
 procedure TCWSInternalGrid.TopLeftChanged;
@@ -699,7 +759,6 @@ var
   Bg, Tx: TColor;
   S: string;
   R: TRect;
-  LineW: Integer;
   IsFixed, IsCurrent: Boolean;
 begin
   IsFixed := gdFixed in AState;
@@ -748,13 +807,20 @@ begin
   end;
 
   { Grid lines always on top — drawn after both default and custom painting }
+  DrawGridLine(FGrid.Canvas, ARect);
+end;
+
+procedure TCWSStringGrid.DrawGridLine(C: TCanvas; const R: TRect);
+var
+  LineW: Integer;
+begin
   LineW := Max(0, Scale(FGridLineWidth));
-  if LineW > 0 then
-  begin
-    FGrid.Canvas.Brush.Color := FGridLineColor;
-    FGrid.Canvas.FillRect(Rect(ARect.Right - LineW, ARect.Top, ARect.Right, ARect.Bottom));
-    FGrid.Canvas.FillRect(Rect(ARect.Left, ARect.Bottom - LineW, ARect.Right, ARect.Bottom));
-  end;
+  if LineW <= 0 then
+    Exit;
+  C.Brush.Style := bsSolid;
+  C.Brush.Color := FGridLineColor;
+  C.FillRect(Rect(R.Right - LineW, R.Top, R.Right, R.Bottom));
+  C.FillRect(Rect(R.Left, R.Bottom - LineW, R.Right, R.Bottom));
 end;
 
 { *** Scroll metrics helpers *** }
@@ -1732,7 +1798,17 @@ function TCWSStringGrid.GetOptions: TGridOptions;
 begin Result := FGrid.Options; end;
 
 procedure TCWSStringGrid.SetOptions(const Value: TGridOptions);
-begin FGrid.Options := Value; UpdateGridPosition; Invalidate; end;
+begin
+  { goDrawFocusSelected is dropped, not passed on. Both of the things it drives
+    in Vcl.Grids — the dotted focus rectangle and the background of the focused
+    cell inside a selection — live behind `DefaultDrawing`, which the inner grid
+    keeps off because the component paints every cell itself. Leaving the flag
+    settable would only offer a switch that changes nothing. The component
+    marks the current cell with CellHighlightColor, the same as TCWSDBGrid. }
+  FGrid.Options := Value - [goDrawFocusSelected];
+  UpdateGridPosition;
+  Invalidate;
+end;
 
 function TCWSStringGrid.GetCol: Integer;
 begin Result := FGrid.Col; end;

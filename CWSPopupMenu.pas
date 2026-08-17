@@ -24,7 +24,7 @@ unit CWSPopupMenu;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, Winapi.MultiMon, Winapi.CommCtrl,
+  Winapi.Windows, Winapi.Messages, Winapi.MultiMon,
   System.SysUtils, System.Classes, System.UITypes, System.Math,
   System.Generics.Collections, Vcl.Controls, Vcl.Graphics, Vcl.Menus,
   Vcl.ImgList, Vcl.Forms, Winapi.GDIPAPI, Winapi.GDIPOBJ, System.Types;
@@ -73,7 +73,8 @@ type
     procedure BuildEntries;
     procedure Measure;
     procedure Render;
-    procedure DrawIcon(G: TGPGraphics; AItem: TMenuItem; const ADest: TRect);
+    procedure DrawIcon(G: TGPGraphics; AItem: TMenuItem; const ADest: TRect;
+      AEnabled: Boolean);
     function ContentTop: Integer;
     function EntryClientTop(AIdx: Integer): Integer;
     function IndexAt(const P: TPoint): Integer;
@@ -448,7 +449,10 @@ var
   Fmt: TGPStringFormat;
 begin
   if S = '' then Exit(0);
-  Fmt := TGPStringFormat.Create(TGPStringFormat.GenericTypographic);
+  { The default format — not GenericTypographic — because Render draws with the
+    default one too; the typographic metrics are tighter and the longest caption
+    would come out ellipsised. }
+  Fmt := TGPStringFormat.Create;
   try
     Fmt.SetFormatFlags(Fmt.GetFormatFlags or StringFormatFlagsNoWrap or
       StringFormatFlagsMeasureTrailingSpaces);
@@ -593,28 +597,155 @@ begin
   Result := ContentTop + FEntries[AIdx].Top - FScrollPos;
 end;
 
-procedure TCWSMenuWindow.DrawIcon(G: TGPGraphics; AItem: TMenuItem;
-  const ADest: TRect);
+type
+  { Renders a glyph onto a prepared 32bpp canvas. }
+  TGlyphDrawProc = reference to procedure (ACanvas: TCanvas);
+
+{ Draws a glyph into a 32bpp premultiplied DIB that GDI+ can alpha-blend.
+
+  GDI+ cannot build a usable bitmap straight from an image list: neither
+  Bitmap.FromHICON (ImageList_GetIcon) nor Bitmap.FromHBITMAP keeps the alpha
+  channel, so glyphs coming from an alpha image list — TVirtualImageList,
+  TImageCollection, SVG lists — end up drawn as black squares.
+
+  The glyph is first drawn over a transparent (zeroed) surface. Alpha-aware
+  image lists blend with AlphaBlend and leave a correct alpha channel behind.
+  A classic masked TImageList writes no alpha at all; in that case the shape is
+  recovered by drawing a second time over a different background — pixels that
+  came out the same on both are opaque, the rest are transparent. }
+function RenderGlyph(AWidth, AHeight: Integer;
+  const ADraw: TGlyphDrawProc): TBitmap;
 var
-  Ico: HICON;
-  GpImg: TGPBitmap;
+  OnWhite: TBitmap;
+  X, Y: Integer;
+  PA, PB: PRGBQuad;
+  HasAlpha: Boolean;
 begin
-  GpImg := nil; Ico := 0;
+  Result := TBitmap.Create;
   try
-    if (FMenu.Images <> nil) and (AItem.ImageIndex >= 0) and
-       (AItem.ImageIndex < FMenu.Images.Count) then
+    Result.PixelFormat := pf32bit;
+    Result.AlphaFormat := afPremultiplied;
+    Result.SetSize(AWidth, AHeight);
+    ZeroMemory(Result.ScanLine[AHeight - 1], AWidth * AHeight * 4);
+    ADraw(Result.Canvas);
+
+    HasAlpha := False;
+    for Y := 0 to AHeight - 1 do
     begin
-      Ico := ImageList_GetIcon(FMenu.Images.Handle, AItem.ImageIndex, ILD_TRANSPARENT);
-      if Ico <> 0 then GpImg := TGPBitmap.Create(Ico);
-    end
-    else if (AItem.Bitmap <> nil) and not AItem.Bitmap.Empty then
-      GpImg := TGPBitmap.Create(AItem.Bitmap.Handle, AItem.Bitmap.Palette);
-    if GpImg <> nil then
-      G.DrawImage(GpImg, ADest.Left, ADest.Top,
-        ADest.Right - ADest.Left, ADest.Bottom - ADest.Top);
+      PA := PRGBQuad(Result.ScanLine[Y]);
+      for X := 0 to AWidth - 1 do
+      begin
+        if PA^.rgbReserved <> 0 then begin HasAlpha := True; Break; end;
+        Inc(PA);
+      end;
+      if HasAlpha then Break;
+    end;
+    if HasAlpha then Exit;
+
+    OnWhite := TBitmap.Create;
+    try
+      OnWhite.PixelFormat := pf32bit;
+      OnWhite.SetSize(AWidth, AHeight);
+      OnWhite.Canvas.Brush.Color := clWhite;
+      OnWhite.Canvas.FillRect(Rect(0, 0, AWidth, AHeight));
+      ADraw(OnWhite.Canvas);
+      for Y := 0 to AHeight - 1 do
+      begin
+        PA := PRGBQuad(Result.ScanLine[Y]);
+        PB := PRGBQuad(OnWhite.ScanLine[Y]);
+        for X := 0 to AWidth - 1 do
+        begin
+          if (PA^.rgbRed = PB^.rgbRed) and (PA^.rgbGreen = PB^.rgbGreen) and
+             (PA^.rgbBlue = PB^.rgbBlue) then
+            PA^.rgbReserved := 255
+          else
+            PCardinal(PA)^ := 0;
+          Inc(PA); Inc(PB);
+        end;
+      end;
+    finally
+      OnWhite.Free;
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+{ Makes every pixel matching AColor fully transparent — the classic
+  transparent-colour convention of TMenuItem.Bitmap. }
+procedure ColorKeyGlyph(ABmp: TBitmap; AColor: TColor);
+var
+  X, Y: Integer;
+  P: PRGBQuad;
+  Rgb: COLORREF;
+  KR, KG, KB: Byte;
+begin
+  Rgb := ColorToRGB(AColor);
+  KR := GetRValue(Rgb); KG := GetGValue(Rgb); KB := GetBValue(Rgb);
+  for Y := 0 to ABmp.Height - 1 do
+  begin
+    P := PRGBQuad(ABmp.ScanLine[Y]);
+    for X := 0 to ABmp.Width - 1 do
+    begin
+      if (P^.rgbRed = KR) and (P^.rgbGreen = KG) and (P^.rgbBlue = KB) then
+        PCardinal(P)^ := 0;
+      Inc(P);
+    end;
+  end;
+end;
+
+procedure TCWSMenuWindow.DrawIcon(G: TGPGraphics; AItem: TMenuItem;
+  const ADest: TRect; AEnabled: Boolean);
+var
+  Glyph: TBitmap;
+  GpImg: TGPBitmap;
+  Bmp: TBitmap;
+  Idx: Integer;
+begin
+  Glyph := nil;
+  Idx := AItem.ImageIndex;
+  if (FMenu.Images <> nil) and (Idx >= 0) and (Idx < FMenu.Images.Count) and
+     (FMenu.Images.Width > 0) and (FMenu.Images.Height > 0) then
+    Glyph := RenderGlyph(FMenu.Images.Width, FMenu.Images.Height,
+      procedure (ACanvas: TCanvas)
+      begin
+        FMenu.Images.Draw(ACanvas, 0, 0, Idx, AEnabled);
+      end)
+  else if (AItem.Bitmap <> nil) and not AItem.Bitmap.Empty and
+          (AItem.Bitmap.Width > 0) and (AItem.Bitmap.Height > 0) then
+  begin
+    Bmp := AItem.Bitmap;
+    Glyph := RenderGlyph(Bmp.Width, Bmp.Height,
+      procedure (ACanvas: TCanvas)
+      begin
+        ACanvas.Draw(0, 0, Bmp);
+      end);
+    { A glyph without an alpha channel is keyed on its transparent colour. }
+    if (Bmp.PixelFormat <> pf32bit) or (Bmp.AlphaFormat = afIgnored) then
+      ColorKeyGlyph(Glyph, Bmp.TransparentColor);
+  end;
+
+  if Glyph = nil then Exit;
+  try
+    GpImg := TGPBitmap.Create(Glyph.Width, Glyph.Height, -Glyph.Width * 4,
+      PixelFormat32bppPARGB, Glyph.ScanLine[0]);
+    try
+      if GpImg.GetLastStatus <> Ok then Exit;
+      if (Glyph.Width <> ADest.Width) or (Glyph.Height <> ADest.Height) then
+        G.SetInterpolationMode(InterpolationModeHighQualityBicubic)
+      else
+        G.SetInterpolationMode(InterpolationModeNearestNeighbor);
+      try
+        G.DrawImage(GpImg, ADest.Left, ADest.Top, ADest.Width, ADest.Height);
+      finally
+        G.SetInterpolationMode(InterpolationModeDefault);
+      end;
+    finally
+      GpImg.Free;
+    end;
   finally
-    GpImg.Free;
-    if Ico <> 0 then DestroyIcon(Ico);
+    Glyph.Free;
   end;
 end;
 
@@ -758,7 +889,7 @@ begin
             R.Left + (IconArea - IconSize) div 2, R.Top + (ItemH - IconSize) div 2,
             R.Left + (IconArea - IconSize) div 2 + IconSize,
             R.Top + (ItemH - IconSize) div 2 + IconSize);
-          if It.Enabled then DrawIcon(G, It, IconRect);
+          DrawIcon(G, It, IconRect, It.Enabled);
 
           if It.Enabled then
           begin

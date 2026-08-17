@@ -600,7 +600,11 @@ type
     property Options: TDBGridOptions read GetOptions write SetOptions;
     property ReadOnly: Boolean read GetReadOnly write SetReadOnly default False;
     property TitleFont: TFont read GetTitleFont write SetTitleFont;
-    property DefaultDrawing: Boolean read GetDefaultDrawing write SetDefaultDrawing default True;
+    { Off by default — the component paints every cell itself (see the inner
+      grid's constructor). Turning it back on hands the cell background, the
+      selection highlight and the VCL's dotted focus rectangle back to the
+      stock grid, in its own system colors. }
+    property DefaultDrawing: Boolean read GetDefaultDrawing write SetDefaultDrawing default False;
     { Keep the visible columns stretched to the full grid width — re-applied on
       resize, dataset open and column changes. Runtime only (see
       FitColumnsToWidth for why design time is skipped). }
@@ -754,7 +758,17 @@ begin
   BorderStyle := bsNone;
   { Disable native scrollbars — the owner draws its own thin Fluent thumbs }
   ScrollBars := ssNone;
-  DefaultDrawing := True;    // grid formats field text; we recolor + flatten
+  { Off, exactly like TCWSStringGrid's inner grid — we paint every cell
+    ourselves. It is also what keeps the two components consistent about the
+    focus rectangle: Vcl.Grids / Vcl.DBGrids gate BOTH dotted focus rectangles
+    on this flag — the per-cell one at the end of TCustomDBGrid.DrawCell and the
+    whole-row one in TCustomGrid.Paint (goRowSelect) — so with it off neither is
+    ever drawn. The current cell is shown with CellHighlightColor instead.
+    Nothing is lost in the text: the field's DisplayText is still resolved by
+    the grid and written by DefaultDrawColumnCell through our always-assigned
+    OnDrawColumnCell handler; the base's own WriteText was only ever painting
+    underneath ours. }
+  DefaultDrawing := False;
   DoubleBuffered := True;
   { Keep Ctl3D permanently off. Without ParentCtl3D := False, assigning the
     grid's Parent re-syncs Ctl3D from the (3D) parent control. Fixed cells are
@@ -907,7 +921,6 @@ var
   R: TRect;
   Col: TColumn;
   SortLevel, IndicatorW: Integer;
-  LineW: Integer;
   SortDir: TCWSSortDirection;
 begin
   if FOwner = nil then
@@ -979,21 +992,7 @@ begin
       Remember the row: the base DrawCell routes into DrawColumnCell, which is
       not told which row it is painting but needs it for the zebra striping. }
     FDrawRow := ARow;
-    { Hand the base the cell *interior* — the rect minus the strips our own
-      DrawGridLine paints over afterwards. The base ends DrawCell with
-      DrawFocusRect(ARect) for the current cell, so with the full rect its
-      right and bottom dotted edges land exactly under those strips and get
-      wiped out. Shrinking here keeps the focus rectangle inside the line, so
-      all four sides stay visible; the strips left unpainted by the base are
-      filled by DrawGridLine below. }
-    R := ARect;
-    LineW := Max(0, FOwner.Scale(FOwner.FGridLineWidth));
-    if LineW > 0 then
-    begin
-      Dec(R.Right, Min(LineW, R.Right - R.Left));
-      Dec(R.Bottom, Min(LineW, R.Bottom - R.Top));
-    end;
-    inherited DrawCell(ACol, ARow, R, AState);
+    inherited DrawCell(ACol, ARow, ARect, AState);
     FOwner.DrawGridLine(Canvas, ARect);
   end;
 end;
@@ -1041,6 +1040,11 @@ begin
     Canvas.Brush.Style := bsSolid;
     Canvas.Brush.Color := Bg;
     Canvas.Font.Color := Tx;
+    { With DefaultDrawing off the grid no longer pre-fills the cell, and the
+      default painter only covers it because TextRect writes opaque. Fill it
+      here so a user-supplied OnDrawColumnCell that draws text alone still
+      lands on the themed background instead of on whatever was there. }
+    Canvas.FillRect(Rect);
   end;
   { Fires the owner's OnDrawColumnCell (or DefaultDrawColumnCell) — see Create }
   inherited DrawColumnCell(Rect, DataCol, Column, State);
@@ -2889,10 +2893,11 @@ var
   R: TRect;
   Flags: Cardinal;
 begin
-  { Brush + font colours were already set by the internal grid's DrawColumnCell.
-    Fill the whole cell (this also covers the grid's own top-aligned default
-    text drawn underneath when DefaultDrawing is on), then draw the field text
-    vertically centred — matching the title row's DT_VCENTER look. }
+  { Brush + font colours were already set by the internal grid's DrawColumnCell,
+    which also filled the cell. Fill it again — the handler must stand on its
+    own, since it is equally reachable through the public DefaultDrawColumnCell
+    — then draw the field text vertically centred, matching the title row's
+    DT_VCENTER look. }
   Cv := FGrid.Canvas;
   Cv.Brush.Style := bsSolid;
   Cv.FillRect(Rect);

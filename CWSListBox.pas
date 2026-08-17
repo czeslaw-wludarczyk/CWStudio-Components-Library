@@ -31,7 +31,7 @@ uses
   Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI, Winapi.GDIPOBJ,
   Winapi.UxTheme,
   System.SysUtils, System.Classes, System.Types, System.Math,
-  Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls, Vcl.Forms, Vcl.ExtCtrls;
+  Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls, Vcl.Forms, Vcl.ExtCtrls, Vcl.Menus;
 
 const
   CM_PPICHANGED = $B080 + 13;
@@ -310,6 +310,10 @@ type
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    { Prawy przycisk poza wnętrzem listy (pasek przewijania, etykieta) trafia
+      wprost tutaj — TControl.WMContextMenu sam pokaże PopupMenu, my dokładamy
+      tylko wywołanie zdarzenia OnContextPopup komponentu. }
+    procedure DoContextPopup(MousePos: TPoint; var Handled: Boolean); override;
     { When the scrollbar is visible the inner list box is narrower, so the
       scrollbar strip belongs to this outer window. Forward the wheel to the
       inner list so hovering the scrollbar still scrolls the list. }
@@ -401,6 +405,10 @@ type
     property TabOrder;
     property TabStop;
     property Visible;
+    { Menu kontekstowe całego komponentu — działa zarówno nad pozycjami listy,
+      jak i nad paskiem przewijania czy etykietą. Przyjmuje TPopupMenu i
+      TCWSPopupMenu (Popup jest wirtualne). }
+    property PopupMenu;
     property OnClick: TNotifyEvent read FOnClick write FOnClick;
     property OnDblClick: TNotifyEvent read FOnDblClick write FOnDblClick;
     property OnKeyDown: TKeyEvent read FOnKeyDown write FOnKeyDown;
@@ -1538,11 +1546,49 @@ begin
     FOnMouseUp(Self, Button, Shift, X, Y);
 end;
 
-procedure TCWSListBox.ListBoxContextPopup(Sender: TObject; MousePos: TPoint;
-  var Handled: Boolean);
+procedure TCWSListBox.DoContextPopup(MousePos: TPoint; var Handled: Boolean);
 begin
+  inherited;
   if Assigned(FOnContextPopup) then
     FOnContextPopup(Self, MousePos, Handled);
+end;
+
+procedure TCWSListBox.ListBoxContextPopup(Sender: TObject; MousePos: TPoint;
+  var Handled: Boolean);
+var
+  OwnerPos, ScreenPos: TPoint;
+  Menu: TPopupMenu;
+begin
+  { MousePos przychodzi w koordynatach wewnętrznej listy, a zdarzenie dostaje
+    Sender = Self — przeliczamy je więc na klienta komponentu. Wywołanie menu
+    z klawiatury (Shift+F10, klawisz menu) daje (-1,-1) i zostaje bez zmian. }
+  if (MousePos.X < 0) or (MousePos.Y < 0) then
+    OwnerPos := MousePos
+  else
+    OwnerPos := ScreenToClient(FListBox.ClientToScreen(MousePos));
+
+  if Assigned(FOnContextPopup) then
+    FOnContextPopup(Self, OwnerPos, Handled);
+  if Handled then
+    Exit;
+
+  { Wewnętrzna lista wypełnia wnętrze komponentu, więc prawy przycisk nad
+    pozycjami trafia w nią, a nie w TCWSListBox — menu z właściwości PopupMenu
+    pokazujemy tutaj sami, dokładnie tak, jak zrobiłby to TControl.WMContextMenu.
+    Handled := True zamyka temat po stronie listy: nie przekaże już komunikatu
+    dalej do rodzica, więc menu nie pojawi się dwa razy. }
+  Menu := PopupMenu;
+  if (Menu <> nil) and Menu.AutoPopup then
+  begin
+    if (MousePos.X < 0) or (MousePos.Y < 0) then
+      ScreenPos := ClientToScreen(Point(0, 0))
+    else
+      ScreenPos := FListBox.ClientToScreen(MousePos);
+    SendCancelMode(nil);
+    Menu.PopupComponent := Self;
+    Menu.Popup(ScreenPos.X, ScreenPos.Y);
+    Handled := True;
+  end;
 end;
 
 procedure TCWSListBox.ListBoxDrawItem(Control: TWinControl; Index: Integer;
