@@ -25,7 +25,7 @@ package CWStudio_ComponentsRT;
 {$IMAGEBASE $400000}
 {$DEFINE RELEASE}
 {$ENDIF IMPLICITBUILDING}
-{$DESCRIPTION 'CWStudio Components Library 1.7.8 (runtime)'}
+{$DESCRIPTION 'CWStudio Components Library 1.7.9 (runtime)'}
 {$IMPLICITBUILD ON}
 
 requires

@@ -26,7 +26,7 @@ package CWStudio_ComponentsDT;
 {$IMAGEBASE $400000}
 {$DEFINE RELEASE}
 {$ENDIF IMPLICITBUILDING}
-{$DESCRIPTION 'CWStudio Components Library 1.7.8 (design-time)'}
+{$DESCRIPTION 'CWStudio Components Library 1.7.9 (design-time)'}
 {$IMPLICITBUILD ON}
 
 requires

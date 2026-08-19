@@ -67,8 +67,8 @@ type
 
     procedure ComputeScale(const X, Y: Integer);
     function FontEmSize: Single;
-    function MakeFont: TGPFont;
-    function MeasureTextW(G: TGPGraphics; AFont: TGPFont; const S: string): Single;
+    function MakeGdiFont: HFONT;
+    function MeasureTextW(ADC: HDC; const S: string): Integer;
     function ShortCutOf(AItem: TMenuItem): string;
     procedure BuildEntries;
     procedure Measure;
@@ -420,50 +420,45 @@ end;
 
 function TCWSMenuWindow.FontEmSize: Single;
 begin
-  if FMenu.Font.Size > 0 then Result := FMenu.Font.Size * FDpi / 72
-  else Result := Abs(FMenu.Font.Height) * FScale;
+  { calkowity rozmiar w pikselach - hinting dziala skuteczniej niz przy
+    ulamkowym ppem (np. przy skalowaniu 110%) }
+  if FMenu.Font.Size > 0 then Result := Round(FMenu.Font.Size * FDpi / 72)
+  else Result := Round(Abs(FMenu.Font.Height) * FScale);
   if Result < 8 then Result := 8;
 end;
 
-function TCWSMenuWindow.MakeFont: TGPFont;
+function TCWSMenuWindow.MakeGdiFont: HFONT;
 var
-  Fam: TGPFontFamily;
-  St: Integer;
+  LF: TLogFont;
 begin
-  St := 0;
-  if fsBold in FMenu.Font.Style then St := St or FontStyleBold;
-  if fsItalic in FMenu.Font.Style then St := St or FontStyleItalic;
-  if fsUnderline in FMenu.Font.Style then St := St or FontStyleUnderline;
-  Fam := TGPFontFamily.Create(FMenu.Font.Name);
-  try
-    Result := TGPFont.Create(Fam, FontEmSize, St, UnitPixel);
-  finally
-    Fam.Free;
-  end;
+  FillChar(LF, SizeOf(LF), 0);
+  LF.lfHeight := -Round(FontEmSize);
+  if fsBold in FMenu.Font.Style then LF.lfWeight := FW_BOLD
+  else LF.lfWeight := FW_NORMAL;
+  LF.lfItalic := Byte(fsItalic in FMenu.Font.Style);
+  LF.lfUnderline := Byte(fsUnderline in FMenu.Font.Style);
+  LF.lfStrikeOut := Byte(fsStrikeOut in FMenu.Font.Style);
+  LF.lfCharSet := DEFAULT_CHARSET;
+  LF.lfOutPrecision := OUT_TT_PRECIS;
+  LF.lfClipPrecision := CLIP_DEFAULT_PRECIS;
+  LF.lfQuality := CLEARTYPE_QUALITY;
+  LF.lfPitchAndFamily := DEFAULT_PITCH or FF_DONTCARE;
+  StrPLCopy(LF.lfFaceName, FMenu.Font.Name, Length(LF.lfFaceName) - 1);
+  Result := CreateFontIndirect(LF);
 end;
 
-function TCWSMenuWindow.MeasureTextW(G: TGPGraphics; AFont: TGPFont;
-  const S: string): Single;
+{ Pomiar tym samym silnikiem, ktorym pozniej rysujemy (GDI), inaczej szerokosci
+  sie rozjezdzaja i najdluzsza pozycja dostaje wielokropek.
+  DT_CALCRECT uwzglednia '&' jako prefiks akceleratora, tak jak rysowanie. }
+function TCWSMenuWindow.MeasureTextW(ADC: HDC; const S: string): Integer;
 var
-  Layout, Bounds: TGPRectF;
-  Fmt: TGPStringFormat;
+  R: TRect;
 begin
   if S = '' then Exit(0);
-  { The default format — not GenericTypographic — because Render draws with the
-    default one too; the typographic metrics are tighter and the longest caption
-    would come out ellipsised. }
-  Fmt := TGPStringFormat.Create;
-  try
-    Fmt.SetFormatFlags(Fmt.GetFormatFlags or StringFormatFlagsNoWrap or
-      StringFormatFlagsMeasureTrailingSpaces);
-    { '&' = accelerator (as in menus): underlines the letter, '&&' = literal & }
-    Fmt.SetHotkeyPrefix(HotkeyPrefixShow);
-    Layout := MakeRect(Single(0), Single(0), Single(100000), Single(100000));
-    G.MeasureString(S, -1, AFont, Layout, Fmt, Bounds);
-    Result := Bounds.Width;
-  finally
-    Fmt.Free;
-  end;
+  R := Rect(0, 0, 0, 0);
+  Winapi.Windows.DrawText(ADC, PChar(S), -1, R,
+    DT_SINGLELINE or DT_CALCRECT or DT_NOCLIP);
+  Result := (R.Right - R.Left) + Round(2 * FScale);
 end;
 
 function TCWSMenuWindow.ShortCutOf(AItem: TMenuItem): string;
@@ -500,9 +495,8 @@ end;
 
 procedure TCWSMenuWindow.Measure;
 var
-  ScreenDC: HDC;
-  G: TGPGraphics;
-  Fnt: TGPFont;
+  ScreenDC, MemDC: HDC;
+  GdiFont: HFONT;
   i, IconArea, RightPad, MinW, MaxH: Integer;
   MaxCap, MaxSc, W: Single;
   HasSub, HasSc: Boolean;
@@ -529,25 +523,30 @@ begin
 
   MaxCap := 0; MaxSc := 0; HasSub := False; HasSc := False;
   ScreenDC := GetDC(0);
-  G := TGPGraphics.Create(ScreenDC);
-  Fnt := MakeFont;
+  MemDC := CreateCompatibleDC(ScreenDC);
+  GdiFont := MakeGdiFont;
+  SaveDC(MemDC);
   try
+    SelectObject(MemDC, GdiFont);
     for i := 0 to High(FEntries) do
     begin
       It := FEntries[i].Item;
       if FEntries[i].Separator then Continue;
-      W := MeasureTextW(G, Fnt, It.Caption);
+      W := MeasureTextW(MemDC, It.Caption);
       if W > MaxCap then MaxCap := W;
       if It.Count > 0 then HasSub := True;
       if ShortCutOf(It) <> '' then
       begin
         HasSc := True;
-        W := MeasureTextW(G, Fnt, ShortCutOf(It));
+        W := MeasureTextW(MemDC, ShortCutOf(It));
         if W > MaxSc then MaxSc := W;
       end;
     end;
   finally
-    Fnt.Free; G.Free; ReleaseDC(0, ScreenDC);
+    RestoreDC(MemDC, -1);
+    DeleteObject(GdiFont);
+    DeleteDC(MemDC);
+    ReleaseDC(0, ScreenDC);
   end;
 
   SubArrowW := IfThen(HasSub, Round(20 * FScale), 0);
@@ -765,19 +764,18 @@ var
   Border, IconSize, IconArea, SepInset, HlInsetX, HlInsetY: Integer;
   It: TMenuItem;
   ItemTop, ItemH: Integer;
-  R: TRect;
-  Fnt: TGPFont;
-  Fmt: TGPStringFormat;
+  R, TR: TRect;
   IconRect: TRect;
   TxtColor, ShCol: TColor;
-  Layout: TGPRectF;
   Sc: string;
   Blend: TBlendFunction;
   PtSrc: TPoint;
   Sz: TSize;
-  CovA, ShBits: TBytes;
+  CovA, ShBits, SavedA: TBytes;
   ShImg: TGPBitmap;
   CY, ChevX, ChevSz: Single;
+  GdiFont: HFONT;
+  PB: PByte;
 begin
   if not HandleAllocated then Exit;
   if (FWinW < 1) or (FWinH < 1) then Exit;
@@ -795,17 +793,22 @@ begin
   MemDC := CreateCompatibleDC(0);
   OldBmp := SelectObject(MemDC, HBmp);
   try
+    IconSize := Round(16 * FScale);
+    IconArea := Round(40 * FScale);
+    SepInset := Round(12 * FScale);
+    HlInsetX := Round(4 * FScale);
+    HlInsetY := Round(2 * FScale);
+    Radius := FMenu.CornerRadius * FScale;
+    Border := Max(1, Round(FMenu.BorderThickness * FScale));
+    BodyX := FShadow; BodyY := FShadow;
+
+    { ══ warstwa 1: tlo, obramowanie, ikony, strzalki - GDI+ ═══════════════ }
     GBmp := TGPBitmap.Create(FWinW, FWinH, FWinW * 4, PixelFormat32bppPARGB, Bits);
     G := TGPGraphics.Create(GBmp);
     try
       G.SetSmoothingMode(SmoothingModeAntiAlias);
       G.SetPixelOffsetMode(PixelOffsetModeHighQuality);
-      G.SetTextRenderingHint(TextRenderingHintAntiAlias);
       G.Clear(MakeColor(0, 0, 0, 0));
-
-      Radius := FMenu.CornerRadius * FScale;
-      Border := Max(1, Round(FMenu.BorderThickness * FScale));
-      BodyX := FShadow; BodyY := FShadow;
 
       { ── shadow ──────────────────────────────────────────────────────────── }
       if FMenu.ShadowEnabled and (FShadow > 0) and (FBlur > 0) then
@@ -838,136 +841,163 @@ begin
         try G.DrawPath(Pen, Path); finally Pen.Free; Path.Free; end;
       end;
 
-      IconSize := Round(16 * FScale);
-      IconArea := Round(40 * FScale);
-      SepInset := Round(12 * FScale);
-      HlInsetX := Round(4 * FScale);
-      HlInsetY := Round(2 * FScale);
+      { przytnij rysowanie pozycji do obszaru widoku }
+      G.SetClip(MakeRect(Single(BodyX), Single(ContentTop),
+        Single(FBodyW), Single(FViewH)));
 
-      Fnt := MakeFont;
-      Fmt := TGPStringFormat.Create;
-      try
-        Fmt.SetLineAlignment(StringAlignmentCenter);
-        Fmt.SetAlignment(StringAlignmentNear);
-        Fmt.SetFormatFlags(Fmt.GetFormatFlags or StringFormatFlagsNoWrap);
-        Fmt.SetTrimming(StringTrimmingEllipsisCharacter);
-        { '&' = accelerator (underlines the letter), '&&' = literal & }
-        Fmt.SetHotkeyPrefix(HotkeyPrefixShow);
+      for i := 0 to High(FEntries) do
+      begin
+        It := FEntries[i].Item;
+        ItemTop := EntryClientTop(i);
+        ItemH := FEntries[i].Height;
+        if (ItemTop + ItemH < ContentTop) or (ItemTop > ContentTop + FViewH) then
+          Continue;
+        R := Rect(Round(BodyX), ItemTop, Round(BodyX) + FBodyW, ItemTop + ItemH);
 
-        { przytnij rysowanie pozycji do obszaru widoku }
-        G.SetClip(MakeRect(Single(BodyX), Single(ContentTop),
-          Single(FBodyW), Single(FViewH)));
-
-        for i := 0 to High(FEntries) do
+        if FEntries[i].Separator then
         begin
-          It := FEntries[i].Item;
-          ItemTop := EntryClientTop(i);
-          ItemH := FEntries[i].Height;
-          if (ItemTop + ItemH < ContentTop) or (ItemTop > ContentTop + FViewH) then
-            Continue;
-          R := Rect(Round(BodyX), ItemTop, Round(BodyX) + FBodyW, ItemTop + ItemH);
-
-          if FEntries[i].Separator then
-          begin
-            Pen := TGPPen.Create(GPColor(FMenu.SeparatorColor), 1);
-            try
-              G.DrawLine(Pen, Single(BodyX + SepInset), Single((R.Top + R.Bottom) / 2),
-                Single(BodyX + FBodyW - SepInset), Single((R.Top + R.Bottom) / 2));
-            finally Pen.Free; end;
-            Continue;
-          end;
-
-          if (i = FHotIndex) and It.Enabled then
-          begin
-            Path := CreateRRPath(R.Left + HlInsetX, R.Top + HlInsetY,
-              FBodyW - HlInsetX * 2, ItemH - HlInsetY * 2, Round(5 * FScale));
-            Brush := TGPSolidBrush.Create(GPColor(FMenu.HighlightColor));
-            try G.FillPath(Brush, Path); finally Brush.Free; Path.Free; end;
-          end;
-
-          IconRect := Rect(
-            R.Left + (IconArea - IconSize) div 2, R.Top + (ItemH - IconSize) div 2,
-            R.Left + (IconArea - IconSize) div 2 + IconSize,
-            R.Top + (ItemH - IconSize) div 2 + IconSize);
-          DrawIcon(G, It, IconRect, It.Enabled);
-
-          if It.Enabled then
-          begin
-            if i = FHotIndex then TxtColor := FMenu.HighlightTextColor
-            else TxtColor := FMenu.TextColor;
-          end
-          else TxtColor := FMenu.DisabledTextColor;
-
-          Brush := TGPSolidBrush.Create(GPColor(TxtColor));
+          Pen := TGPPen.Create(GPColor(FMenu.SeparatorColor), 1);
           try
-            Layout := MakeRect(Single(R.Left + IconArea), Single(R.Top),
-              Single(FBodyW - IconArea - Round(14 * FScale)), Single(ItemH));
-            G.DrawString(It.Caption, -1, Fnt, Layout, Fmt, Brush);
-          finally Brush.Free; end;
-
-          { keyboard shortcut }
-          Sc := ShortCutOf(It);
-          if (Sc <> '') and (It.Count = 0) then
-          begin
-            if It.Enabled then ShCol := FMenu.ShortCutColor
-            else ShCol := FMenu.DisabledTextColor;
-            Fmt.SetAlignment(StringAlignmentFar);
-            Brush := TGPSolidBrush.Create(GPColor(ShCol));
-            try
-              Layout := MakeRect(Single(R.Left + IconArea), Single(R.Top),
-                Single(FBodyW - IconArea - Round(14 * FScale)), Single(ItemH));
-              G.DrawString(Sc, -1, Fnt, Layout, Fmt, Brush);
-            finally Brush.Free; end;
-            Fmt.SetAlignment(StringAlignmentNear);
-          end;
-
-          { submenu arrow }
-          if It.Count > 0 then
-          begin
-            if It.Enabled then ShCol := FMenu.TextColor
-            else ShCol := FMenu.DisabledTextColor;
-            ChevSz := 4 * FScale;
-            ChevX := R.Right - Round(14 * FScale);
-            CY := (R.Top + R.Bottom) / 2;
-            Pen := TGPPen.Create(GPColor(ShCol), 1.4 * FScale);
-            try
-              G.DrawLine(Pen, ChevX - ChevSz / 2, CY - ChevSz, ChevX + ChevSz / 2, CY);
-              G.DrawLine(Pen, ChevX + ChevSz / 2, CY, ChevX - ChevSz / 2, CY + ChevSz);
-            finally Pen.Free; end;
-          end;
+            G.DrawLine(Pen, Single(BodyX + SepInset), Single((R.Top + R.Bottom) / 2),
+              Single(BodyX + FBodyW - SepInset), Single((R.Top + R.Bottom) / 2));
+          finally Pen.Free; end;
+          Continue;
         end;
 
-        G.ResetClip;
-
-        { ── scroll arrows ───────────────────────────────────────────────────── }
-        if FScrolling then
+        if (i = FHotIndex) and It.Enabled then
         begin
-          ChevX := BodyX + FBodyW / 2;
-          ChevSz := 5 * FScale;
-          { top }
-          if FScrollPos > 0 then ShCol := FMenu.TextColor else ShCol := FMenu.DisabledTextColor;
-          CY := BodyY + FVPad + FArrowH / 2;
+          Path := CreateRRPath(R.Left + HlInsetX, R.Top + HlInsetY,
+            FBodyW - HlInsetX * 2, ItemH - HlInsetY * 2, Round(5 * FScale));
+          Brush := TGPSolidBrush.Create(GPColor(FMenu.HighlightColor));
+          try G.FillPath(Brush, Path); finally Brush.Free; Path.Free; end;
+        end;
+
+        IconRect := Rect(
+          R.Left + (IconArea - IconSize) div 2, R.Top + (ItemH - IconSize) div 2,
+          R.Left + (IconArea - IconSize) div 2 + IconSize,
+          R.Top + (ItemH - IconSize) div 2 + IconSize);
+        DrawIcon(G, It, IconRect, It.Enabled);
+
+        { submenu arrow }
+        if It.Count > 0 then
+        begin
+          if It.Enabled then ShCol := FMenu.TextColor
+          else ShCol := FMenu.DisabledTextColor;
+          ChevSz := 4 * FScale;
+          ChevX := R.Right - Round(14 * FScale);
+          CY := (R.Top + R.Bottom) / 2;
           Pen := TGPPen.Create(GPColor(ShCol), 1.4 * FScale);
           try
-            G.DrawLine(Pen, ChevX - ChevSz, CY + ChevSz / 2, ChevX, CY - ChevSz / 2);
-            G.DrawLine(Pen, ChevX, CY - ChevSz / 2, ChevX + ChevSz, CY + ChevSz / 2);
-          finally Pen.Free; end;
-          { bottom }
-          if FScrollPos < FMaxScroll then ShCol := FMenu.TextColor else ShCol := FMenu.DisabledTextColor;
-          CY := BodyY + FBodyH - FVPad - FArrowH / 2;
-          Pen := TGPPen.Create(GPColor(ShCol), 1.4 * FScale);
-          try
-            G.DrawLine(Pen, ChevX - ChevSz, CY - ChevSz / 2, ChevX, CY + ChevSz / 2);
-            G.DrawLine(Pen, ChevX, CY + ChevSz / 2, ChevX + ChevSz, CY - ChevSz / 2);
+            G.DrawLine(Pen, ChevX - ChevSz / 2, CY - ChevSz, ChevX + ChevSz / 2, CY);
+            G.DrawLine(Pen, ChevX + ChevSz / 2, CY, ChevX - ChevSz / 2, CY + ChevSz);
           finally Pen.Free; end;
         end;
-      finally
-        Fmt.Free; Fnt.Free;
+      end;
+
+      G.ResetClip;
+
+      { ── scroll arrows ───────────────────────────────────────────────────── }
+      if FScrolling then
+      begin
+        ChevX := BodyX + FBodyW / 2;
+        ChevSz := 5 * FScale;
+        { top }
+        if FScrollPos > 0 then ShCol := FMenu.TextColor else ShCol := FMenu.DisabledTextColor;
+        CY := BodyY + FVPad + FArrowH / 2;
+        Pen := TGPPen.Create(GPColor(ShCol), 1.4 * FScale);
+        try
+          G.DrawLine(Pen, ChevX - ChevSz, CY + ChevSz / 2, ChevX, CY - ChevSz / 2);
+          G.DrawLine(Pen, ChevX, CY - ChevSz / 2, ChevX + ChevSz, CY + ChevSz / 2);
+        finally Pen.Free; end;
+        { bottom }
+        if FScrollPos < FMaxScroll then ShCol := FMenu.TextColor else ShCol := FMenu.DisabledTextColor;
+        CY := BodyY + FBodyH - FVPad - FArrowH / 2;
+        Pen := TGPPen.Create(GPColor(ShCol), 1.4 * FScale);
+        try
+          G.DrawLine(Pen, ChevX - ChevSz, CY - ChevSz / 2, ChevX, CY + ChevSz / 2);
+          G.DrawLine(Pen, ChevX, CY + ChevSz / 2, ChevX + ChevSz, CY - ChevSz / 2);
+        finally Pen.Free; end;
       end;
 
       G.Flush(FlushIntentionSync);
     finally
       G.Free; GBmp.Free;
+    end;
+
+    { ══ warstwa 2: podpisy - GDI z ClearType ══════════════════════════════
+      GDI+ nie renderuje ClearType na bitmapie z kanalem alfa - cicho schodzi
+      do skali szarosci, przez co tekst menu wygladal miekko obok reszty
+      aplikacji rysowanej przez GDI. Napisy idą wiec zwyklym GDI wprost do
+      DIB-a. GDI nie zna alfy i zeruje ja w pikselach glifow, dlatego kanal
+      alfa zapamietujemy przed rysowaniem i odtwarzamy po nim. Tlo pod
+      tekstem jest w pelni nieprzezroczyste, wiec ClearType blenduje sie
+      poprawnie. }
+    N := FWinW * FWinH;
+    SetLength(SavedA, N);
+    PB := Bits; Inc(PB, 3);
+    for i := 0 to N - 1 do
+    begin
+      SavedA[i] := PB^;
+      Inc(PB, 4);
+    end;
+
+    GdiFont := MakeGdiFont;
+    SaveDC(MemDC);
+    try
+      SelectObject(MemDC, GdiFont);
+      SetBkMode(MemDC, TRANSPARENT);
+      IntersectClipRect(MemDC, Round(BodyX), ContentTop,
+        Round(BodyX) + FBodyW, ContentTop + FViewH);
+
+      for i := 0 to High(FEntries) do
+      begin
+        if FEntries[i].Separator then Continue;
+        It := FEntries[i].Item;
+        ItemTop := EntryClientTop(i);
+        ItemH := FEntries[i].Height;
+        if (ItemTop + ItemH < ContentTop) or (ItemTop > ContentTop + FViewH) then
+          Continue;
+        R := Rect(Round(BodyX), ItemTop, Round(BodyX) + FBodyW, ItemTop + ItemH);
+
+        if It.Enabled then
+        begin
+          if i = FHotIndex then TxtColor := FMenu.HighlightTextColor
+          else TxtColor := FMenu.TextColor;
+        end
+        else TxtColor := FMenu.DisabledTextColor;
+
+        TR := Rect(R.Left + IconArea, R.Top,
+                   R.Right - Round(14 * FScale), R.Bottom);
+
+        { '&' = akcelerator (podkreslenie litery), '&&' = zwykly znak & }
+        SetTextColor(MemDC, ColorToRGB(TxtColor));
+        Winapi.Windows.DrawText(MemDC, PChar(It.Caption), -1, TR,
+          DT_SINGLELINE or DT_VCENTER or DT_LEFT or DT_END_ELLIPSIS);
+
+        { keyboard shortcut }
+        Sc := ShortCutOf(It);
+        if (Sc <> '') and (It.Count = 0) then
+        begin
+          if It.Enabled then ShCol := FMenu.ShortCutColor
+          else ShCol := FMenu.DisabledTextColor;
+          SetTextColor(MemDC, ColorToRGB(ShCol));
+          TR := Rect(R.Left + IconArea, R.Top,
+                     R.Right - Round(14 * FScale), R.Bottom);
+          Winapi.Windows.DrawText(MemDC, PChar(Sc), -1, TR,
+            DT_SINGLELINE or DT_VCENTER or DT_RIGHT or DT_NOPREFIX);
+        end;
+      end;
+    finally
+      RestoreDC(MemDC, -1);
+      DeleteObject(GdiFont);
+    end;
+    GdiFlush;
+
+    PB := Bits; Inc(PB, 3);
+    for i := 0 to N - 1 do
+    begin
+      PB^ := SavedA[i];
+      Inc(PB, 4);
     end;
 
     ScreenDC := GetDC(0);

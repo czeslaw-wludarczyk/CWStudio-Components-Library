@@ -366,6 +366,7 @@ type
     property Enabled;
     property Font;
     property ParentFont;
+    property PopupMenu;
     property TabOrder;
     property TabStop default True;
     property Visible;
