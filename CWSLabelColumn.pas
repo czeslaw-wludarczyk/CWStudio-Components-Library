@@ -111,6 +111,17 @@ type
     FLeft: TCWSScrollCol;
     FRight: TCWSScrollCol;
 
+    // The two edge-fade strips, pre-rendered once as premultiplied 32-bit
+    // bitmaps and alpha-blended per frame. The fade does not depend on the
+    // marquee offset — only on its width, the column height and Color — so
+    // building it per frame (a TGPGraphics plus a TGPLinearGradientBrush, in
+    // GDI+, twice a column) was rebuilding an identical picture 33 times a
+    // second. FFadeKeyW/H/Color is what the cached pair was built for.
+    FFadeL, FFadeR: TBitmap;
+    FFadeKeyW, FFadeKeyH: Integer;
+    FFadeKeyColor: TColor;
+    procedure EnsureFadeStrips(AW, AH: Integer);
+
     procedure SetLeftText(const Value: string);
     procedure SetRightText(const Value: string);
     procedure SetLeftFont(Value: TFont);
@@ -249,6 +260,9 @@ begin
   FRight.Bg := TBitmap.Create;
   FRight.Bg.PixelFormat := pf32bit;
 
+  FFadeL := TBitmap.Create;
+  FFadeR := TBitmap.Create;
+
   FTimer := TTimer.Create(nil);
   FTimer.Enabled  := False;
   FTimer.Interval := FScrollInterval;
@@ -260,11 +274,73 @@ begin
   FTimer.Free;
   FMeasureBmp.Free;
   FScrollBuf.Free;
+  FFadeL.Free;
+  FFadeR.Free;
   FLeft.Bg.Free;
   FRight.Bg.Free;
   FLeftFont.Free;
   FRightFont.Free;
   inherited Destroy;
+end;
+
+{ (Re)build the two edge-fade strips for a column AW wide and AH tall.
+  The ramp is the one TGPLinearGradientBrush produced: a linear interpolation of
+  ALPHA from fully opaque at the outer edge to fully transparent inward, over a
+  constant Color. Written straight into a premultiplied 32-bit DIB, it is then
+  put on by TCanvas.Draw, which for afPremultiplied goes to AlphaBlend — the same
+  picture as before, minus a GDI+ rendering context and two gradient brushes
+  constructed and destroyed on every frame. }
+procedure TCWSLabelColumn.EnsureFadeStrips(AW, AH: Integer);
+var
+  cr: LongInt;
+  R, G, B: Byte;
+  X, Y, A: Integer;
+  RowL, RowR: PCardinal;
+begin
+  if (AW <= 0) or (AH <= 0) then
+    Exit;
+  if (FFadeKeyW = AW) and (FFadeKeyH = AH) and (FFadeKeyColor = Color) and
+     (FFadeL.Width = AW) and (FFadeL.Height = AH) then
+    Exit;
+
+  cr := ColorToRGB(Color);
+  R := GetRValue(cr);
+  G := GetGValue(cr);
+  B := GetBValue(cr);
+
+  FFadeL.PixelFormat := pf32bit;
+  FFadeR.PixelFormat := pf32bit;
+  FFadeL.SetSize(AW, AH);
+  FFadeR.SetSize(AW, AH);
+  { SetSize resets the format on some paths — pin it, and only then declare the
+    channel premultiplied, or TBitmap will try to convert what we are about to
+    write instead of taking it as given. }
+  FFadeL.PixelFormat := pf32bit;
+  FFadeR.PixelFormat := pf32bit;
+
+  for Y := 0 to AH - 1 do
+  begin
+    RowL := FFadeL.ScanLine[Y];
+    RowR := FFadeR.ScanLine[Y];
+    for X := 0 to AW - 1 do
+    begin
+      { Opaque at the outer edge, clear inward — mirrored for the right strip. }
+      A := 255 - MulDiv(X, 255, AW);
+      { Premultiplied: the colour channels carry the coverage already. }
+      PCardinal(PByte(RowL) + X * 4)^ :=
+        (Cardinal(A) shl 24) or (Cardinal(R * A div 255) shl 16) or
+        (Cardinal(G * A div 255) shl 8) or Cardinal(B * A div 255);
+      PCardinal(PByte(RowR) + (AW - 1 - X) * 4)^ :=
+        (Cardinal(A) shl 24) or (Cardinal(R * A div 255) shl 16) or
+        (Cardinal(G * A div 255) shl 8) or Cardinal(B * A div 255);
+    end;
+  end;
+
+  FFadeL.AlphaFormat := afPremultiplied;
+  FFadeR.AlphaFormat := afPremultiplied;
+  FFadeKeyW := AW;
+  FFadeKeyH := AH;
+  FFadeKeyColor := Color;
 end;
 
 procedure TCWSLabelColumn.Loaded;
@@ -698,7 +774,11 @@ begin
       IntersectClipRect(ACanvas.Handle, ARect.Left, ARect.Top,
         ARect.Right, ARect.Bottom);
       X := ARect.Left + Pad - AOffset;
-      Y := ARect.Top + (ARect.Bottom - ARect.Top - ACanvas.TextHeight(AText)) div 2;
+      { TextHeight('Wg'), not TextHeight(AText): GetTextExtentPoint32 returns the
+        selected FONT's height whatever the string, so the two agree exactly — but
+        the second one walks the entire marquee text to find that out, and this
+        runs on every frame. }
+      Y := ARect.Top + (ARect.Bottom - ARect.Top - ACanvas.TextHeight('Wg')) div 2;
       ACanvas.TextOut(X, Y, AText);
     finally
       RestoreDC(ACanvas.Handle, SavedDC);
@@ -732,12 +812,7 @@ end;
 procedure TCWSLabelColumn.DrawEdgeFade(ACanvas: TCanvas; const ARect: TRect;
   AFadeLeft, AFadeRight: Boolean);
 var
-  G: TGPGraphics;
-  Brush: TGPLinearGradientBrush;
-  cr: LongInt;
   FadeW, H: Integer;
-  Opaque, Clear: TGPColor;
-  GR: TGPRectF;
 begin
   H := ARect.Bottom - ARect.Top;
   if (H <= 0) or not (AFadeLeft or AFadeRight) then
@@ -749,41 +824,19 @@ begin
   if FadeW <= 0 then
     Exit;
 
-  cr     := ColorToRGB(Color);
-  Opaque := MakeColor(255, GetRValue(cr), GetGValue(cr), GetBValue(cr));
-  Clear  := MakeColor(0,   GetRValue(cr), GetGValue(cr), GetBValue(cr));
+  { Both strips are built once for this width/height/colour and then simply
+    blended on — see EnsureFadeStrips. This is the marquee's per-frame path and
+    it used to construct a GDI+ rendering context and up to two gradient brushes
+    every time through it, per column, ~33 times a second, for a picture that
+    never changed. }
+  EnsureFadeStrips(FadeW, H);
+  if (FFadeL.Width <> FadeW) or (FFadeL.Height <> H) then
+    Exit;
 
-  G := TGPGraphics.Create(ACanvas.Handle);
-  try
-    if AFadeLeft then
-    begin
-      GR := MakeRect(Single(ARect.Left), Single(ARect.Top), Single(FadeW), Single(H));
-      Brush := TGPLinearGradientBrush.Create(GR, Opaque, Clear, LinearGradientModeHorizontal);
-      try
-        Brush.SetWrapMode(WrapModeTileFlipX);   // avoids the GDI+ edge artifact
-        G.FillRectangle(Brush, Single(ARect.Left), Single(ARect.Top),
-          Single(FadeW), Single(H));
-      finally
-        Brush.Free;
-      end;
-    end;
-
-    if AFadeRight then
-    begin
-      GR := MakeRect(Single(ARect.Right - FadeW), Single(ARect.Top),
-        Single(FadeW), Single(H));
-      Brush := TGPLinearGradientBrush.Create(GR, Clear, Opaque, LinearGradientModeHorizontal);
-      try
-        Brush.SetWrapMode(WrapModeTileFlipX);
-        G.FillRectangle(Brush, Single(ARect.Right - FadeW), Single(ARect.Top),
-          Single(FadeW), Single(H));
-      finally
-        Brush.Free;
-      end;
-    end;
-  finally
-    G.Free;
-  end;
+  if AFadeLeft then
+    ACanvas.Draw(ARect.Left, ARect.Top, FFadeL);
+  if AFadeRight then
+    ACanvas.Draw(ARect.Right - FadeW, ARect.Top, FFadeR);
 end;
 
 { Snapshot the clean background of a column (no text yet) so that the per-frame
@@ -830,28 +883,56 @@ begin
   if (W <= 0) or (H <= 0) then
     Exit;
 
-  // Without a fresh background snapshot we cannot compose; ask for a full paint
-  // (which captures it) and let the next tick draw directly.
-  if not Col.BgValid or (Col.Bg.Width <> W) or (Col.Bg.Height <> H) then
-  begin
-    Invalidate;
-    Exit;
-  end;
-
-  if (FScrollBuf.Width <> W) or (FScrollBuf.Height <> H) then
-    FScrollBuf.SetSize(W, H);
-
-  LocalR := Rect(0, 0, W, H);
-  BitBlt(FScrollBuf.Canvas.Handle, 0, 0, W, H, Col.Bg.Canvas.Handle, 0, 0, SRCCOPY);
-  DrawColumn(FScrollBuf.Canvas, LocalR, AText, AFont, taLeftJustify, True, Col.Offset, False);
-  if FEdgeFade then
-    DrawEdgeFade(FScrollBuf.Canvas, LocalR, Col.Offset > 0, Col.Offset < Col.MaxOffset);
-
-  Canvas.Lock;
+  // The Canvas of a TGraphicControl is a TControlCanvas borrowing the PARENT's
+  // DC, and once it has been touched outside Paint it KEEPS that DC open. A
+  // retained DC carries the visible region it was created with; it never learns
+  // that the parent window has moved since — which is exactly what a scrolling
+  // host does on every step (TCWSScrollBox scrolls by moving its content
+  // window). So the marquee was blitting through a clip that described where the
+  // control used to be. Taking a fresh DC per frame is what makes the visibility
+  // test below true, and it hands the DC back between frames instead of holding
+  // one open for the lifetime of the control.
+  TControlCanvas(Canvas).FreeHandle;
   try
-    BitBlt(Canvas.Handle, ARect.Left, ARect.Top, W, H, FScrollBuf.Canvas.Handle, 0, 0, SRCCOPY);
+    // Visible and Parent.Showing say nothing about being ON SCREEN. Inside a
+    // scrollbox the parent is as tall as the CONTENT, so a label scrolled
+    // thousands of pixels out of view is still Visible, its parent is still
+    // Showing, and it went on composing and blitting a frame nobody can see —
+    // two BitBlts, a TextOut and a GDI+ gradient per column — 33 times a second,
+    // for as long as the form was open. Every such label was paying that, all of
+    // them at once, and WM_TIMER is a low-priority message: while a drag keeps
+    // the queue busy the ticks pile up and are then delivered in a burst the
+    // moment it drains, which is what made the scrolling hitch.
+    // The DC's visible region answers "is any of this on screen" exactly, and
+    // costs one call.
+    if not RectVisible(Canvas.Handle, ARect) then
+      Exit;
+
+    // Without a fresh background snapshot we cannot compose; ask for a full paint
+    // (which captures it) and let the next tick draw directly.
+    if not Col.BgValid or (Col.Bg.Width <> W) or (Col.Bg.Height <> H) then
+    begin
+      Invalidate;
+      Exit;
+    end;
+
+    if (FScrollBuf.Width <> W) or (FScrollBuf.Height <> H) then
+      FScrollBuf.SetSize(W, H);
+
+    LocalR := Rect(0, 0, W, H);
+    BitBlt(FScrollBuf.Canvas.Handle, 0, 0, W, H, Col.Bg.Canvas.Handle, 0, 0, SRCCOPY);
+    DrawColumn(FScrollBuf.Canvas, LocalR, AText, AFont, taLeftJustify, True, Col.Offset, False);
+    if FEdgeFade then
+      DrawEdgeFade(FScrollBuf.Canvas, LocalR, Col.Offset > 0, Col.Offset < Col.MaxOffset);
+
+    Canvas.Lock;
+    try
+      BitBlt(Canvas.Handle, ARect.Left, ARect.Top, W, H, FScrollBuf.Canvas.Handle, 0, 0, SRCCOPY);
+    finally
+      Canvas.Unlock;
+    end;
   finally
-    Canvas.Unlock;
+    TControlCanvas(Canvas).FreeHandle;
   end;
 end;
 

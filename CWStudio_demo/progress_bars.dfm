@@ -24,6 +24,7 @@ object frmProgressBars: TfrmProgressBars
     Height = 833
     ShowBorder = False
     ScrollStyle = cssVertical
+    ScrollbarRenderMode = srmBlended
     Align = alClient
     TabOrder = 0
     DesignSize = (

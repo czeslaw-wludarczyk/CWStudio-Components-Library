@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.8.0] — 2026-08-22
+
+- **New** `TCWSSystemMenu`: replaces the native window system menu — Alt+Space, the title-bar icon, a right-click on the caption — with a `TCWSPopupMenu` in the CWStudio style. Captions, order and any `AppendMenu` entries are read from the real system menu, so it stays localised and complete; choosing an item posts `WM_SYSCOMMAND` exactly like the native menu. `Triggers`, `UseSystemCaptions`, the six `Caption*` / `ImageIndex*` properties, `ExtraMenu`, `OnPopup` / `OnClose` / `OnCommand`.
+- **Fix** `TCWSPopupMenu`: the separator rule is snapped to whole device pixels — depending on the parity of the scaled row height it used to be split across two rows at half intensity — and now runs the full width of the menu, from border to border.
+- **Changed** `TCWSPopupMenu`: a disabled item takes the highlight on hover, as in a Windows menu; it simply does nothing when clicked. Submenus of a disabled parent stay closed.
+- **Fix** `TCWSLabelColumn`: the marquee no longer runs while the label is scrolled out of view inside a `TCWSScrollBox` — it went on composing and blitting ~33 frames a second per label, and the piled-up `WM_TIMER` ticks are what made the scrolling hitch.
+- **Fix** `TCWSLabelColumn`: the marquee was blitting through a stale clip region in a scrolling host — the retained parent DC never learns that the window has moved — so the DC is now taken and released per frame.
+- **Changed** `TCWSLabelColumn`: the edge-fade strips are pre-rendered once into premultiplied DIBs and blended on, instead of building a GDI+ context and two gradient brushes on every frame. Identical pixels.
+
 ## [1.7.9] — 2026-08-19
 
 - **Fix** `TCWSPopupMenu`: **captions and shortcuts are no longer soft next to the rest of the application.** They were drawn by GDI+ (`Graphics.DrawString`) onto the menu's 32-bit surface — and GDI+ does not render ClearType onto a bitmap that has an alpha channel: it quietly falls back to greyscale antialiasing, whatever `TextRenderingHint` it is asked for. The text is therefore now put down by plain GDI (`DrawText` with a `CLEARTYPE_QUALITY` font) straight into the DIB the menu is composed from, in a second pass over the GDI+ one, which keeps the background, border, glyphs, separators and chevrons. GDI knows nothing about alpha and zeroes it in every pixel it writes, so the alpha channel is saved before the text pass and restored after it — the menu is put on screen with `UpdateLayeredWindow`, and would otherwise become transparent exactly where the letters are. The background under a caption is fully opaque, which is what ClearType's subpixel blending needs to come out right.

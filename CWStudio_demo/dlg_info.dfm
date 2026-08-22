@@ -87,8 +87,6 @@ object dlgInfo: TdlgInfo
     BevelOuter = bvNone
     ParentBackground = False
     TabOrder = 0
-    ExplicitTop = 131
-    ExplicitWidth = 434
     DesignSize = (
       440
       64)
@@ -106,7 +104,6 @@ object dlgInfo: TdlgInfo
       Width = 150
       Height = 35
       Anchors = [akRight, akBottom]
-      Color = clBtnFace
       TabOrder = 0
       IconFontName = 'Segoe MDL2 Assets'
       BckNormalColor = clWhite
@@ -127,7 +124,6 @@ object dlgInfo: TdlgInfo
       CaptionColorDisabled = 12434877
       IconColorDisabled = 12434877
       OnClick = btnOKClick
-      ExplicitLeft = 274
     end
   end
   object brTitle: TTitleBarPanel

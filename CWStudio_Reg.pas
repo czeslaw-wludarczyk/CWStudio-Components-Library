@@ -59,6 +59,7 @@ uses
   CWSProgressBar,
   CWSIndicatorLoading,
   CWSPopupMenu,
+  CWSSystemMenu,
   CWSScrollBox,
   CWSDimOverlay,
   CWSAfterFormShow,
@@ -174,7 +175,7 @@ begin
   RegisterComponents('CWStudio_ProgressBars',
     [TCWSProgressCircle, TCWSProgressBar, TCWSIndicatorLoading]);
   RegisterComponents('CWStudio_Menus',
-    [TCWSPopupMenu]);
+    [TCWSPopupMenu, TCWSSystemMenu]);
   RegisterComponents('CWStudio_ScrollBoxes',
     [TCWSScrollBox]);
   RegisterComponents('CWStudio_Forms',

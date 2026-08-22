@@ -6,7 +6,7 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, System.Types, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Menus, CWSSettingsPanel, CWSScrollBox, CWSStoreButton, CWSFluentColorsMulti,
   CWSMenuButton, CWSButton, CWSCheckBox, CWSRadioButton, CWSSwitch, CWSPopupMenu, System.ImageList, Vcl.ImgList,
-  SVGIconImageListBase, SVGIconImageList, System.Skia, Vcl.Skia;
+  SVGIconImageListBase, SVGIconImageList;
 
 type
   TfrmButtons = class(TForm)

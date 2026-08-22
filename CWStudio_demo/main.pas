@@ -5,7 +5,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, CWSFluentColorsMulti, Vcl.TitleBarCtrls, Vcl.ExtCtrls, CWSScrollBox, ES.BaseControls,
-  ES.Shapes, CWSStoreButton, home, Vcl.StdCtrls, CWSButton, CWSDimOverlay, System.Skia, Vcl.Skia;
+  ES.Shapes, CWSStoreButton, home, Vcl.StdCtrls, CWSButton, CWSDimOverlay, CWSSystemMenu, Vcl.Menus, CWSPopupMenu;
 
 type
   TfrmMain = class(TForm)
@@ -30,6 +30,7 @@ type
     CWSStoreButton8: TCWSStoreButton;
     shpLineMenu: TShape;
     CWSStoreButton9: TCWSStoreButton;
+    CWSSystemMenu1: TCWSSystemMenu;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure FormShow(Sender: TObject);
@@ -100,6 +101,14 @@ begin
   pnlMenuTitle.Color := flNeutralBackground1;
   pnlMenuTitle.Font.Color := flNeutralForeground1;
   scrbMenu.BackgroundColor := flNeutralBackground1;
+
+  CWSSystemMenu1.BackgroundColor:= flNeutralBackground1;
+  CWSSystemMenu1.TextColor:= flNeutralForeground1;
+  CWSSystemMenu1.HighlightColor:= flNeutralBackground1Selected;
+  CWSSystemMenu1.BorderColor:= flNeutralStroke1;
+  CWSSystemMenu1.DisabledTextColor:= flNeutralForegroundDisabled;
+  CWSSystemMenu1.HighlightTextColor:= flNeutralForeground1;
+  CWSSystemMenu1.SeparatorColor:= flNeutralStroke1;
 
   //Set colors for buttons
 

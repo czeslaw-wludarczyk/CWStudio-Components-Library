@@ -23,6 +23,7 @@ object frmPanels: TfrmPanels
     Width = 801
     Height = 554
     ShowBorder = False
+    ScrollbarRenderMode = srmBlended
     Align = alClient
     TabOrder = 0
     DesignSize = (

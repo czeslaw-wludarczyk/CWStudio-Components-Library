@@ -23,6 +23,7 @@ object frmEdits: TfrmEdits
     Width = 997
     Height = 754
     ShowBorder = False
+    ScrollbarRenderMode = srmBlended
     Align = alClient
     TabOrder = 0
     DesignSize = (

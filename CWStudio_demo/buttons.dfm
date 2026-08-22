@@ -23,6 +23,7 @@ object frmButtons: TfrmButtons
     Width = 951
     Height = 695
     ShowBorder = False
+    ScrollbarRenderMode = srmBlended
     Align = alClient
     TabOrder = 0
     DesignSize = (
@@ -154,7 +155,6 @@ object frmButtons: TfrmButtons
         Top = 72
         Width = 63
         Height = 57
-        OnClick = CWSStoreButton4Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -177,13 +177,13 @@ object frmButtons: TfrmButtons
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
+        OnClick = CWSStoreButton4Click
       end
       object CWSStoreButton5: TCWSStoreButton
         Left = 408
         Top = 72
         Width = 63
         Height = 57
-        OnClick = CWSStoreButton5Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -206,13 +206,13 @@ object frmButtons: TfrmButtons
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
+        OnClick = CWSStoreButton5Click
       end
       object CWSStoreButton6: TCWSStoreButton
         Left = 328
         Top = 152
         Width = 97
         Height = 89
-        OnClick = CWSStoreButton6Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -236,13 +236,13 @@ object frmButtons: TfrmButtons
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
+        OnClick = CWSStoreButton6Click
       end
       object CWSStoreButton7: TCWSStoreButton
         Left = 447
         Top = 152
         Width = 98
         Height = 89
-        OnClick = CWSStoreButton7Click
         Color = clBtnFace
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -266,6 +266,7 @@ object frmButtons: TfrmButtons
         DescriptionColorNormal = clGray
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
+        OnClick = CWSStoreButton7Click
       end
     end
     object pnlEdits2: TCWSSettingsPanel
@@ -995,6 +996,7 @@ object frmButtons: TfrmButtons
     Font.Height = -12
     Font.Name = 'Segoe UI'
     Font.Style = []
+    ItemHeight = 32
     Left = 776
     Top = 344
     object miNew: TMenuItem

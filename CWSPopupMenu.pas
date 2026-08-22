@@ -80,6 +80,7 @@ type
     function IndexAt(const P: TPoint): Integer;
     function ArrowAt(const P: TPoint): Integer;
     function Selectable(AIdx: Integer): Boolean;
+    function Hoverable(AIdx: Integer): Boolean;
     procedure SetHot(AIdx: Integer);
     procedure StartScrollTimer;
     procedure StopScrollTimer;
@@ -760,8 +761,8 @@ var
   Brush: TGPSolidBrush;
   Pen: TGPPen;
   i, N, A: Integer;
-  Radius, BodyX, BodyY: Single;
-  Border, IconSize, IconArea, SepInset, HlInsetX, HlInsetY: Integer;
+  Radius, BodyX, BodyY, SepY: Single;
+  Border, IconSize, IconArea, HlInsetX, HlInsetY, SepThick: Integer;
   It: TMenuItem;
   ItemTop, ItemH: Integer;
   R, TR: TRect;
@@ -795,7 +796,6 @@ begin
   try
     IconSize := Round(16 * FScale);
     IconArea := Round(40 * FScale);
-    SepInset := Round(12 * FScale);
     HlInsetX := Round(4 * FScale);
     HlInsetY := Round(2 * FScale);
     Radius := FMenu.CornerRadius * FScale;
@@ -856,15 +856,24 @@ begin
 
         if FEntries[i].Separator then
         begin
-          Pen := TGPPen.Create(GPColor(FMenu.SeparatorColor), 1);
+          { Scale the rule like every other stroke, then snap it to whole
+            device pixels: a 1 px line centred on a pixel boundary gets split
+            across two rows at half intensity by the antialiaser, and whether
+            that happens depended on the parity of the scaled row height. }
+          SepThick := Max(1, Round(FScale));
+          SepY := Floor((R.Top + R.Bottom - SepThick) / 2) + SepThick / 2;
+          Pen := TGPPen.Create(GPColor(FMenu.SeparatorColor), SepThick);
           try
-            G.DrawLine(Pen, Single(BodyX + SepInset), Single((R.Top + R.Bottom) / 2),
-              Single(BodyX + FBodyW - SepInset), Single((R.Top + R.Bottom) / 2));
+            { full width — from the inner edge of one border across to the other }
+            G.DrawLine(Pen, Single(BodyX + Border), SepY,
+              Single(BodyX + FBodyW - Border), SepY);
           finally Pen.Free; end;
           Continue;
         end;
 
-        if (i = FHotIndex) and It.Enabled then
+        { separators already skipped above, so a hot index means a real item —
+          including a disabled one, which highlights like in a Windows menu }
+        if i = FHotIndex then
         begin
           Path := CreateRRPath(R.Left + HlInsetX, R.Top + HlInsetY,
             FBodyW - HlInsetX * 2, ItemH - HlInsetY * 2, Round(5 * FScale));
@@ -1102,10 +1111,20 @@ begin
     Result := Result.FChildWin;
 end;
 
+{ Can the item be executed? }
 function TCWSMenuWindow.Selectable(AIdx: Integer): Boolean;
 begin
   Result := (AIdx >= 0) and (AIdx <= High(FEntries)) and
     not FEntries[AIdx].Separator and FEntries[AIdx].Item.Enabled;
+end;
+
+{ Can the item take the highlight? Disabled entries can — Windows menus
+  highlight a greyed item just like any other, they simply do nothing when it
+  is clicked. Only separators never light up. }
+function TCWSMenuWindow.Hoverable(AIdx: Integer): Boolean;
+begin
+  Result := (AIdx >= 0) and (AIdx <= High(FEntries)) and
+    not FEntries[AIdx].Separator;
 end;
 
 function TCWSMenuWindow.ArrowAt(const P: TPoint): Integer;
@@ -1227,11 +1246,12 @@ begin
   if Arrow <> 0 then begin SetHot(-1); Exit; end;
 
   Idx := IndexAt(Point(X, Y));
-  if not Selectable(Idx) then Idx := -1;
+  if not Hoverable(Idx) then Idx := -1;
   if Idx <> FHotIndex then
   begin
     SetHot(Idx);
-    { open / close the submenu depending on the item }
+    { Open / close the submenu depending on the item. A disabled parent only
+      closes the previous submenu — OpenSubmenu re-checks Selectable. }
     if (Idx >= 0) and (FEntries[Idx].Item.Count > 0) then
       OpenSubmenu(Idx)
     else

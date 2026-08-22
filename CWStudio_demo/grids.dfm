@@ -23,6 +23,7 @@ object frmGrids: TfrmGrids
     Width = 640
     Height = 562
     ShowBorder = False
+    ScrollbarRenderMode = srmBlended
     Align = alClient
     TabOrder = 0
     DesignSize = (
@@ -60,7 +61,7 @@ object frmGrids: TfrmGrids
       Top = 64
       Width = 433
       Height = 475
-      Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goRangeSelect, goFixedRowDefAlign]
+      Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goRangeSelect, goEditing, goFixedRowDefAlign]
       Anchors = [akLeft, akTop, akRight, akBottom]
       TabOrder = 5
       CornerRadiusF = 6.000000000000000000
