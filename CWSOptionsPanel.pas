@@ -39,8 +39,9 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI, Winapi.GDIPOBJ,
-  System.Classes, System.SysUtils, System.UITypes,
-  Vcl.Controls, Vcl.Graphics, Vcl.ImgList;
+  System.Classes, System.SysUtils,
+  { System.UITypes last: Vcl.ImgList carries a deprecated TImageIndex alias }
+  Vcl.Controls, Vcl.Graphics, Vcl.ImgList, System.UITypes;
 
 type
   TCWSOptionsPanel = class;
@@ -133,7 +134,7 @@ type
     FHover: Boolean;
     FHoverColor: TColor;
     FImages: TCustomImageList;
-    FImageIndex: Integer;
+    FImageIndex: TImageIndex;
     FIconMode: TCWSIconMode;
     FIconGlyph: string;
     FIconFontName: string;
@@ -175,7 +176,7 @@ type
     procedure SetHover(const Value: Boolean);
     procedure SetHoverColor(const Value: TColor);
     procedure SetImages(const Value: TCustomImageList);
-    procedure SetImageIndex(const Value: Integer);
+    procedure SetImageIndex(const Value: TImageIndex);
     procedure SetIconMode(const Value: TCWSIconMode);
     procedure SetIconGlyph(const Value: string);
     procedure SetIconFontName(const Value: string);
@@ -308,7 +309,9 @@ type
       exactly like TCWSButton. }
     property IconMode: TCWSIconMode read FIconMode write SetIconMode default icmImageList;
     property Images: TCustomImageList read FImages write SetImages;
-    property ImageIndex: Integer read FImageIndex write SetImageIndex default -1;
+    { TImageIndex, not Integer — the Object Inspector then offers the CWStudio
+      icon picker: a drop-down with the glyphs of Images instead of bare numbers. }
+    property ImageIndex: TImageIndex read FImageIndex write SetImageIndex default -1;
 
     { Glyph icon (used when IconMode = icmGlyph). IconGlyph is a single character
       from the icon font — e.g. #$E713 in 'Segoe MDL2 Assets'. }
@@ -1572,7 +1575,7 @@ begin
   end;
 end;
 
-procedure TCWSOptionsPanel.SetImageIndex(const Value: Integer);
+procedure TCWSOptionsPanel.SetImageIndex(const Value: TImageIndex);
 begin
   if FImageIndex <> Value then
   begin

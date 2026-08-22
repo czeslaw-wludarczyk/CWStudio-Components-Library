@@ -95,8 +95,8 @@ type
 
     FIconMode: TCWSIconMode;
     FImages: TCustomImageList;
-    FImageIndex: Integer;
-    FImageIndexPressed: Integer;
+    FImageIndex: TImageIndex;
+    FImageIndexPressed: TImageIndex;
 
     FButtonStyle: TCWSButtonStyle;
 
@@ -108,8 +108,8 @@ type
     procedure SetIconOffsetY(const Value: Integer);
     procedure SetIconMode(const Value: TCWSIconMode);
     procedure SetImages(const Value: TCustomImageList);
-    procedure SetImageIndex(const Value: Integer);
-    procedure SetImageIndexPressed(const Value: Integer);
+    procedure SetImageIndex(const Value: TImageIndex);
+    procedure SetImageIndexPressed(const Value: TImageIndex);
     procedure SetCaptionText(const Value: string);
     procedure SetBckColor(const Value: TColor);
     procedure SetBckPressedColor(const Value: TColor);
@@ -251,8 +251,10 @@ type
 
     property IconMode: TCWSIconMode read FIconMode write SetIconMode default icmGlyph;
     property Images: TCustomImageList read FImages write SetImages;
-    property ImageIndex: Integer read FImageIndex write SetImageIndex default -1;
-    property ImageIndexPressed: Integer read FImageIndexPressed write SetImageIndexPressed default -1;
+    { TImageIndex, not Integer — the Object Inspector then offers the CWStudio
+      icon picker: a drop-down with the glyphs of Images instead of bare numbers. }
+    property ImageIndex: TImageIndex read FImageIndex write SetImageIndex default -1;
+    property ImageIndexPressed: TImageIndex read FImageIndexPressed write SetImageIndexPressed default -1;
 
     { Events compatible with VCL TButton }
     property OnClick: TNotifyEvent read FOnClick write FOnClick;
@@ -1317,7 +1319,7 @@ begin
   Repaint;
 end;
 
-procedure TCWSButton.SetImageIndex(const Value: Integer);
+procedure TCWSButton.SetImageIndex(const Value: TImageIndex);
 begin
   if FImageIndex = Value then Exit;
   FImageIndex := Value;
@@ -1325,7 +1327,7 @@ begin
     FIconBox.Invalidate;
 end;
 
-procedure TCWSButton.SetImageIndexPressed(const Value: Integer);
+procedure TCWSButton.SetImageIndexPressed(const Value: TImageIndex);
 begin
   if FImageIndexPressed = Value then Exit;
   FImageIndexPressed := Value;

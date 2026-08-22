@@ -25,7 +25,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, Vcl.Controls, Vcl.StdCtrls, Vcl.Graphics,
-  Vcl.ExtCtrls, Vcl.ImgList, CWSShape, Windows, Messages;
+  Vcl.ExtCtrls, Vcl.ImgList, CWSShape, Windows, Messages, System.UITypes;
 
 type
   TCWSIconMode = (icmGlyph, icmImageList);
@@ -76,8 +76,8 @@ type
 
     FIconMode: TCWSIconMode;
     FImages: TCustomImageList;
-    FImageIndex: Integer;
-    FImageIndexPressed: Integer;
+    FImageIndex: TImageIndex;
+    FImageIndexPressed: TImageIndex;
 
     FIconOffsetX: Integer;
     FIconOffsetY: Integer;
@@ -95,8 +95,8 @@ type
     procedure SetCursorHeight(const Value: Integer);
     procedure SetIconMode(const Value: TCWSIconMode);
     procedure SetImages(const Value: TCustomImageList);
-    procedure SetImageIndex(const Value: Integer);
-    procedure SetImageIndexPressed(const Value: Integer);
+    procedure SetImageIndex(const Value: TImageIndex);
+    procedure SetImageIndexPressed(const Value: TImageIndex);
     procedure SetIconOffsetX(const Value: Integer);
     procedure SetIconOffsetY(const Value: Integer);
     procedure SetIconColorNormal(const Value: TColor);
@@ -170,8 +170,10 @@ type
 
     property IconMode: TCWSIconMode read FIconMode write SetIconMode default icmGlyph;
     property Images: TCustomImageList read FImages write SetImages;
-    property ImageIndex: Integer read FImageIndex write SetImageIndex default -1;
-    property ImageIndexPressed: Integer read FImageIndexPressed write SetImageIndexPressed default -1;
+    { TImageIndex, not Integer — the Object Inspector then offers the CWStudio
+      icon picker: a drop-down with the glyphs of Images instead of bare numbers. }
+    property ImageIndex: TImageIndex read FImageIndex write SetImageIndex default -1;
+    property ImageIndexPressed: TImageIndex read FImageIndexPressed write SetImageIndexPressed default -1;
 
     property IconOffsetX: Integer read FIconOffsetX write SetIconOffsetX default 0;
     property IconOffsetY: Integer read FIconOffsetY write SetIconOffsetY default 0;
@@ -581,7 +583,7 @@ begin
   Repaint;
 end;
 
-procedure TCWSStoreButton.SetImageIndex(const Value: Integer);
+procedure TCWSStoreButton.SetImageIndex(const Value: TImageIndex);
 begin
   if FImageIndex = Value then Exit;
   FImageIndex := Value;
@@ -589,7 +591,7 @@ begin
     FIconBox.Invalidate;
 end;
 
-procedure TCWSStoreButton.SetImageIndexPressed(const Value: Integer);
+procedure TCWSStoreButton.SetImageIndexPressed(const Value: TImageIndex);
 begin
   if FImageIndexPressed = Value then Exit;
   FImageIndexPressed := Value;

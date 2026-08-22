@@ -41,7 +41,8 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI, Winapi.GDIPOBJ,
   System.SysUtils, System.Classes, System.Types, System.Math,
-  Vcl.Controls, Vcl.Graphics, Vcl.ImgList;
+  { System.UITypes last: Vcl.ImgList carries a deprecated TImageIndex alias }
+  Vcl.Controls, Vcl.Graphics, Vcl.ImgList, System.UITypes;
 
 type
   // What an icon slot (left / right) shows.
@@ -65,8 +66,8 @@ type
     FRightIcon: TCWSTrendIcon;
     FLeftGlyph: string;
     FRightGlyph: string;
-    FLeftImageIndex: Integer;
-    FRightImageIndex: Integer;
+    FLeftImageIndex: TImageIndex;
+    FRightImageIndex: TImageIndex;
     FImages: TCustomImageList;
 
     FMeasureBmp: TBitmap;
@@ -85,8 +86,8 @@ type
     procedure SetRightIcon(Value: TCWSTrendIcon);
     procedure SetLeftGlyph(const Value: string);
     procedure SetRightGlyph(const Value: string);
-    procedure SetLeftImageIndex(Value: Integer);
-    procedure SetRightImageIndex(Value: Integer);
+    procedure SetLeftImageIndex(Value: TImageIndex);
+    procedure SetRightImageIndex(Value: TImageIndex);
     procedure SetImages(Value: TCustomImageList);
 
     function Scaled(Value: Integer): Integer;
@@ -127,8 +128,10 @@ type
     property RightIcon: TCWSTrendIcon read FRightIcon write SetRightIcon default tiNone;
     property LeftGlyph: string read FLeftGlyph write SetLeftGlyph;
     property RightGlyph: string read FRightGlyph write SetRightGlyph;
-    property LeftImageIndex: Integer read FLeftImageIndex write SetLeftImageIndex default -1;
-    property RightImageIndex: Integer read FRightImageIndex write SetRightImageIndex default -1;
+    { TImageIndex, not Integer — the Object Inspector then offers the CWStudio
+      icon picker: a drop-down with the glyphs of Images instead of bare numbers. }
+    property LeftImageIndex: TImageIndex read FLeftImageIndex write SetLeftImageIndex default -1;
+    property RightImageIndex: TImageIndex read FRightImageIndex write SetRightImageIndex default -1;
     property Images: TCustomImageList read FImages write SetImages;
 
     property Align;
@@ -634,7 +637,7 @@ begin
   end;
 end;
 
-procedure TCWSLabelTrend.SetLeftImageIndex(Value: Integer);
+procedure TCWSLabelTrend.SetLeftImageIndex(Value: TImageIndex);
 begin
   if FLeftImageIndex <> Value then
   begin
@@ -643,7 +646,7 @@ begin
   end;
 end;
 
-procedure TCWSLabelTrend.SetRightImageIndex(Value: Integer);
+procedure TCWSLabelTrend.SetRightImageIndex(Value: TImageIndex);
 begin
   if FRightImageIndex <> Value then
   begin

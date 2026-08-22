@@ -45,7 +45,8 @@ interface
 uses
   Winapi.Windows, Winapi.Messages,
   System.SysUtils, System.Classes, System.Types,
-  Vcl.Controls, Vcl.Graphics, Vcl.Menus, Vcl.Forms, Vcl.ImgList,
+  { System.UITypes last: Vcl.ImgList carries a deprecated TImageIndex alias }
+  Vcl.Controls, Vcl.Graphics, Vcl.Menus, Vcl.Forms, Vcl.ImgList, System.UITypes,
   CWSPopupMenu;
 
 type
@@ -101,7 +102,7 @@ type
     FTriggers: TCWSSysMenuTriggers;
     FUseSystemCaptions: Boolean;
     FCaptions: array[TCWSSysCommandKind] of string;
-    FImageIndexes: array[TCWSSysCommandKind] of Integer;
+    FImageIndexes: array[TCWSSysCommandKind] of TImageIndex;
     FExtraMenu: TPopupMenu;
 
     FOnPopup: TNotifyEvent;
@@ -141,8 +142,8 @@ type
 
     function GetCaption(AIndex: Integer): string;
     procedure SetCaption(AIndex: Integer; const Value: string);
-    function GetImageIndex(AIndex: Integer): Integer;
-    procedure SetImageIndex(AIndex: Integer; const Value: Integer);
+    function GetImageIndex(AIndex: Integer): TImageIndex;
+    procedure SetImageIndex(AIndex: Integer; const Value: TImageIndex);
 
     procedure SetActive(const Value: Boolean);
     procedure SetExtraMenu(const Value: TPopupMenu);
@@ -193,18 +194,22 @@ type
     property CaptionClose: string index Ord(sckClose)
       read GetCaption write SetCaption;
 
+    { The six ImageIndex properties are TImageIndex, so the Object Inspector
+      offers the CWStudio icon picker instead of a bare number: the drop-down
+      lists every image of Images with its glyph, its index and — for lists that
+      expose names, e.g. TVirtualImageList — its name. }
     property Images: TCustomImageList read GetImages write SetImages;
-    property ImageIndexRestore: Integer index Ord(sckRestore)
+    property ImageIndexRestore: TImageIndex index Ord(sckRestore)
       read GetImageIndex write SetImageIndex default -1;
-    property ImageIndexMove: Integer index Ord(sckMove)
+    property ImageIndexMove: TImageIndex index Ord(sckMove)
       read GetImageIndex write SetImageIndex default -1;
-    property ImageIndexSize: Integer index Ord(sckSize)
+    property ImageIndexSize: TImageIndex index Ord(sckSize)
       read GetImageIndex write SetImageIndex default -1;
-    property ImageIndexMinimize: Integer index Ord(sckMinimize)
+    property ImageIndexMinimize: TImageIndex index Ord(sckMinimize)
       read GetImageIndex write SetImageIndex default -1;
-    property ImageIndexMaximize: Integer index Ord(sckMaximize)
+    property ImageIndexMaximize: TImageIndex index Ord(sckMaximize)
       read GetImageIndex write SetImageIndex default -1;
-    property ImageIndexClose: Integer index Ord(sckClose)
+    property ImageIndexClose: TImageIndex index Ord(sckClose)
       read GetImageIndex write SetImageIndex default -1;
 
     { ── look of the popup — forwarded to the inner TCWSPopupMenu ─────────── }
@@ -1082,12 +1087,12 @@ begin
   FCaptions[TCWSSysCommandKind(AIndex)] := Value;
 end;
 
-function TCWSSystemMenu.GetImageIndex(AIndex: Integer): Integer;
+function TCWSSystemMenu.GetImageIndex(AIndex: Integer): TImageIndex;
 begin
   Result := FImageIndexes[TCWSSysCommandKind(AIndex)];
 end;
 
-procedure TCWSSystemMenu.SetImageIndex(AIndex: Integer; const Value: Integer);
+procedure TCWSSystemMenu.SetImageIndex(AIndex: Integer; const Value: TImageIndex);
 begin
   FImageIndexes[TCWSSysCommandKind(AIndex)] := Value;
 end;
