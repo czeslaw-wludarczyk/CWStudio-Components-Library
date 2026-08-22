@@ -15,6 +15,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Fix** `TCWSLabelColumn`: the marquee was blitting through a stale clip region in a scrolling host — the retained parent DC never learns that the window has moved — so the DC is now taken and released per frame.
 - **Changed** `TCWSLabelColumn`: the edge-fade strips are pre-rendered once into premultiplied DIBs and blended on, instead of building a GDI+ context and two gradient brushes on every frame. Identical pixels.
 
+## [1.7.10] — 2026-08-20
+
+- **New** `TCWSComboBox`: **auto-completion in `csDropDown`** — typing completes the field with the first matching item, the added part left selected.
+- **New** `TCWSComboBox`: `AutoComplete`, `AutoCompleteDelay`, `AutoCloseUp`, `AutoDropDown`, `CharCase`, `MaxLength`, `ReadOnly`, `DropDownCount` — as in the VCL `TComboBox`.
+- **New** `TCWSComboBox`: `SelStart`, `SelLength`, `SelText`, `SelectAll`, `ClearSelection`, `CopyToClipboard`, `CutToClipboard`, `PasteFromClipboard` — no-ops in `csDropDownList`.
+- **New** `TCWSComboBox`: `Action`, `BiDiMode`, `ParentBiDiMode`, `DragCursor`, `DragKind`, `DragMode`, `Hint`, `Touch` and the drag / dock / gesture / context-menu events.
+- **Fix** `TCWSComboBox`: the field now shows the item the keyboard moves to while the list is open; the mouse does not change it.
+- **Fix** `TCWSComboBox`: ESC restores the field; closing any other way keeps the highlighted item, so the text and `ItemIndex` agree.
+- **Fix** `TCWSComboBox`: the list opens on the current selection — the down arrow goes to the next item, not the first.
+- **Fix** `TCWSComboBox`: `ItemIndex` follows the typed text in `csDropDown`; `OnChange` no longer fires twice.
+- **Changed** `TCWSComboBox`: keyboard search in `csDropDownList` matches the whole typed prefix, not just the first letter.
+
 ## [1.7.9] — 2026-08-19
 
 - **Fix** `TCWSPopupMenu`: **captions and shortcuts are no longer soft next to the rest of the application.** They were drawn by GDI+ (`Graphics.DrawString`) onto the menu's 32-bit surface — and GDI+ does not render ClearType onto a bitmap that has an alpha channel: it quietly falls back to greyscale antialiasing, whatever `TextRenderingHint` it is asked for. The text is therefore now put down by plain GDI (`DrawText` with a `CLEARTYPE_QUALITY` font) straight into the DIB the menu is composed from, in a second pass over the GDI+ one, which keeps the background, border, glyphs, separators and chevrons. GDI knows nothing about alpha and zeroes it in every pixel it writes, so the alpha channel is saved before the text pass and restored after it — the menu is put on screen with `UpdateLayeredWindow`, and would otherwise become transparent exactly where the letters are. The background under a caption is fully opaque, which is what ClearType's subpixel blending needs to come out right.

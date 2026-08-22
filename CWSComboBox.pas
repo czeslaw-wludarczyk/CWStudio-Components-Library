@@ -35,9 +35,9 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI, Winapi.GDIPOBJ,
-  Winapi.MultiMon, System.SysUtils, System.Classes, System.Types, System.Math,
-  Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls, Vcl.Forms, Vcl.ExtCtrls, CWSEdit,
-  System.UITypes;
+  Winapi.MultiMon, System.SysUtils, System.StrUtils, System.Classes,
+  System.Types, System.Math, Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls,
+  Vcl.Forms, Vcl.ExtCtrls, CWSEdit, System.UITypes;
 
 const
   WM_CWS_CLOSEDROPDOWN = WM_USER + 201;
@@ -196,6 +196,21 @@ type
     FTextHint: string;
     FSorted: Boolean;
 
+    { VCL-compatible edit behaviour }
+    FAutoComplete: Boolean;
+    FAutoCompleteDelay: Cardinal;
+    FAutoCloseUp: Boolean;
+    FAutoDropDown: Boolean;
+    FCharCase: TEditCharCase;
+    FMaxLength: Integer;
+    FReadOnly: Boolean;
+    FAllowAutoComplete: Boolean;   { armed on KeyPress — only typed chars complete }
+    FInternalTextChange: Boolean;  { guard: our own edit updates are not user input }
+    FSearchText: string;           { incremental search buffer (csDropDownList)     }
+    FSearchTick: Cardinal;
+    FPreviewIndex: Integer;        { item previewed in the field while dropped down }
+    FDropStartText: string;        { field text when the list opened — ESC restores }
+
     { Events }
     FOnChange: TNotifyEvent;
     FOnDropDown: TNotifyEvent;
@@ -208,6 +223,8 @@ type
     { Getters / Setters }
     function GetItems: TStrings;
     function GetText: string;
+    function GetDisplayText: string;
+    procedure SetPreviewIndex(Value: Integer);
     procedure SetText(const Value: string);
     function GetItemCount: Integer;
     procedure SetItemIndex(Value: Integer);
@@ -243,6 +260,17 @@ type
     procedure SetScrollbarThumbHoverWidth(const Value: Integer);
     procedure SetTextHint(const Value: string);
     procedure SetAutoSizeHeight(const Value: Boolean);
+    procedure SetCharCase(const Value: TEditCharCase);
+    procedure SetMaxLength(const Value: Integer);
+    procedure SetReadOnly(const Value: Boolean);
+    function  GetDropDownCount: Integer;
+    procedure SetDropDownCount(const Value: Integer);
+    function  GetSelStart: Integer;
+    procedure SetSelStart(const Value: Integer);
+    function  GetSelLength: Integer;
+    procedure SetSelLength(const Value: Integer);
+    function  GetSelText: string;
+    procedure SetSelText(const Value: string);
 
     { Pomocnicze }
     function GetCurrentBgColor: TColor;
@@ -261,11 +289,19 @@ type
     procedure ApplyStateChange;
     procedure ItemsChanged(Sender: TObject);
     procedure OpenDropdown;
-    procedure CloseDropdown;
+    procedure CloseDropdown(Cancel: Boolean = False);
     procedure CreateEdit;
     procedure DestroyEdit;
     procedure UpdateEditPosition;
     procedure SyncEditAppearance;
+    procedure SyncEditProperties;
+    procedure SetEditTextSilent(const S: string; ASelectAll: Boolean = False);
+
+    { Auto-complete / incremental search }
+    function  FindItemByPrefix(const Prefix: string; StartIdx: Integer = 0): Integer;
+    function  DoAutoComplete: Boolean;
+    procedure UpdateItemIndexFromText;
+    procedure SyncDropdownHover;
 
     { Edit handlers — csDropDown only }
     procedure EditChange(Sender: TObject);
@@ -317,8 +353,18 @@ type
     function Focused: Boolean; override;
     procedure SelectItem(Index: Integer);
 
+    { Edit operations — csDropDown only, no-ops in csDropDownList }
+    procedure SelectAll;
+    procedure ClearSelection;
+    procedure CopyToClipboard;
+    procedure CutToClipboard;
+    procedure PasteFromClipboard;
+
     property ItemCount: Integer read GetItemCount;
     property DroppedDown: Boolean read FDroppedDown write SetDroppedDown;
+    property SelStart: Integer read GetSelStart write SetSelStart;
+    property SelLength: Integer read GetSelLength write SetSelLength;
+    property SelText: string read GetSelText write SetSelText;
 
   published
     property Style: TCWSComboStyle read FStyle write SetStyle default csDropDownList;
@@ -364,29 +410,57 @@ type
     property TextHint: string read FTextHint write SetTextHint;
     property Sorted: Boolean read FSorted write SetSorted default False;
 
+    { VCL TComboBox compatible behaviour }
+    property AutoComplete: Boolean read FAutoComplete write FAutoComplete default True;
+    property AutoCompleteDelay: Cardinal read FAutoCompleteDelay write FAutoCompleteDelay default 500;
+    property AutoCloseUp: Boolean read FAutoCloseUp write FAutoCloseUp default False;
+    property AutoDropDown: Boolean read FAutoDropDown write FAutoDropDown default False;
+    property CharCase: TEditCharCase read FCharCase write SetCharCase default ecNormal;
+    property MaxLength: Integer read FMaxLength write SetMaxLength default 0;
+    property ReadOnly: Boolean read FReadOnly write SetReadOnly default False;
+    { VCL-named alias of DropDownMaxItem — not streamed, DropDownMaxItem is }
+    property DropDownCount: Integer read GetDropDownCount write SetDropDownCount stored False default 8;
+
     { Standard VCL }
+    property Action;
     property Align;
     property Anchors;
+    property BiDiMode;
     property Constraints;
     property Cursor;
+    property DragCursor;
+    property DragKind;
+    property DragMode;
     property Enabled;
     property Font;
+    property Hint;
+    property ParentBiDiMode;
     property ParentFont;
     property ParentShowHint;
     property PopupMenu;
     property ShowHint;
     property TabOrder;
     property TabStop;
+    property Touch;
     property Visible;
     property OnClick;
+    property OnContextPopup;
     property OnDblClick;
+    property OnDragDrop;
+    property OnDragOver;
+    property OnEndDock;
+    property OnEndDrag;
     property OnEnter;
     property OnExit;
+    property OnGesture;
+    property OnMouseActivate;
     property OnMouseDown;
     property OnMouseUp;
     property OnMouseMove;
     property OnMouseEnter;
     property OnMouseLeave;
+    property OnStartDock;
+    property OnStartDrag;
     property ItemIndex: Integer read FItemIndex write SetItemIndex;
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
     property OnDropDown: TNotifyEvent read FOnDropDown write FOnDropDown;
@@ -1618,7 +1692,9 @@ begin
   FCtrlScreen := ComboRect;
 
   FScrollPos         := 0;
-  FHoveredIndex      := -1;
+  { The list opens on the current selection: it is highlighted and the arrow
+    keys carry on from it, rather than from the top of the list. }
+  FHoveredIndex      := FCombo.FItemIndex;
   FScrollAreaHovered := False;
   if FCombo.FItemIndex >= 0 then
     ScrollToItem(FCombo.FItemIndex);
@@ -1710,9 +1786,18 @@ begin
   FScrollbarThumbHoverWidth := 6;
 
   FItemIndex      := -1;
+  FPreviewIndex   := -1;
   FAutoSizeHeight := True;
   FStyle          := csDropDownList;
   FInternalEdit   := nil;
+
+  FAutoComplete      := True;
+  FAutoCompleteDelay := 500;
+  FAutoCloseUp       := False;
+  FAutoDropDown      := False;
+  FCharCase          := ecNormal;
+  FMaxLength         := 0;
+  FReadOnly          := False;
 
   FItems := TStringList.Create;
   FItems.OnChange := ItemsChanged;
@@ -1756,6 +1841,7 @@ begin
     KeyPreview sees it (otherwise an ESC=Close form would fire first). }
   FEditWndProc := FInternalEdit.WindowProc;
   FInternalEdit.WindowProc := EditSubclassProc;
+  SyncEditProperties;
   UpdateEditPosition;
 end;
 
@@ -1806,6 +1892,37 @@ begin
     FInternalEdit.Invalidate;
 end;
 
+{ Push the VCL-compatible edit properties down to the inner TEdit. }
+procedure TCWSComboBox.SyncEditProperties;
+begin
+  if FInternalEdit = nil then Exit;
+  FInternalEdit.CharCase  := FCharCase;
+  FInternalEdit.MaxLength := FMaxLength;
+  FInternalEdit.ReadOnly  := FReadOnly;
+  FInternalEdit.TextHint  := FTextHint;
+end;
+
+{ Write the field text ourselves. Marked as internal, so EditChange knows this
+  is not user input: no auto-complete, and no OnChange from the edit — the
+  caller reports the change (or deliberately does not, for a preview). }
+procedure TCWSComboBox.SetEditTextSilent(const S: string; ASelectAll: Boolean);
+begin
+  if FInternalEdit = nil then Exit;
+  FInternalTextChange := True;
+  try
+    FInternalEdit.Text := S;
+    if ASelectAll then
+    begin
+      FInternalEdit.SelStart  := 0;
+      FInternalEdit.SelLength := Length(S);
+    end
+    else
+      FInternalEdit.SelStart := Length(S);
+  finally
+    FInternalTextChange := False;
+  end;
+end;
+
 { ─── Style ──────────────────────────────────────────────────────────────── }
 
 procedure TCWSComboBox.SetStyle(const Value: TCWSComboStyle);
@@ -1817,9 +1934,9 @@ begin
   begin
     CreateEdit;
     if (FItemIndex >= 0) and (FItemIndex < FItems.Count) then
-      FInternalEdit.Text := FItems[FItemIndex]
+      SetEditTextSilent(FItems[FItemIndex])
     else
-      FInternalEdit.Text := '';
+      SetEditTextSilent('');
     Cursor := crDefault;
   end else
   begin
@@ -2051,6 +2168,35 @@ begin
   end;
 end;
 
+{ Text drawn in the field. While the list is dropped down, keyboard navigation
+  — arrows and the incremental search — previews the item it lands on, exactly
+  as the VCL csDropDownList does; ESC closes the list and the field falls back
+  to ItemIndex. Mouse hovering does not preview: it leaves the field showing
+  the current selection, which is the Win32 behaviour. }
+function TCWSComboBox.GetDisplayText: string;
+var
+  Idx: Integer;
+begin
+  Idx := -1;
+  if FDroppedDown then Idx := FPreviewIndex;
+  if Idx < 0 then Idx := FItemIndex;
+  if (Idx >= 0) and (Idx < FItems.Count) then Result := FItems[Idx]
+  else Result := '';
+end;
+
+procedure TCWSComboBox.SetPreviewIndex(Value: Integer);
+begin
+  if FPreviewIndex = Value then Exit;
+  FPreviewIndex := Value;
+  { csDropDown: the field is a real edit, so the preview has to be written into
+    it — fully selected, the way the VCL leaves it when the list selection
+    moves. csDropDownList draws the field itself and only needs a repaint. }
+  if (FStyle = csDropDown) and (FInternalEdit <> nil) and
+     (Value >= 0) and (Value < FItems.Count) then
+    SetEditTextSilent(FItems[Value], True);
+  Invalidate;
+end;
+
 procedure TCWSComboBox.SetText(const Value: string);
 var Idx: Integer;
 begin
@@ -2074,13 +2220,15 @@ begin
   if (Index < 0) or (Index >= FItems.Count) then FItemIndex := -1
   else FItemIndex := Index;
 
+  { A real selection supersedes whatever the keyboard was previewing. }
+  FPreviewIndex := -1;
+
   if (FStyle = csDropDown) and (FInternalEdit <> nil) then
   begin
     if FItemIndex >= 0 then
-      FInternalEdit.Text := FItems[FItemIndex]
+      SetEditTextSilent(FItems[FItemIndex])
     else
-      FInternalEdit.Text := '';
-    FInternalEdit.SelStart := Length(FInternalEdit.Text);
+      SetEditTextSilent('');
   end;
 
   if FItemIndex <> OldIdx then
@@ -2099,9 +2247,90 @@ end;
 procedure TCWSComboBox.Clear;
 begin
   FItems.Clear;
-  FItemIndex := -1;
-  if FInternalEdit <> nil then FInternalEdit.Text := '';
+  FItemIndex    := -1;
+  FPreviewIndex := -1;
+  FSearchText   := '';
+  SetEditTextSilent('');
   Invalidate;
+end;
+
+{ ─── Auto-complete / incremental search ─────────────────────────────────── }
+
+{ First item whose text starts with Prefix (case-insensitive). The scan wraps
+  around, beginning at StartIdx — that is what makes repeated presses of the
+  same letter cycle through the matching items. }
+function TCWSComboBox.FindItemByPrefix(const Prefix: string;
+  StartIdx: Integer): Integer;
+var
+  I, N, Idx: Integer;
+begin
+  Result := -1;
+  N := FItems.Count;
+  if (N = 0) or (Prefix = '') then Exit;
+  if StartIdx < 0 then StartIdx := 0;
+  for I := 0 to N - 1 do
+  begin
+    Idx := (StartIdx + I) mod N;
+    if StartsText(Prefix, FItems[Idx]) then Exit(Idx);
+  end;
+end;
+
+{ csDropDown: extend what the user typed with the tail of the first matching
+  item and select that tail, so the next keystroke overwrites it — the VCL
+  TComboBox / Win32 CBS_DROPDOWN auto-completion behaviour.
+  Returns True when a match was applied. }
+function TCWSComboBox.DoAutoComplete: Boolean;
+var
+  Typed, Match: string;
+  Idx: Integer;
+begin
+  Result := False;
+  if (FStyle <> csDropDown) or (FInternalEdit = nil) or FReadOnly then Exit;
+  Typed := FInternalEdit.Text;
+  if Typed = '' then Exit;
+  { Complete only while typing at the end of the text — never mid-word. }
+  if FInternalEdit.SelStart < Length(Typed) then Exit;
+  Idx := FindItemByPrefix(Typed);
+  if Idx < 0 then Exit;
+  Match := FItems[Idx];
+  { MaxLength would silently truncate the completion — leave the text alone. }
+  if (FMaxLength > 0) and (Length(Match) > FMaxLength) then Exit;
+
+  FInternalTextChange := True;
+  try
+    FInternalEdit.Text      := Match;   { adopts the item's own letter case }
+    FInternalEdit.SelStart  := Length(Typed);
+    FInternalEdit.SelLength := Length(Match) - Length(Typed);
+  finally
+    FInternalTextChange := False;
+  end;
+  Result := True;
+end;
+
+{ csDropDown: ItemIndex mirrors the edit text — the index of the item equal to
+  it, or -1 for free text. Does not fire OnChange / OnSelect. }
+procedure TCWSComboBox.UpdateItemIndexFromText;
+var
+  Idx: Integer;
+begin
+  if FStyle <> csDropDown then Exit;
+  if FInternalEdit = nil then Idx := -1
+  else Idx := FItems.IndexOf(FInternalEdit.Text);
+  if FItemIndex <> Idx then
+  begin
+    FItemIndex := Idx;
+    Invalidate;
+  end;
+end;
+
+{ Keep the open list in sync with the current selection. }
+procedure TCWSComboBox.SyncDropdownHover;
+begin
+  if not FDroppedDown or (FDropdown = nil) or (FItemIndex < 0) then Exit;
+  if FDropdown.FHoveredIndex = FItemIndex then Exit;
+  FDropdown.FHoveredIndex := FItemIndex;
+  FDropdown.ScrollToItem(FItemIndex);
+  FDropdown.Render;
 end;
 
 { ─── Dropdown ────────────────────────────────────────────────────────────── }
@@ -2112,7 +2341,10 @@ var
   PopupW: Integer;
 begin
   if FDroppedDown or not Enabled or (FItems.Count = 0) then Exit;
-  FDroppedDown := True;
+  FDroppedDown   := True;
+  FPreviewIndex  := -1;
+  FSearchText    := '';
+  FDropStartText := GetText;   { what ESC has to restore }
   Pt     := ClientToScreen(Point(0, Height));
   { The list is exactly the ComboBox width — the side edges of the field and the
     list form one continuous line (unified, no "step"); as in the Windows 11 ComboBox. }
@@ -2123,12 +2355,39 @@ begin
   Invalidate;
 end;
 
-procedure TCWSComboBox.CloseDropdown;
+procedure TCWSComboBox.CloseDropdown(Cancel: Boolean);
+var
+  Pending: Integer;
 begin
   if not FDroppedDown then Exit;
-  FDroppedDown := False;
-  FDropUp      := False;
+  Pending       := FPreviewIndex;
+  FDroppedDown  := False;
+  FDropUp       := False;
+  FPreviewIndex := -1;   { field falls back to ItemIndex from here on }
+  FSearchText   := '';
   FDropdown.HidePopup;
+
+  if csDestroying in ComponentState then
+    Pending := -1;
+
+  if Cancel then
+  begin
+    { ESC — the preview is discarded and the field goes back to what was in it
+      when the list opened, as in the VCL. csDropDownList needs nothing: it
+      draws from ItemIndex, which the preview never touched. }
+    if (FStyle = csDropDown) and (FInternalEdit <> nil) and
+       (FInternalEdit.Text <> FDropStartText) then
+    begin
+      SetEditTextSilent(FDropStartText);
+      UpdateItemIndexFromText;   { the restore bypassed EditChange }
+    end;
+  end
+  else if (Pending >= 0) and (Pending <> FItemIndex) then
+    { Closed without cancelling — commit what the keyboard had highlighted.
+      Enter and a click on an item have already gone through SelectItem, which
+      clears the preview, so this is the click-outside / lost-focus path. }
+    SelectItem(Pending);
+
   if Assigned(FOnCloseUp) then FOnCloseUp(Self);
   if (FStyle = csDropDown) and (FInternalEdit <> nil) and FInternalEdit.CanFocus then
     FInternalEdit.SetFocus;
@@ -2141,8 +2400,24 @@ procedure TCWSComboBox.CloseUp;   begin CloseDropdown; end;
 { ─── Edit handlers ──────────────────────────────────────────────────────── }
 
 procedure TCWSComboBox.EditChange(Sender: TObject);
+var
+  Completed: Boolean;
 begin
+  { Text we pushed into the edit ourselves — the caller reports the change. }
+  if FInternalTextChange then Exit;
+
+  Completed := False;
+  if FAutoComplete and FAllowAutoComplete then
+    Completed := DoAutoComplete;
+  FAllowAutoComplete := False;
+
+  UpdateItemIndexFromText;
+  SyncDropdownHover;
+
   if Assigned(FOnChange) then FOnChange(Self);
+
+  if Completed and FAutoCloseUp and FDroppedDown then
+    CloseDropdown;
 end;
 
 procedure TCWSComboBox.EditEnter(Sender: TObject);
@@ -2164,6 +2439,8 @@ procedure TCWSComboBox.EditKeyDown(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 var NewIdx, RetIdx: Integer;
 begin
+  { Cleared on every key; only EditKeyPress re-arms it for printable chars. }
+  FAllowAutoComplete := False;
   if Assigned(FOnKeyDown) then FOnKeyDown(Self, Key, Shift);
   case Key of
     VK_DOWN:
@@ -2201,7 +2478,7 @@ begin
     VK_ESCAPE:
     begin
       Key := 0;  { swallow → no WM_CHAR #27 → no beep }
-      if FDroppedDown then CloseDropdown;
+      if FDroppedDown then CloseDropdown(True);
     end;
     VK_F4:
     begin
@@ -2209,6 +2486,9 @@ begin
       Key := 0;
     end;
   end;
+
+  { Navigating an open list previews the highlighted item in the edit. }
+  if FDroppedDown then SetPreviewIndex(FDropdown.HoveredIndex);
 end;
 
 procedure TCWSComboBox.EditKeyUp(Sender: TObject; var Key: Word;
@@ -2225,7 +2505,7 @@ begin
   if (Message.Msg = CN_KEYDOWN) and FDroppedDown and
      (TWMKeyDown(Message).CharCode = VK_ESCAPE) then
   begin
-    CloseDropdown;
+    CloseDropdown(True);
     Message.Result := 1;   { handled — stop propagation to form KeyPreview }
     Exit;
   end;
@@ -2238,6 +2518,17 @@ begin
     #13, #27: Key := #0;
   end;
   if Assigned(FOnKeyPress) then FOnKeyPress(Self, Key);
+  if Key = #0 then Exit;
+
+  { Arm auto-complete for the OnChange that this character will trigger.
+    Only printable, typed characters complete — Backspace/Delete, Ctrl
+    shortcuts and programmatic text changes must leave the text as-is,
+    otherwise the deleted tail would be put straight back. }
+  if Key < #32 then Exit;
+  if FAutoComplete and not FReadOnly then
+    FAllowAutoComplete := True;
+  if FAutoDropDown and not FDroppedDown then
+    OpenDropdown;
 end;
 
 procedure TCWSComboBox.EditMouseDown(Sender: TObject; Button: TMouseButton;
@@ -2366,7 +2657,7 @@ begin
     if FStyle = csDropDownList then
     begin
       G.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
-      DisplayText := GetText;
+      DisplayText := GetDisplayText;
       if (DisplayText = '') and (FTextHint <> '') and not FFocused then
         DisplayText := FTextHint;
 
@@ -2396,7 +2687,7 @@ begin
               Fmt.SetAlignment(StringAlignmentNear);
               Fmt.SetTrimming(StringTrimmingEllipsisCharacter);
               Fmt.SetFormatFlags(StringFormatFlagsNoWrap);
-              if (GetText = '') and (FTextHint <> '') then
+              if (GetDisplayText = '') and (FTextHint <> '') then
                 Brush := TGPSolidBrush.Create(MakeGPColor(FDisabledTextColor))
               else
                 Brush := TGPSolidBrush.Create(TxtColor);
@@ -2480,7 +2771,7 @@ procedure TCWSComboBox.CNKeyDown(var Msg: TWMKeyDown);
 begin
   if (Msg.CharCode = VK_ESCAPE) and FDroppedDown then
   begin
-    CloseDropdown;
+    CloseDropdown(True);
     Msg.Result := 1;   { handled — stop propagation to form KeyPreview }
     Exit;
   end;
@@ -2534,7 +2825,7 @@ begin
     VK_ESCAPE:
       if FDroppedDown then
       begin
-        CloseDropdown;          { list open → close it, swallow ESC }
+        CloseDropdown(True);    { list open → close it, swallow ESC }
         Msg.Result := 0;
       end
       else
@@ -2566,6 +2857,9 @@ begin
   else
     begin inherited; Exit; end;
   end;
+
+  { Navigating an open list previews the highlighted item in the field. }
+  if FDroppedDown then SetPreviewIndex(FDropdown.HoveredIndex);
 end;
 
 procedure TCWSComboBox.WMKeyUp(var Msg: TWMKeyUp);
@@ -2578,33 +2872,67 @@ begin
   inherited;
 end;
 
+{ csDropDownList incremental search. Characters typed within AutoCompleteDelay
+  of each other build up a prefix and jump to the first item matching it — the
+  VCL / Win32 list behaviour. Repeating one and the same character instead
+  cycles through all items starting with it. }
 procedure TCWSComboBox.WMChar(var Msg: TWMChar);
 var
   Ch: Char;
-  i, StartIdx, Idx: Integer;
+  Idx, CurIdx: Integer;
+  Tick: Cardinal;
+  Repeated: Boolean;
 begin
   if FStyle = csDropDown then begin inherited; Exit; end;
   Ch := Chr(Msg.CharCode);
   if Assigned(FOnKeyPress) then FOnKeyPress(Self, Ch);
-  if Ch = #0 then Exit;
-  if Ch >= ' ' then
+  if (Ch = #0) or (Ch < ' ') or not FAutoComplete or (FItems.Count = 0) then
   begin
-    StartIdx := FItemIndex + 1;
-    for i := 0 to FItems.Count - 1 do
+    inherited;
+    Exit;
+  end;
+
+  Tick := GetTickCount;
+  if (FSearchText <> '') and (Tick - FSearchTick <= FAutoCompleteDelay) then
+    FSearchText := FSearchText + Ch
+  else
+    FSearchText := Ch;
+  FSearchTick := Tick;
+
+  if FAutoDropDown and not FDroppedDown then
+  begin
+    OpenDropdown;
+    if FDroppedDown then FDropdown.FHoveredIndex := FItemIndex;
+  end;
+
+  if FDroppedDown then CurIdx := FDropdown.HoveredIndex else CurIdx := FItemIndex;
+
+  { All characters identical → treat it as "next item with this letter". }
+  Repeated := (Length(FSearchText) > 1) and
+    (FSearchText = StringOfChar(FSearchText[1], Length(FSearchText)));
+  if Repeated then
+    Idx := FindItemByPrefix(Ch, CurIdx + 1)
+  else
+  begin
+    Idx := FindItemByPrefix(FSearchText);
+    { Prefix leads nowhere — fall back to a fresh single-character search. }
+    if (Idx < 0) and (Length(FSearchText) > 1) then
     begin
-      Idx := (StartIdx + i) mod FItems.Count;
-      if (FItems[Idx] <> '') and (UpCase(FItems[Idx][1]) = UpCase(Ch)) then
-      begin
-        if FDroppedDown then
-        begin
-          FDropdown.FHoveredIndex := Idx;
-          FDropdown.ScrollToItem(Idx);
-          FDropdown.Invalidate;
-        end else
-          SelectItem(Idx);
-        Break;
-      end;
+      FSearchText := Ch;
+      Idx := FindItemByPrefix(Ch, CurIdx + 1);
     end;
+  end;
+
+  if Idx >= 0 then
+  begin
+    if FDroppedDown then
+    begin
+      FDropdown.FHoveredIndex := Idx;
+      FDropdown.ScrollToItem(Idx);
+      FDropdown.Render;
+      SetPreviewIndex(Idx);   { show the item the search landed on in the field }
+    end else
+      SelectItem(Idx);
   end;
   inherited;
 end;
@@ -2898,6 +3226,119 @@ begin
       FInternalEdit.TextHint := Value;
     Invalidate;
   end;
+end;
+
+{ ─── VCL-compatible edit properties ─────────────────────────────────────── }
+
+procedure TCWSComboBox.SetCharCase(const Value: TEditCharCase);
+begin
+  if FCharCase <> Value then
+  begin
+    FCharCase := Value;
+    if FInternalEdit <> nil then FInternalEdit.CharCase := Value;
+  end;
+end;
+
+procedure TCWSComboBox.SetMaxLength(const Value: Integer);
+begin
+  if FMaxLength <> Value then
+  begin
+    FMaxLength := Max(0, Value);
+    if FInternalEdit <> nil then FInternalEdit.MaxLength := FMaxLength;
+  end;
+end;
+
+procedure TCWSComboBox.SetReadOnly(const Value: Boolean);
+begin
+  if FReadOnly <> Value then
+  begin
+    FReadOnly := Value;
+    if FInternalEdit <> nil then FInternalEdit.ReadOnly := Value;
+  end;
+end;
+
+function TCWSComboBox.GetDropDownCount: Integer;
+begin
+  Result := FDropDownMaxItem;
+end;
+
+procedure TCWSComboBox.SetDropDownCount(const Value: Integer);
+begin
+  SetDropDownMaxItem(Value);
+end;
+
+{ ─── Selection (csDropDown) ─────────────────────────────────────────────── }
+
+function TCWSComboBox.GetSelStart: Integer;
+begin
+  if (FStyle = csDropDown) and (FInternalEdit <> nil) then
+    Result := FInternalEdit.SelStart
+  else
+    Result := 0;
+end;
+
+procedure TCWSComboBox.SetSelStart(const Value: Integer);
+begin
+  if (FStyle = csDropDown) and (FInternalEdit <> nil) then
+    FInternalEdit.SelStart := Value;
+end;
+
+function TCWSComboBox.GetSelLength: Integer;
+begin
+  if (FStyle = csDropDown) and (FInternalEdit <> nil) then
+    Result := FInternalEdit.SelLength
+  else
+    Result := 0;
+end;
+
+procedure TCWSComboBox.SetSelLength(const Value: Integer);
+begin
+  if (FStyle = csDropDown) and (FInternalEdit <> nil) then
+    FInternalEdit.SelLength := Value;
+end;
+
+function TCWSComboBox.GetSelText: string;
+begin
+  if (FStyle = csDropDown) and (FInternalEdit <> nil) then
+    Result := FInternalEdit.SelText
+  else
+    Result := '';
+end;
+
+procedure TCWSComboBox.SetSelText(const Value: string);
+begin
+  if (FStyle = csDropDown) and (FInternalEdit <> nil) then
+    FInternalEdit.SelText := Value;
+end;
+
+procedure TCWSComboBox.SelectAll;
+begin
+  if (FStyle = csDropDown) and (FInternalEdit <> nil) then
+    FInternalEdit.SelectAll;
+end;
+
+procedure TCWSComboBox.ClearSelection;
+begin
+  if (FStyle = csDropDown) and (FInternalEdit <> nil) then
+    FInternalEdit.ClearSelection;
+end;
+
+procedure TCWSComboBox.CopyToClipboard;
+begin
+  if (FStyle = csDropDown) and (FInternalEdit <> nil) then
+    FInternalEdit.CopyToClipboard;
+end;
+
+procedure TCWSComboBox.CutToClipboard;
+begin
+  if (FStyle = csDropDown) and (FInternalEdit <> nil) then
+    FInternalEdit.CutToClipboard;
+end;
+
+procedure TCWSComboBox.PasteFromClipboard;
+begin
+  if (FStyle = csDropDown) and (FInternalEdit <> nil) then
+    FInternalEdit.PasteFromClipboard;
 end;
 
 end.
