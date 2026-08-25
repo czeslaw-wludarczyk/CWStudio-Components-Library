@@ -26,7 +26,8 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI, Winapi.GDIPOBJ,
   System.SysUtils, System.Classes, System.Types, System.Math,
-  Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls, Vcl.Forms, Vcl.ExtCtrls, System.UITypes;
+  Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls, Vcl.Forms, Vcl.ExtCtrls, Vcl.Menus,
+  System.UITypes;
 
 const
   CM_PPICHANGED = $B080 + 13;
@@ -42,6 +43,9 @@ type
   protected
     procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
     procedure WMNCPaint(var Msg: TMessage); message WM_NCPAINT;
+    { Right-click inside the inner memo must show the owner's PopupMenu
+      instead of the native EDIT menu (Undo/Cut/Copy/Paste). }
+    procedure WMContextMenu(var Message: TWMContextMenu); message WM_CONTEXTMENU;
     procedure Change; override;
     procedure CMTextChanged(var Message: TMessage); message CM_TEXTCHANGED;
     procedure CMMouseEnter(var Message: TMessage); message CM_MOUSEENTER;
@@ -221,6 +225,11 @@ type
     procedure CMPPIChanged(var Msg: TMessage); message CM_PPICHANGED;
     procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
     procedure WMPaint(var Msg: TWMPaint); message WM_PAINT;
+    { The inner memo covers only part of the control — the border, the padding
+      and the label strip belong to this window and would otherwise show the
+      arrow cursor. Show the I-beam there as well, so it appears the moment the
+      pointer crosses the border. }
+    procedure WMSetCursor(var Msg: TWMSetCursor); message WM_SETCURSOR;
   protected
     procedure Paint; override;
     procedure Resize; override;
@@ -234,6 +243,10 @@ type
       strip belongs to this outer window. Forward the wheel to the inner memo so
       hovering the scrollbar still scrolls the text. }
     function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
+    { TControl.DoContextPopup fires its own OnContextPopup field, which this
+      component does not use — route it to the published event instead so a
+      right-click on the scrollbar strip behaves like one inside the text. }
+    procedure DoContextPopup(MousePos: TPoint; var Handled: Boolean); override;
     procedure ChangeScale(M, D: Integer); override;
   public
     constructor Create(AOwner: TComponent); override;
@@ -294,6 +307,7 @@ type
     property ScrollbarThumbHoverWidth: Integer read FScrollbarThumbHoverWidth write SetScrollbarThumbHoverWidth default 6;
     property ScrollBars: TScrollStyle read FScrollBars write SetScrollBars default ssVertical;
     property CornerRadius: Single read FCornerRadius write FCornerRadius;
+    property PopupMenu;
     property Align;
     property Anchors;
     property Font;
@@ -451,6 +465,59 @@ begin
   { Suppress background erase — together with WS_EX_COMPOSITED this
     completely eliminates flicker while typing and scrolling }
   Msg.Result := 1;
+end;
+
+procedure TCWSInternalMemo.WMContextMenu(var Message: TWMContextMenu);
+var
+  ScreenPos, ClientPos: TPoint;
+  Menu: TPopupMenu;
+  Handled: Boolean;
+begin
+  { At design time, or when no menu is assigned, keep the previous behaviour
+    (TControl fires OnContextPopup and the native EDIT menu shows up). }
+  if (csDesigning in ComponentState) or (FOwner = nil) then
+  begin
+    inherited;
+    Exit;
+  end;
+
+  Menu := FOwner.PopupMenu;
+  if (Menu = nil) or (not Menu.AutoPopup) then
+  begin
+    inherited;
+    Exit;
+  end;
+
+  ScreenPos := SmallPointToPoint(Message.Pos);
+  if (ScreenPos.X >= 0) and (ScreenPos.Y >= 0) then
+  begin
+    ClientPos := ScreenToClient(ScreenPos);
+    if not ClientRect.Contains(ClientPos) then
+    begin
+      inherited;
+      Exit;
+    end;
+  end
+  else
+  begin
+    { (-1,-1) — invoked from the keyboard (Shift+F10 / context key). }
+    ClientPos := ScreenPos;
+    ScreenPos := ClientToScreen(Point(0, 0));
+  end;
+
+  Handled := False;
+  { Fires OnContextPopup of the owner through FMemo.OnContextPopup. }
+  DoContextPopup(ClientPos, Handled);
+  if Handled then
+  begin
+    Message.Result := 1;
+    Exit;
+  end;
+
+  SendCancelMode(nil);
+  Menu.PopupComponent := FOwner;
+  Menu.Popup(ScreenPos.X, ScreenPos.Y);
+  Message.Result := 1;
 end;
 
 procedure TCWSInternalMemo.MouseWheelHandler(var Message: TMessage);
@@ -1202,6 +1269,13 @@ begin
     FOnContextPopup(Self, MousePos, Handled);
 end;
 
+procedure TCWSMemo.DoContextPopup(MousePos: TPoint; var Handled: Boolean);
+begin
+  inherited;
+  if Assigned(FOnContextPopup) then
+    FOnContextPopup(Self, MousePos, Handled);
+end;
+
 { *** Stan i kolory *** }
 
 procedure TCWSMemo.ApplyStateChange;
@@ -1878,6 +1952,27 @@ end;
 procedure TCWSMemo.WMEraseBkgnd(var Msg: TWMEraseBkgnd);
 begin
   Msg.Result := 1;
+end;
+
+procedure TCWSMemo.WMSetCursor(var Msg: TWMSetCursor);
+var
+  P: TPoint;
+begin
+  { Only when the user has not set an explicit Cursor, and never over the
+    scrollbar strips — those keep the arrow, like a native scrollbar. }
+  if (Cursor = crDefault) and Enabled and (not (csDesigning in ComponentState)) and
+     (Msg.CursorWnd = Handle) and (Smallint(Msg.HitTest) = HTCLIENT) then
+  begin
+    P := ScreenToClient(Mouse.CursorPos);
+    if not ((FScrollVisible and FScrollTrackRect.Contains(P)) or
+            (FHScrollVisible and FHScrollTrackRect.Contains(P))) then
+    begin
+      Winapi.Windows.SetCursor(Screen.Cursors[crIBeam]);
+      Msg.Result := 1;
+      Exit;
+    end;
+  end;
+  inherited;
 end;
 
 { *** GDI+ helpers *** }

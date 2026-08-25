@@ -4,9 +4,9 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, System.Types, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Menus, CWSSettingsPanel, CWSScrollBox, CWSStoreButton, CWSFluentColorsMulti,
-  CWSMenuButton, CWSButton, CWSCheckBox, CWSRadioButton, CWSSwitch, CWSPopupMenu, System.ImageList, Vcl.ImgList,
-  SVGIconImageListBase, SVGIconImageList;
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Menus, CWSSettingsPanel, CWSScrollBox, CWSStoreButton,
+  CWSFluentColorsMulti, CWSMenuButton, CWSButton, CWSCheckBox, CWSRadioButton, CWSSwitch, CWSPopupMenu, System.ImageList,
+  Vcl.ImgList, SVGIconImageListBase, SVGIconImageList;
 
 type
   TfrmButtons = class(TForm)
@@ -108,6 +108,8 @@ begin
   lblTitle3.Font.Color := flNeutralForeground1;
   lblTitle4.Font.Color := flNeutralForeground1;
 
+  SVGIconImageList1.SVGIconItems.Items[1].FixedColor:= flNeutralForeground1;
+
   CWSPopupMenu1.BackgroundColor := flNeutralBackground1;
   CWSPopupMenu1.BorderColor := flNeutralStroke1;
   CWSPopupMenu1.TextColor := flNeutralForeground1;
@@ -117,9 +119,9 @@ begin
   CWSPopupMenu1.SeparatorColor := flNeutralStroke1;
   CWSPopupMenu1.ShortCutColor := flNeutralForeground3;
 
-  for i := 0 to ComponentCount - 1 do
+  for I := 0 to ComponentCount - 1 do
   begin
-    Comp := Components[i];
+    Comp := Components[I];
     if Comp is TCWSStoreButton then
     begin
       TCWSStoreButton(Comp).Color := flNeutralBackground3;
@@ -136,7 +138,6 @@ begin
       TCWSStoreButton(Comp).IconColorPressed := flNeutralForeground2BrandPressed;
 
       TCWSStoreButton(Comp).CursorColor := flNeutralForeground2BrandPressed;
-
     end;
 
     if Comp is TCWSMenuButton then
@@ -155,7 +156,6 @@ begin
       TCWSMenuButton(Comp).IconColorPressed := flNeutralForeground2BrandPressed;
 
       TCWSMenuButton(Comp).CursorColor := flNeutralForeground2BrandPressed;
-
     end;
 
     if Comp is TCWSCheckBox then
@@ -201,7 +201,8 @@ begin
     if Comp is TCWSButton then
     begin
 
-      if Comp.Name = 'CWSButton3' then continue;
+      if Comp.Name = 'CWSButton3' then
+        continue;
 
       TCWSButton(Comp).Color := flNeutralBackground3;
       TCWSButton(Comp).BckNormalColor := flNeutralBackground3;
@@ -222,7 +223,6 @@ begin
       TCWSButton(Comp).IconColorHover := flNeutralForeground1Hover;
       TCWSButton(Comp).IconColorNormal := flNeutralForeground3;
       TCWSButton(Comp).IconColorPressed := flNeutralForeground2BrandPressed;
-
     end;
 
     CWSButton3.Color := flNeutralBackground3;
@@ -231,11 +231,9 @@ begin
     begin
       TLabel(Comp).Font.Color := flNeutralForeground1;
     end;
-
   end;
 
   Invalidate;
-
 end;
 
 procedure TfrmButtons.CWSStoreButton4Click(Sender: TObject);
@@ -319,7 +317,7 @@ end;
 
 procedure TfrmButtons.FormShow(Sender: TObject);
 begin
-ScaleForPPI(CurrentPPI);
+  ScaleForPPI(CurrentPPI);
 end;
 
 end.

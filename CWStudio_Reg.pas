@@ -186,9 +186,11 @@ type
     ICustomPropertyDrawing, ICustomPropertyDrawing80)
   private
     function ImageList: TCustomImageList;
-    { fills ARect, paints the glyph at its left edge and returns what is left }
+    { Fills ARect, paints the glyph at its left edge (scaling down if larger than row) and returns what is left }
     function PaintGlyph(AIndex: Integer; ACanvas: TCanvas;
       const ARect: TRect): TRect;
+    function GetScaledIconSize(AListWidth, AListHeight, AMaxHeight: Integer;
+      out AScaledWidth, AScaledHeight: Integer): Boolean;
   public
     function GetAttributes: TPropertyAttributes; override;
     procedure GetValues(Proc: TGetStrProc); override;
@@ -231,17 +233,45 @@ begin
     Result := TCustomImageList(Value);
 end;
 
+function TCWSImageIndexProperty.GetScaledIconSize(AListWidth, AListHeight,
+  AMaxHeight: Integer; out AScaledWidth, AScaledHeight: Integer): Boolean;
+var
+  AvailableH: Integer;
+  Scale: Double;
+begin
+  Result := False;
+  if (AListWidth <= 0) or (AListHeight <= 0) or (AMaxHeight <= 0) then
+    Exit;
+
+  // Wymuszamy spójną maksymalną wysokość ikony (max 16px), niezależnie od wysokości wiersza
+  AvailableH := Min(16, Max(1, AMaxHeight - 2));
+
+  if AListHeight > AvailableH then
+  begin
+    Scale := AvailableH / AListHeight;
+    AScaledWidth := Max(1, Round(AListWidth * Scale));
+    AScaledHeight := AvailableH;
+  end
+  else
+  begin
+    AScaledWidth := AListWidth;
+    AScaledHeight := AListHeight;
+  end;
+  Result := True;
+end;
+
 { The glyph is composed on an opaque copy of the row background before it
   reaches the grid. Blitting an image list straight onto the Object Inspector
   canvas leaves a white block behind every icon that carries an alpha channel;
-  the IDE's own TCursorProperty goes through the same detour. A glyph taller
-  than the row is skipped rather than clipped — grid rows have a fixed height. }
+  the IDE's own TCursorProperty goes through the same detour. If the icon height
+  exceeds the row height, it is proportionally scaled down to fit inside the cell. }
 function TCWSImageIndexProperty.PaintGlyph(AIndex: Integer; ACanvas: TCanvas;
   const ARect: TRect): TRect;
 var
   List: TCustomImageList;
   Bmp: TBitmap;
-  W, H: Integer;
+  W, H, ScaledW, ScaledH: Integer;
+  IconDstRect: TRect;
 begin
   ACanvas.FillRect(ARect);
   Result := ARect;
@@ -251,12 +281,13 @@ begin
     Exit;
   W := List.Width;
   H := List.Height;
-  if (W <= 0) or (H <= 0) or (H > ARect.Height) then
+
+  if not GetScaledIconSize(W, H, ARect.Height, ScaledW, ScaledH) then
     Exit;
 
   { the gutter is reserved even when this entry has no icon, so the texts of
     all entries line up }
-  Result := Rect(ARect.Left + W + cIconGap, ARect.Top, ARect.Right, ARect.Bottom);
+  Result := Rect(ARect.Left + ScaledW + cIconGap, ARect.Top, ARect.Right, ARect.Bottom);
   if (AIndex < 0) or (AIndex >= List.Count) then
     Exit;
 
@@ -268,7 +299,18 @@ begin
     Bmp.Canvas.Brush.Color := ACanvas.Brush.Color;
     Bmp.Canvas.FillRect(Rect(0, 0, W, H));
     List.Draw(Bmp.Canvas, 0, 0, AIndex, True);
-    ACanvas.Draw(ARect.Left, ARect.Top + (ARect.Height - H) div 2, Bmp);
+
+    IconDstRect := Rect(
+      ARect.Left,
+      ARect.Top + (ARect.Height - ScaledH) div 2,
+      ARect.Left + ScaledW,
+      ARect.Top + (ARect.Height - ScaledH) div 2 + ScaledH
+    );
+
+    if (W = ScaledW) and (H = ScaledH) then
+      ACanvas.Draw(IconDstRect.Left, IconDstRect.Top, Bmp)
+    else
+      ACanvas.StretchDraw(IconDstRect, Bmp);
   finally
     Bmp.Free;
   end;
@@ -297,11 +339,16 @@ procedure TCWSImageIndexProperty.ListMeasureWidth(const Value: string;
   ACanvas: TCanvas; var AWidth: Integer);
 var
   List: TCustomImageList;
+  ScaledW, ScaledH: Integer;
 begin
-  { additive — the Object Inspector has already measured the text }
   List := ImageList;
   if List <> nil then
-    Inc(AWidth, List.Width + cIconGap);
+  begin
+    if GetScaledIconSize(List.Width, List.Height, 18, ScaledW, ScaledH) then
+      Inc(AWidth, ScaledW + cIconGap)
+    else
+      Inc(AWidth, List.Width + cIconGap);
+  end;
   Inc(AWidth, PropertyDrawingOffset + cIconGap);
 end;
 
@@ -309,10 +356,16 @@ procedure TCWSImageIndexProperty.ListMeasureHeight(const Value: string;
   ACanvas: TCanvas; var AHeight: Integer);
 var
   List: TCustomImageList;
+  ScaledW, ScaledH: Integer;
 begin
   List := ImageList;
   if List <> nil then
-    AHeight := Max(AHeight, List.Height + cIconGap);
+  begin
+    if GetScaledIconSize(List.Width, List.Height, AHeight, ScaledW, ScaledH) then
+      AHeight := Max(AHeight, ScaledH + cIconGap)
+    else
+      AHeight := Max(AHeight, List.Height + cIconGap);
+  end;
 end;
 
 procedure TCWSImageIndexProperty.ListDrawValue(const Value: string;
@@ -352,22 +405,26 @@ begin
 end;
 
 { Only the glyph square belongs to us; the grid paints the text of the value
-  itself. An empty rect means "nothing custom here" — used when there is no
-  list, or no glyph that fits, so the cell is left entirely to the IDE. }
+  itself. Returns the scaled glyph bounding area so larger icons downscale
+  properly without hiding the property field. }
 function TCWSImageIndexProperty.PropDrawValueRect(const ARect: TRect): TRect;
 var
   List: TCustomImageList;
-  Idx: Integer;
+  Idx, ScaledW, ScaledH: Integer;
 begin
   Result := Rect(0, 0, 0, 0);
   List := ImageList;
-  if (List = nil) or (List.Width <= 0) or (List.Height > ARect.Height) then
+  if (List = nil) or (List.Width <= 0) or (List.Height <= 0) then
     Exit;
   if not TryStrToInt(GetVisualValue, Idx) then
     Exit;
   if (Idx < 0) or (Idx >= List.Count) then
     Exit;
-  Result := Rect(ARect.Left, ARect.Top, ARect.Left + List.Width + cIconGap,
+
+  if not GetScaledIconSize(List.Width, List.Height, ARect.Height, ScaledW, ScaledH) then
+    Exit;
+
+  Result := Rect(ARect.Left, ARect.Top, ARect.Left + ScaledW + cIconGap,
     ARect.Bottom);
 end;
 
@@ -456,12 +513,12 @@ begin
   Bmp := LoadSplashBitmap;
   try
     SplashScreenServices.AddPluginBitmap(
-      CWStudioCaption,        { 'CWStudio Component 1.6.2' }
+      CWStudioCaption,         { 'CWStudio Component 1.6.2' }
       Bmp.Handle,
-      False,                  { not an unregistered version }
+      False,                   { not an unregistered version }
       CWStudioVersionLabel);  { 'V1.6.2.0' — status field next to the icon }
   finally
-    Bmp.Free;               { splash copy bitmap — can free }
+    Bmp.Free;                { splash copy bitmap — can free }
   end;
 end;
 

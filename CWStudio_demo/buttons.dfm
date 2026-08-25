@@ -862,6 +862,7 @@ object frmButtons: TfrmButtons
     end
   end
   object SVGIconImageList1: TSVGIconImageList
+    Size = 24
     SVGIconItems = <
       item
         IconName = 'delphi'
@@ -985,12 +986,41 @@ object frmButtons: TfrmButtons
           '76-.015c.216.003.433.022.648.045a9.7 9.7 0 0 1 2.377.532c.432.16' +
           '.86.332 1.264.56q.42.234.829.49c.206.13.405.276.6.424q.267.2.514' +
           '.423a.43.43 0 0 1 .13.373z"/></svg>'
+      end
+      item
+        IconName = 'new-file'
+        SVGText = 
+          '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em"' +
+          ' viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke' +
+          '-width="1.5"><path d="M16 2H3v20h18V7z"/><path d="M15 2v6h6"/></' +
+          'g></svg>'
+      end
+      item
+        IconName = 'emergency-exit-flat'
+        SVGText = 
+          '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em"' +
+          ' viewBox="0 0 14 14"><g fill="none" fill-rule="evenodd" clip-rul' +
+          'e="evenodd"><path fill="#2859c5" d="M6.133.066a1.42 1.42 0 0 0-1' +
+          '.419 1.419v2.644a3 3 0 0 1 .812.217a2.881 2.881 0 1 1 4.713 2.96' +
+          '6a2 2 0 0 1-.56 3.92H8.307q-.27 0-.531-.047q.01.123.01.247v1.818' +
+          'c0 .24-.043.47-.12.684h4.902a1.42 1.42 0 0 0 1.419-1.419V1.485a1' +
+          '.42 1.42 0 0 0-1.42-1.42z"/><path fill="#8fbffa" d="M6.645 5.207' +
+          'a1.63 1.63 0 1 1 3.259 0a1.63 1.63 0 0 1-3.26 0m.082 1.62L8.22 8' +
+          '.322a.13.13 0 0 0 .088.036h1.371a.875.875 0 0 1 0 1.75H8.308c-.4' +
+          '97 0-.974-.197-1.326-.549l-.874-.874l-.71.71l.714.712c.351.352.5' +
+          '49.829.549 1.326V13a.875.875 0 0 1-1.75 0v-1.568a.13.13 0 0 0-.0' +
+          '37-.088l-.725-.725A1.88 1.88 0 0 1 3.015 11H1a.875.875 0 0 1 0-1' +
+          '.75h2.015a.13.13 0 0 0 .089-.037L4.87 7.446l-.428-.427a.13.13 0 ' +
+          '0 0-.088-.037H2.536a.875.875 0 1 1 0-1.75h1.819c.497 0 .974.198 ' +
+          '1.325.55z"/></g></svg>'
       end>
+    DisabledGrayScale = False
     Scaled = True
     Left = 776
     Top = 264
   end
   object CWSPopupMenu1: TCWSPopupMenu
+    Images = SVGIconImageList1
     Font.Charset = DEFAULT_CHARSET
     Font.Color = clWindowText
     Font.Height = -12
@@ -1001,6 +1031,8 @@ object frmButtons: TfrmButtons
     Top = 344
     object miNew: TMenuItem
       Caption = 'New'
+      ImageIndex = 1
+      ImageName = 'new-file'
     end
     object miOpen: TMenuItem
       Caption = 'Open...'
@@ -1013,6 +1045,8 @@ object frmButtons: TfrmButtons
     end
     object miExit: TMenuItem
       Caption = 'Exit'
+      ImageIndex = 2
+      ImageName = 'emergency-exit-flat'
     end
   end
 end

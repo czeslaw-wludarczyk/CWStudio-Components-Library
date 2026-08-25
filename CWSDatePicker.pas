@@ -34,7 +34,7 @@
     Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI, Winapi.GDIPOBJ,
     Winapi.MultiMon,
     System.SysUtils, System.Classes, System.Types, System.Math, System.DateUtils,
-    Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls, Vcl.Forms, Vcl.Mask,
+    Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls, Vcl.Forms, Vcl.Mask, Vcl.Menus,
     CWSEdit;
 
   const
@@ -282,6 +282,7 @@
       procedure EditExit(Sender: TObject);
       procedure EditKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
       procedure EditMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+      procedure EditContextPopup(Sender: TObject; MousePos: TPoint; var Handled: Boolean);
 
       procedure CMMouseEnter(var Msg: TMessage); message CM_MOUSEENTER;
       procedure CMMouseLeave(var Msg: TMessage); message CM_MOUSELEAVE;
@@ -302,6 +303,7 @@
       procedure SetEnabled(Value: Boolean); override;
       procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
       procedure ChangeScale(M, D: Integer); override;
+      procedure DoContextPopup(MousePos: TPoint; var Handled: Boolean); override;
 
     public
       constructor Create(AOwner: TComponent); override;
@@ -354,10 +356,12 @@
       property Font;
       property ParentFont;
       property ParentShowHint;
+      property PopupMenu;
       property ShowHint;
       property TabOrder;
       property TabStop;
       property Visible;
+      property OnContextPopup;
       property OnChange: TNotifyEvent read FOnChange write FOnChange;
       property OnDropDown: TNotifyEvent read FOnDropDown write FOnDropDown;
       property OnCloseUp: TNotifyEvent read FOnCloseUp write FOnCloseUp;
@@ -2382,6 +2386,7 @@
     FInternalEdit.OnExit := EditExit;
     FInternalEdit.OnKeyDown := EditKeyDown;
     FInternalEdit.OnMouseDown := EditMouseDown;
+    FInternalEdit.OnContextPopup := EditContextPopup;
 
     // UpdateEditFromDate sets the mask and text in the correct order
     UpdateEditFromDate;
@@ -2434,6 +2439,46 @@
     // theme colors immediately, without waiting for a mouse-over.
     if FInternalEdit.HandleAllocated then
       FInternalEdit.Invalidate;
+  end;
+
+  { Prawy przycisk myszy nad samą kontrolką. Wywoływane przez TControl.WMContextMenu
+    zanim pojawi się menu — zamykamy otwarty kalendarz, żeby okno warstwowe
+    nie zasłaniało menu. }
+  procedure TCWSDatePicker.DoContextPopup(MousePos: TPoint; var Handled: Boolean);
+  begin
+    if FDroppedDown then
+      CloseDropdown;
+    inherited;
+  end;
+
+  { Prawy przycisk myszy nad wewnętrznym edytorem. Bez tego edit pokazałby
+    systemowe menu Cofnij/Wytnij/Kopiuj/Wklej i PopupMenu komponentu nigdy
+    by się nie pojawiło. Pozycję przeliczamy na współrzędne DatePickera,
+    a PopupComponent ustawiamy na Self, nie na ukryty edit. }
+  procedure TCWSDatePicker.EditContextPopup(Sender: TObject; MousePos: TPoint;
+    var Handled: Boolean);
+  var
+    P: TPoint;
+    Menu: TPopupMenu;
+  begin
+    if (MousePos.X < 0) or (MousePos.Y < 0) then
+      { menu wywołane z klawiatury (VK_APPS) — pokaż pod kontrolką }
+      P := Point(0, Height)
+    else
+      P := ScreenToClient(FInternalEdit.ClientToScreen(MousePos));
+
+    DoContextPopup(P, Handled);
+    if Handled then
+      Exit;
+
+    Menu := PopupMenu;
+    if (Menu <> nil) and Menu.AutoPopup then
+    begin
+      Menu.PopupComponent := Self;
+      P := ClientToScreen(P);
+      Menu.Popup(P.X, P.Y);
+      Handled := True;
+    end;
   end;
 
   procedure TCWSDatePicker.CMFontChanged(var Msg: TMessage);
