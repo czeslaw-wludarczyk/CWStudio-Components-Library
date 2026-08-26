@@ -72,6 +72,11 @@
       FHoveredDayIdx: Integer;
       FHoveredBtn: Integer; // -1: none, 0: prev, 1: next, 2: label (month/year)
 
+      { Wybrano date na WM_LBUTTONDOWN, ale okno zamykamy dopiero na WM_LBUTTONUP.
+        Inaczej popup znika miedzy down a up i mouse-up trafia w kontrolke,
+        ktora byla pod spodem (np. naglowek DBGrida -> niechciane sortowanie). }
+      FPendingClose: Boolean;
+
       { Geometria okna warstwowego (per-pixel alpha) }
       FScale: Single;
       FDpi: Integer;
@@ -143,7 +148,10 @@
       procedure WMNCHitTest(var Msg: TWMNCHitTest); message WM_NCHITTEST;
       procedure WMPaint(var Msg: TWMPaint); message WM_PAINT;
       procedure WMMouseWheel(var Msg: TWMMouseWheel); message WM_MOUSEWHEEL;
+      procedure BeginPendingClose;
       procedure WMLButtonDown(var Msg: TWMLButtonDown); message WM_LBUTTONDOWN;
+      procedure WMLButtonUp(var Msg: TWMLButtonUp); message WM_LBUTTONUP;
+      procedure WMCaptureChanged(var Msg: TMessage); message WM_CAPTURECHANGED;
       procedure WMMouseMove(var Msg: TWMMouseMove); message WM_MOUSEMOVE;
       procedure WMCWSClose(var Msg: TMessage); message WM_CWS_CLOSEDROPDOWN;
       procedure WMActivateApp(var Msg: TMessage); message WM_ACTIVATEAPP;
@@ -1955,6 +1963,18 @@
     Msg.Result := 1;
   end;
 
+  procedure TCWSCalendarDropdown.BeginPendingClose;
+  begin
+    { Data jest juz ustawiona; okno ZOSTAJE widoczne az do WM_LBUTTONUP,
+      dzieki czemu mouse-up konsumuje popup, a nie kontrolka pod nim.
+      SetCapture to dodatkowe zabezpieczenie na wypadek zjechania kursorem
+      poza okno przed zwolnieniem przycisku (okno ma WS_EX_NOACTIVATE,
+      wiec capture moze sie nie udac - i to jest OK). }
+    FPendingClose := True;
+    if GetCapture <> Handle then
+      SetCapture(Handle);
+  end;
+
   procedure TCWSCalendarDropdown.WMLButtonDown(var Msg: TWMLButtonDown);
   var
     Pt: TPoint;
@@ -1966,7 +1986,7 @@
     if PtInRect(GetTodayBarRect, Pt) then
     begin
       FDatePicker.Date := Trunc(Now);
-      FDatePicker.CloseDropdown;
+      BeginPendingClose;
       Exit;
     end;
 
@@ -2057,7 +2077,7 @@
       else if FHoveredDayIdx >= 0 then
       begin
         FDatePicker.Date := GetDateForCell(FHoveredDayIdx);
-        FDatePicker.CloseDropdown;
+        BeginPendingClose;
       end;
     end;
   end;
@@ -2138,6 +2158,31 @@
     if (OldDay <> FHoveredDayIdx) or (OldBtn <> FHoveredBtn) or
        (OldYear <> FHoveredYearIdx) or (OldMonth <> FHoveredMonthIdx) then
       Invalidate;
+  end;
+
+  procedure TCWSCalendarDropdown.WMLButtonUp(var Msg: TWMLButtonUp);
+  begin
+    if FPendingClose then
+    begin
+      FPendingClose := False;
+      if GetCapture = Handle then
+        ReleaseCapture;
+      FDatePicker.CloseDropdown;
+      Msg.Result := 0;   { komunikat skonsumowany - nie leci do kontrolki pod spodem }
+      Exit;
+    end;
+    inherited;
+  end;
+
+  procedure TCWSCalendarDropdown.WMCaptureChanged(var Msg: TMessage);
+  begin
+    { Capture przejal ktos inny - nie zostawiaj wiszacego popupu. }
+    if FPendingClose then
+    begin
+      FPendingClose := False;
+      FDatePicker.CloseDropdown;
+    end;
+    inherited;
   end;
 
   procedure TCWSCalendarDropdown.WMCWSClose(var Msg: TMessage);
@@ -2275,6 +2320,7 @@
     FHoveredYearIdx  := -1;
     FHoveredMonthIdx := -1;
     FViewMode        := 0;
+    FPendingClose    := False;
 
     if FDatePicker.Date <> 0 then
     begin
@@ -2300,6 +2346,9 @@
 
   procedure TCWSCalendarDropdown.HidePopup;
   begin
+    FPendingClose := False;
+    if HandleAllocated and (GetCapture = Handle) then
+      ReleaseCapture;
     UninstallHook;
     if HandleAllocated then
       ShowWindow(Handle, SW_HIDE);

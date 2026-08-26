@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.8.2](https://img.shields.io/badge/version-1.8.2-blue.svg)](CHANGELOG.md)
+[![Version: 1.8.3](https://img.shields.io/badge/version-1.8.3-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -218,7 +218,13 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Historia wersji
 
-**Najnowsza wersja — 1.8.2:**
+**Najnowsza wersja — 1.8.3:**
+
+- **Poprawka** `TCWSComboBox`: **lewy klik na pozycji listy rozwijanej nie trafia już w kontrolkę pod spodem.** Lista zamykała się na `WM_LBUTTONDOWN` — w chwili wybrania pozycji — więc do czasu, gdy przychodziło `WM_LBUTTONUP`, warstwowe okno popupu już nie istniało, a mouse-up przechodził do tego, co było pod tym miejscem na ekranie, np. nagłówka siatki, wywołując tam własne kliknięcie (niechciane sortowanie). Wybór i zamknięcie są teraz odkładane do `WM_LBUTTONUP`: okno popupu przechwytuje mysz na button-down i zostaje otwarte aż do puszczenia przycisku, dzięki czemu to ono konsumuje komunikat mouse-up, zanim się zamknie.
+- **Poprawka** `TCWSDatePicker`: **to samo przenikanie kliknięcia** — wybór dnia albo „Dziś” w rozwijanym kalendarzu zamykał go na `WM_LBUTTONDOWN`, a następujący po nim mouse-up trafiał w kontrolkę pod popupem zamiast zostać przez niego pochłonięty. Data jest ustawiana od razu jak dawniej, ale samo okno zostaje teraz otwarte, z przechwyconą myszą, aż do `WM_LBUTTONUP`; obsłużone jest też `WM_CAPTURECHANGED`, więc przejęcie przechwycenia myszy jeszcze przed puszczeniem przycisku i tak zamyka kalendarz, zamiast zostawiać go zawieszony na ekranie.
+- **Poprawka** `TCWSPopupMenu`: zamykanie tą samą drogą — pozycja menu wykonywała się na `WM_LBUTTONDOWN` przez `ActivateItem`, więc okno znikało, zanim przyszło `WM_LBUTTONUP`, a ten komunikat trafiał w kontrolkę pod menu; gorzej, jeśli `Item.Click` otwierał okno modalne — to właśnie ten zabłąkany mouse-up mógł w nie trafić. Wybrany indeks jest teraz tylko zapamiętywany na button-down; `WM_LBUTTONUP` go czyści, zwalnia `MouseCapture` przez właściwość VCL zamiast wprost przez API (żeby stan `TControl` się nie rozjechał) i dopiero wtedy wywołuje `ActivateItem` — po czym nie wolno już dotykać pól okna, które w tym momencie może już nie istnieć. `WM_CAPTURECHANGED` porzuca odłożony wybór tym samym sposobem, więc utrata przechwycenia w trakcie kliknięcia nie może później wykonać żadnej pozycji.
+
+**Wersja 1.8.2:**
 
 - **Nowość** `TCWSMemo`: **`PopupMenu`** — komponent nie miał jak nosić własnego menu kontekstowego; prawy przycisk myszy nad tekstem pokazywał systemowe menu EDIT (Cofnij/Wytnij/Kopiuj/Wklej), bo wewnętrzny memo to prawdziwe okno i samo odpowiada na `WM_CONTEXTMENU`. Ten komunikat jest teraz przechwytywany na wewnętrznym oknie: poza czasem projektowania, z przypisanym menu i `AutoPopup`, punkt kliknięcia jest przeliczany na współrzędne klienckie, najpierw wywoływane jest `DoContextPopup` (więc `OnContextPopup` nadal się odpala i może anulować pokazanie menu), a dopiero potem menu natywne jest pomijane na rzecz `Menu.Popup`. Prawy klik na pasku scrollbara — który należy do zewnętrznej kontrolki, nie do wewnętrznego memo — idzie tą samą drogą: `TCWSMemo.DoContextPopup` jest teraz nadpisane i wywołuje opublikowane `OnContextPopup`, czego bazowy `TControl` sam z siebie nie robi.
 - **Poprawka** `TCWSMemo`: **kursor I-belki pokazuje się teraz nad całą kontrolką**, a nie dopiero po wejściu w obszar wewnętrznego memo. Ramka, wewnętrzny margines i pasek etykiety należą do zewnętrznego okna, które nie miało własnej obsługi kursora i tam pokazywała się zwykła strzałka. `WM_SETCURSOR` jest teraz obsługiwane wprost — I-belka ustawiana jest dla każdego punktu w obszarze klienckim poza pasami scrollbarów, które zachowują strzałkę jak natywny scrollbar — i tylko dopóki `Cursor` pozostaje `crDefault`, więc jawnie przypisany kursor nigdy nie jest nadpisywany.
@@ -568,7 +574,13 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ Version history
 
-**Latest release — 1.8.2:**
+**Latest release — 1.8.3:**
+
+- **Fix** `TCWSComboBox`: **a left-click on a dropdown item no longer reaches the control underneath it.** The dropdown list closed on `WM_LBUTTONDOWN` — the moment an item was picked — so by the time `WM_LBUTTONUP` arrived the layered popup window was already gone, and the mouse-up fell through to whatever sat at that screen position, e.g. a grid header, triggering its own click there (an unwanted sort). Selection and the close are now deferred to `WM_LBUTTONUP`: the popup window captures the mouse on button-down and stays open until the button is released, so it is the one to consume the up message before closing itself.
+- **Fix** `TCWSDatePicker`: **the same click-through** — choosing a day, or Today, in the calendar dropdown closed it on `WM_LBUTTONDOWN`, and the mouse-up that followed reached the control underneath the popup instead of being swallowed by it. The date is still set immediately, but the window itself now stays open, with mouse capture held, until `WM_LBUTTONUP`; `WM_CAPTURECHANGED` is handled too, so capture stolen before the button comes up still closes the dropdown instead of leaving it stuck open.
+- **Fix** `TCWSPopupMenu`: closing the same way — an item used to run on `WM_LBUTTONDOWN` through `ActivateItem`, so the window was gone before `WM_LBUTTONUP` and that message reached the control beneath the menu; worse, if `Item.Click` opened a modal dialog, it was that stray mouse-up that could land on it. The chosen index is now only recorded on button-down; `WM_LBUTTONUP` clears it, releases `MouseCapture` through the VCL property rather than the API directly (so `TControl`'s own state stays consistent), and only then calls `ActivateItem` — after which nothing on the, by then possibly destroyed, window may be touched again. `WM_CAPTURECHANGED` drops the pending choice the same way, so losing capture mid-click cannot fire an item later.
+
+**Version 1.8.2:**
 
 - **New** `TCWSMemo`: **`PopupMenu`** — the component had no way to carry a context menu; a right-click inside the text showed the native EDIT menu (Undo/Cut/Copy/Paste) instead, since the inner memo is a real windowed control and answers `WM_CONTEXTMENU` on its own. That message is now intercepted on the inner window: outside design time, with a menu assigned and `AutoPopup` set, the click point is translated to client coordinates, `DoContextPopup` runs first (so `OnContextPopup` still fires and can cancel it), and only then is the native menu skipped in favour of `Menu.Popup`. A right-click on the scrollbar strip — which belongs to the outer control, not the inner memo — goes through the same event: `TCWSMemo.DoContextPopup` is now overridden to call the published `OnContextPopup`, which the base `TControl` implementation does not do on its own.
 - **Fix** `TCWSMemo`: **the I-beam cursor now shows over the whole control**, not only once the pointer reaches the inner memo. The border, the padding and the label strip belong to the outer window, which had no cursor handling of its own and fell back to the plain arrow there. `WM_SETCURSOR` is now answered directly — the I-beam is set for any point inside the client area except the scrollbar tracks, which keep the arrow as a native scrollbar would — and only while `Cursor` is left at `crDefault`, so an explicitly assigned cursor is never overridden.

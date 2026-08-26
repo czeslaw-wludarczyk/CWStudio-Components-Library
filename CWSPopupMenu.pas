@@ -62,6 +62,13 @@ type
     FArrowH: Integer;
     FVPad: Integer;
     FHotIndex: Integer;          { index in FEntries or -1 }
+
+    { Pozycje wybrana na WM_LBUTTONDOWN wykonujemy dopiero na WM_LBUTTONUP.
+      Inaczej okno menu znika miedzy down a up, mouse-up trafia w kontrolke
+      pod spodem (np. naglowek DBGrida -> sortowanie), a Item.Click moze
+      pokazac okno modalne, ktore zlapie ten zabladzony mouse-up. }
+    FPendingClose: Boolean;
+    FPendingIdx: Integer;
     FHotArrow: Integer;          { 0 none, 1 up, 2 down }
     FScrollTimer: UINT_PTR;
 
@@ -93,6 +100,8 @@ type
     procedure CreateParams(var Params: TCreateParams); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    procedure WMLButtonUp(var Msg: TWMLButtonUp); message WM_LBUTTONUP;
+    procedure WMCaptureChanged(var Msg: TMessage); message WM_CAPTURECHANGED;
     procedure CMMouseLeave(var Msg: TMessage); message CM_MOUSELEAVE;
     procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
     procedure WMPaint(var Msg: TWMPaint); message WM_PAINT;
@@ -371,6 +380,8 @@ begin
   FRoot := ARoot;
   FParentWin := AParent;
   FHotIndex := -1;
+  FPendingClose := False;
+  FPendingIdx := -1;
   FScale := 1;
   FDpi := 96;
 end;
@@ -1038,6 +1049,8 @@ begin
   HandleNeeded;
   FHotIndex := -1;
   FScrollPos := 0;
+  FPendingClose := False;
+  FPendingIdx := -1;
   ComputeScale(X, Y);
   Measure;
   if Length(FEntries) = 0 then Exit;
@@ -1271,7 +1284,48 @@ begin
   if FEntries[Idx].Item.Count > 0 then
     OpenSubmenu(Idx)
   else
-    ActivateItem(Idx);
+  begin
+    { Nie wykonuj pozycji teraz - okno musi przezyc do WM_LBUTTONUP.
+      Capture ustawil juz VCL (TCustomControl ma csCaptureMouse), wiec
+      mouse-up i tak przyjdzie tutaj. }
+    FPendingIdx := Idx;
+    FPendingClose := True;
+  end;
+end;
+
+procedure TCWSMenuWindow.WMLButtonUp(var Msg: TWMLButtonUp);
+var
+  Idx: Integer;
+begin
+  if not FPendingClose then
+  begin
+    inherited;
+    Exit;
+  end;
+
+  { Stan czyscimy PRZED ActivateItem: CloseChain zwalnia okna podmenu,
+    wiec po tym wywolaniu Self moze juz nie istniec. }
+  FPendingClose := False;
+  Idx := FPendingIdx;
+  FPendingIdx := -1;
+  Msg.Result := 0;         { komunikat skonsumowany - nie leci nizej }
+
+  { Zwalniamy capture wlasnoscia VCL, zeby nie rozjechal sie stan TControl. }
+  if MouseCapture then
+    MouseCapture := False;
+
+  if Idx >= 0 then
+    ActivateItem(Idx);     { <- po tej linii nie dotykaj pol obiektu }
+end;
+
+procedure TCWSMenuWindow.WMCaptureChanged(var Msg: TMessage);
+begin
+  { Capture przejal ktos inny jeszcze przed zwolnieniem przycisku - porzuc
+    odlozony wybor, zeby pozniejszy mouse-up nie wykonal pozycji.
+    Menu zamknie hook myszy przy nastepnym kliknieciu. }
+  FPendingClose := False;
+  FPendingIdx := -1;
+  inherited;
 end;
 
 procedure TCWSMenuWindow.CMMouseLeave(var Msg: TMessage);

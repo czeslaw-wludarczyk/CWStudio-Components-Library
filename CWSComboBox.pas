@@ -61,6 +61,12 @@ type
     FScrollDragStartPos: Integer;
     FScrollAreaHovered: Boolean;
 
+    { Pozycje klikanej na WM_LBUTTONDOWN zatwierdzamy dopiero na WM_LBUTTONUP.
+      Inaczej lista znika miedzy down a up i mouse-up trafia w kontrolke, ktora
+      byla pod nia (np. naglowek DBGrida -> niechciane sortowanie). }
+    FPendingClose: Boolean;
+    FPendingIdx: Integer;
+
     { Track-click auto-repeat (holding the button on the track keeps paging
       toward the cursor until the thumb reaches it — the native scrollbar feel) }
     FRepeatTimer: TTimer;
@@ -1550,14 +1556,38 @@ begin
     Idx := IndexAtBodyY(BY);
     if (Idx >= 0) and (Idx < FCombo.FItems.Count) then
     begin
-      FCombo.SelectItem(Idx);
-      FCombo.CloseDropdown;
+      { Wybor i zamkniecie odkladamy do WM_LBUTTONUP - okno musi przezyc
+        caly klik, zeby skonsumowac mouse-up. }
+      FPendingIdx   := Idx;
+      FPendingClose := True;
+      if GetCapture <> Handle then
+        SetCapture(Handle);
     end;
   end;
 end;
 
 procedure TCWSDropdownWindow.WMLButtonUp(var Msg: TWMLButtonUp);
+var
+  Idx: Integer;
 begin
+  { Zatwierdzenie pozycji klikanej na mouse-down. Ma pierwszenstwo przed
+    obsluga scrollbara i konsumuje komunikat, zeby nie poszedl nizej. }
+  if FPendingClose then
+  begin
+    FPendingClose := False;
+    Idx := FPendingIdx;
+    FPendingIdx := -1;
+    if GetCapture = Handle then
+      ReleaseCapture;
+    if (Idx >= 0) and (Idx < FCombo.FItems.Count) then
+    begin
+      FCombo.SelectItem(Idx);
+      FCombo.CloseDropdown;
+    end;
+    Msg.Result := 0;
+    Exit;
+  end;
+
   { End any track-click auto-repeat the moment the button is released. }
   if FRepeatActive then
     StopTrackRepeat;
@@ -1609,6 +1639,12 @@ begin
       FRepeatTimer.Enabled := False;
   end;
   if FScrollDragging then begin FScrollDragging := False; Render; end;
+  if FPendingClose then
+  begin
+    FPendingClose := False;
+    FPendingIdx   := -1;
+    FCombo.CloseDropdown;
+  end;
   inherited;
 end;
 
@@ -1692,6 +1728,8 @@ begin
   FCtrlScreen := ComboRect;
 
   FScrollPos         := 0;
+  FPendingClose      := False;
+  FPendingIdx        := -1;
   { The list opens on the current selection: it is highlighted and the arrow
     keys carry on from it, rather than from the top of the list. }
   FHoveredIndex      := FCombo.FItemIndex;
@@ -1713,6 +1751,10 @@ end;
 
 procedure TCWSDropdownWindow.HidePopup;
 begin
+  FPendingClose := False;
+  FPendingIdx   := -1;
+  if HandleAllocated and (GetCapture = Handle) then
+    ReleaseCapture;
   UninstallHook;
   if HandleAllocated then ShowWindow(Handle, SW_HIDE);
   FHoveredIndex      := -1;
