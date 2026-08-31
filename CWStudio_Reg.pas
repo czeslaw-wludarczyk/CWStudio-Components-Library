@@ -47,6 +47,8 @@ uses
   MaskProp,   { TMaskProperty — the VCL "Input Mask Editor" dialog (… button) }
   CWStudio_Version,
   { runtime units with components — the DT package requires CWStudio_ComponentsRT }
+  CWSShape,
+  CWSAvatar,
   CWSCornerPanel,
   CWSSettingsPanel,
   CWSOptionsPanel,
@@ -442,6 +444,8 @@ procedure Register;
 var
   Cls: TClass;
 begin
+  RegisterComponents('CWStudio_Shapes',
+    [TCWSShape, TCWSAvatar]);
   RegisterComponents('CWStudio_Panels',
     [TCWSCornerPanel, TCWSSettingsPanel, TCWSOptionsPanel]);
   { Sections are created through the panel's editor / AddSection, not dropped

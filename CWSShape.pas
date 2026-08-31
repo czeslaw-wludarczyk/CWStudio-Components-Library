@@ -30,7 +30,7 @@ uses
   System.SysUtils, System.Classes, Vcl.Controls, Vcl.Graphics;
 
 type
-  TShapeKind = (Rectangle, RoundRectangle);
+  TShapeKind = (Rectangle, RoundRectangle, Circle);
   TShapeBrushStyle = (Solid, Clear);
   TShapePenStyle = (Solid, Clear);
 
@@ -91,13 +91,17 @@ type
     procedure SetShape(const Value: TShapeKind);
     procedure SetCornerRadius(const Value: Integer);
     procedure StyleChanged(Sender: TObject);
-    function MakeGPColor(AColor: TColor): Cardinal;
-    function BuildPath(X, Y, W, H, R: Single): TGPGraphicsPath;
   protected
     procedure Paint; override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+
+    { Shared with other CWStudio graphic controls (e.g. TCWSAvatar) so every
+      component that draws a rectangle / rounded rectangle / circle builds the
+      exact same anti-aliased GDI+ outline instead of duplicating the geometry. }
+    class function MakeGPColor(AColor: TColor): Cardinal;
+    class function BuildShapePath(Shape: TShapeKind; X, Y, W, H, R: Single): TGPGraphicsPath;
   published
     property Brush: TCWSShapeBrush read FBrush write SetBrush;
     property Pen: TCWSShapePen read FPen write SetPen;
@@ -276,7 +280,7 @@ begin
   Invalidate;
 end;
 
-function TCWSShape.MakeGPColor(AColor: TColor): Cardinal;
+class function TCWSShape.MakeGPColor(AColor: TColor): Cardinal;
 var
   C: TColor;
 begin
@@ -284,32 +288,35 @@ begin
   Result := Winapi.GDIPAPI.MakeColor(255, GetRValue(C), GetGValue(C), GetBValue(C));
 end;
 
-function TCWSShape.BuildPath(X, Y, W, H, R: Single): TGPGraphicsPath;
+class function TCWSShape.BuildShapePath(Shape: TShapeKind; X, Y, W, H, R: Single): TGPGraphicsPath;
 var
   D: Single;
 begin
   Result := TGPGraphicsPath.Create;
-  if (FShape = TShapeKind.RoundRectangle) and (R > 0) then
-  begin
-    D := R * 2;
-    if D > H then D := H;
-    if D > W then D := W;
-    if D < 0 then D := 0;
-    if D = 0 then
-    begin
-      Result.AddRectangle(MakeRect(X, Y, W, H));
-    end
-    else
-    begin
-      Result.AddArc(X,         Y,         D, D, 180, 90);
-      Result.AddArc(X + W - D, Y,         D, D, 270, 90);
-      Result.AddArc(X + W - D, Y + H - D, D, D,   0, 90);
-      Result.AddArc(X,         Y + H - D, D, D,  90, 90);
-      Result.CloseFigure;
-    end;
-  end
+  case Shape of
+    TShapeKind.Circle:
+      Result.AddEllipse(MakeRect(X, Y, W, H));
+
+    TShapeKind.RoundRectangle:
+      begin
+        D := R * 2;
+        if D > H then D := H;
+        if D > W then D := W;
+        if D < 0 then D := 0;
+        if D = 0 then
+          Result.AddRectangle(MakeRect(X, Y, W, H))
+        else
+        begin
+          Result.AddArc(X,         Y,         D, D, 180, 90);
+          Result.AddArc(X + W - D, Y,         D, D, 270, 90);
+          Result.AddArc(X + W - D, Y + H - D, D, D,   0, 90);
+          Result.AddArc(X,         Y + H - D, D, D,  90, 90);
+          Result.CloseFigure;
+        end;
+      end;
   else
     Result.AddRectangle(MakeRect(X, Y, W, H));
+  end;
 end;
 
 procedure TCWSShape.Paint;
@@ -343,7 +350,7 @@ begin
     G.SetSmoothingMode(SmoothingModeAntiAlias);
     G.SetPixelOffsetMode(PixelOffsetModeHalf);
 
-    Path := BuildPath(X, Y, W, H, FCornerRadius);
+    Path := BuildShapePath(FShape, X, Y, W, H, FCornerRadius);
     try
       { Fill — clNone is treated as "no fill" (transparent) }
       if (FBrush.Style = TShapeBrushStyle.Solid) and (FBrush.Color <> clNone) then

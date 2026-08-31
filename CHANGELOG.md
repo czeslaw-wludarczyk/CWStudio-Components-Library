@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.8.8] — 2026-08-31
+
+- **Changed** `TCWSAvatar`: **`ImageMargin` now feathers the image into the background instead of just reserving a solid ring for it.** The image is rendered into an offscreen buffer whose alpha is then ramped, pixel by pixel (via a closed-form distance to the Shape/CornerRadius outline), from fully opaque `ImageMargin` pixels inside the outline down to fully transparent right at it — a genuine soft gradient, not the hard, all-or-nothing GDI+ region clip 1.8.7 used to keep the image off the shape's corners. `ImageMargin = 0` still gets a minimal ~1px anti-aliased edge rather than a hard cut. Verified with a widened pixel-sampling test across the transition band at several `ImageMargin` values (0, 1, 15), confirming a smooth ramp scaling with the property instead of a step.
+
+## [1.8.7] — 2026-08-31
+
+- **Fix** `TCWSAvatar`: **`ifContain`/`ifCenter` no longer let a picture spill past a `Circle`/`RoundRectangle` outline.** They drew the picture as a plain, unclipped rectangle, so its square corners covered the region outside the shape that is meant to stay transparent/background — visually replacing the round/rounded silhouette with a hard-edged square photo. Both modes are now clipped to the same shape path the background and `ifCover`/`ifStretch` already use.
+- **Fix** `TCWSAvatar`: **`ifCover`/`ifStretch` painted nothing at all for a non-square picture** (any width/height ratio other than 1:1) — the `TGPTextureBrush` + `FillPath` technique they used turned out not to place the image where intended once the (cropped or full) source stopped being exactly the size of the destination rectangle, silently filling with nothing instead of raising an error. All four `ImageFit` modes now share one drawing path — pick a source rectangle and a destination rectangle for the mode, clip to the shape, and let a single `G.DrawImage` do the scaling — verified against a battery of offscreen-rendered pixel checks (shape-corner leakage, and per-mode crop/letterbox/natural-size geometry) covering every mode and shape.
+
+## [1.8.6] — 2026-08-31
+
+- **New** `TCWSAvatar`: **`ImageFit`** (`ifCover` / `ifContain` / `ifStretch` / `ifCenter`) — controls how the picture is resized into its area, the same idea as CSS `object-fit` or the classic VCL `TImage` `Stretch`+`Proportional`+`Center` combination. `ifCover` (default, previous behaviour) center-crops to fill the area with no distortion; `ifContain` scales down/up preserving aspect ratio so the whole picture stays visible, letterboxed by the `Brush` background; `ifStretch` fills the area exactly on both axes, distorting the picture if its aspect ratio differs; `ifCenter` draws it at its natural pixel size, centered, clipped only if larger than the area.
+
+## [1.8.5] — 2026-08-31
+
+- **New** `TCWSAvatar`: a graphic (`TGraphicControl`) avatar component — `Shape` (`Rectangle`, `RoundRectangle`, `Circle`), `CornerRadius`, `Brush`/`Pen` for the background and border, `Picture` for a photo and `Caption`/`Font` for centered initials shown when no picture is set. The picture is center-cropped to the shape's aspect ratio ("cover" fit) and filled through the same anti-aliased GDI+ path used for the background, so its edge comes out smooth and blends into whatever is painted behind the control rather than showing a hard pixel boundary; `ImageMargin` leaves a ring of the background colour around it.
+- **Changed** `TCWSShape`: **published on the component palette** (`CWStudio_Shapes`) — until now it only existed as an internal building block other components created in code (e.g. `TCWSButton`'s background). It can now be dropped straight onto a form like any other component.
+- **New** `TCWSShape`: **`Circle`** added to `TShapeKind` alongside `Rectangle`/`RoundRectangle` — draws an ellipse inscribed in the control's bounds.
+- **Changed** `TCWSShape`: the private per-instance `BuildPath`/`MakeGPColor` became public `class function BuildShapePath`/`MakeGPColor`, so other CWStudio graphic controls (`TCWSAvatar`) can build the exact same anti-aliased outline instead of duplicating the geometry.
+
+## [1.8.4] — 2026-08-31
+
+- **New** `TCWSButton`: **`CaptionAlignment`** — horizontal alignment of the caption text (`taLeftJustify`, `taRightJustify`, `taCenter`). The caption block was already centered in the button as a whole, but the text inside it was hard-coded to `taLeftJustify`, so a multi-line caption (e.g. containing `sLineBreak`) had its shorter lines stuck to the left edge instead of centered under the longer ones. Setting `CaptionAlignment := taCenter` centers every line independently.
+
 ## [1.8.3] — 2026-08-26
 
 - **Fix** `TCWSComboBox`: **a left-click on a dropdown item no longer reaches the control underneath it.** The dropdown list closed on `WM_LBUTTONDOWN` — the moment an item was picked — so by the time `WM_LBUTTONUP` arrived the layered popup window was already gone, and the mouse-up fell through to whatever sat at that screen position, e.g. a grid header, triggering its own click there (an unwanted sort). Selection and the close are now deferred to `WM_LBUTTONUP`: the popup window captures the mouse on button-down and stays open until the button is released, so it is the one to consume the up message before closing itself.

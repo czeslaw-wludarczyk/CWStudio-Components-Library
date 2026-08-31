@@ -71,6 +71,7 @@ type
 
     FIconSpacing: Integer;
     FIconPosition: TCWSIconPosition;
+    FCaptionAlignment: TAlignment;
     FCornerRadius: Integer;
     FIsDefault: Boolean;
     FIsCancel: Boolean;
@@ -126,6 +127,7 @@ type
     procedure SetCaptionColorPressed(const Value: TColor);
     procedure SetIconSpacing(const Value: Integer);
     procedure SetIconPosition(const Value: TCWSIconPosition);
+    procedure SetCaptionAlignment(const Value: TAlignment);
     procedure SetCornerRadius(const Value: Integer);
     procedure SetIsDefault(const Value: Boolean);
     procedure SetIsCancel(const Value: Boolean);
@@ -239,6 +241,12 @@ type
     property IconSpacing: Integer read FIconSpacing write SetIconSpacing default 6;
     property IconPosition: TCWSIconPosition read FIconPosition write SetIconPosition default ipLeft;
 
+    { Horizontal alignment of the caption text. With taCenter, a multi-line
+      caption (e.g. containing sLineBreak) has each line centered instead of
+      left-justified — the whole text block is always centered in the button
+      regardless of this setting; this only affects lines of unequal width. }
+    property CaptionAlignment: TAlignment read FCaptionAlignment write SetCaptionAlignment default taLeftJustify;
+
     property CornerRadius: Integer read FCornerRadius write SetCornerRadius default 4;
 
     property IsDefault: Boolean read FIsDefault write SetIsDefault default False;
@@ -323,9 +331,10 @@ begin
   FBorderColorPressed := $00B3B3B3;
   FBorderWidth        := 1;
 
-  FIconSpacing  := 6;
-  FIconPosition := ipLeft;
-  FCornerRadius := 4;
+  FIconSpacing      := 6;
+  FIconPosition     := ipLeft;
+  FCaptionAlignment := taLeftJustify;
+  FCornerRadius     := 4;
   FIsDefault    := False;
   FIsCancel     := False;
   FActive       := False;
@@ -363,7 +372,7 @@ begin
   FLabelCaption.Parent      := Self;
   FLabelCaption.Transparent := True;
   FLabelCaption.Caption     := FCaptionText;
-  FLabelCaption.Alignment   := taLeftJustify;
+  FLabelCaption.Alignment   := FCaptionAlignment;
   FLabelCaption.Layout      := tlCenter;
   FLabelCaption.AutoSize    := True;
 
@@ -1255,6 +1264,17 @@ end;
 procedure TCWSButton.SetIconPosition(const Value: TCWSIconPosition);
 begin
   if FIconPosition <> Value then begin FIconPosition := Value; Resize; end;
+end;
+
+procedure TCWSButton.SetCaptionAlignment(const Value: TAlignment);
+begin
+  if FCaptionAlignment = Value then Exit;
+  FCaptionAlignment := Value;
+  if Assigned(FLabelCaption) then
+  begin
+    FLabelCaption.Alignment := FCaptionAlignment;
+    Resize;
+  end;
 end;
 
 procedure TCWSButton.SetIsDefault(const Value: Boolean);

@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.8.3](https://img.shields.io/badge/version-1.8.3-blue.svg)](CHANGELOG.md)
+[![Version: 1.8.8](https://img.shields.io/badge/version-1.8.8-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -95,14 +95,19 @@ CWStudio to zestaw nowoczesnych, wysokiej jakości komponentów VCL dla środowi
 | **`TCWSLabelColumn`** | Dwukolumnowa etykieta — dwa niezależne teksty obok siebie (lewa / prawa kolumna), każdy z własną czcionką (`LeftFont` / `RightFont`), wyrównaniem i szerokością. Automatyczny *marquee*, gdy tekst nie mieści się w kolumnie (`ScrollColumns`, osobne prędkości `LeftScrollStep` / `RightScrollStep`, miękkie wygaszanie krawędzi `EdgeFade`) — bez migotania (rysuje się bezpośrednio, bez `Invalidate`). |
 | **`TCWSLabelTrend`** | Etykieta w stylu „pigułki" / badge (kolorowe tagi statusu, np. Lead / POC / Closed) — kapsułka GDI+ z wypełnieniem (`Color`) i opcjonalną ramką, auto-rozmiar do treści. Ikona po lewej i/lub prawej stronie tekstu (glyph z fontu ikon lub obraz z `ImageList` — jak w `TCWSMenuButton`). Pełen zestaw zdarzeń etykiety (`OnClick`, mysz, `OnMouseEnter` / `OnMouseLeave`, `OnContextPopup`). |
 
+### Kształty
+
+| Komponent | Opis |
+|-----------|------|
+| **`TCWSShape`** | Lekka, bezzależnościowa kontrolka graficzna (`TGraphicControl`, GDI+) rysująca prostokąt, zaokrąglony prostokąt lub koło (`Shape`: `Rectangle` / `RoundRectangle` / `Circle`) z wypełnieniem (`Brush`) i opcjonalną ramką (`Pen`). Element bazowy, na którym opierają się inne komponenty CWStudio — m.in. `TCWSButton`, `TCWSStoreButton` i `TCWSMenuButton` używają jej (przez kompozycję) do rysowania zaokrąglonego tła — ale można ją też swobodnie kłaść na formularz. |
+| **`TCWSAvatar`** | Awatar w kształcie koła, prostokąta lub zaokrąglonego prostokąta (`Shape`, `CornerRadius`, oparte na `TCWSShape`). Pokazuje zdjęcie (`Picture`), skalowane do jego obszaru według `ImageFit` (`ifCover` — przycięcie przez środek do proporcji, domyślne; `ifContain` — całe zdjęcie widoczne z zachowaniem proporcji, tło jako „listwy"; `ifStretch` — rozciągnięcie na cały obszar, może zniekształcić; `ifCenter` — naturalny rozmiar, wyśrodkowane). Zdjęcie nigdy nie wychodzi poza kontur kształtu — jego krawędź wtapia się w tło (`Brush`) przez płynny gradient przezroczystości o szerokości `ImageMargin` pikseli (a nie twardą, zero-jedynkową granicę) — a przy braku zdjęcia wycentrowany tekst, np. inicjały, we wskazanej czcionce i kolorze (`Caption`, `Font`). |
+
 ### Komponenty pomocnicze
 
 | Komponent | Opis |
 |-----------|------|
 | **`TCWSDimOverlay`** | Warstwa przyciemniająca formularz (layered window) — idealna pod modalne dialogi. Wsparcie zaokrąglonych narożników Win11, animacja fade-in/out, blokowanie kliknięć. Wbudowany wskaźnik aktywności (loader) w 4 stylach (`cisLines`, `cisRing`, `cisSegmented`, `cisArrows`) z płynną, niezależną od FPS animacją — prędkość konfigurowalna przez `IndicatorSpeed` (stopnie/s, domyślnie 300). Animacja działa we własnym wątku, więc kręci się nawet gdy główny wątek jest zajęty. Opcjonalny tekst pod wskaźnikiem. |
 | **`TCWSAfterFormShow`** | Komponent emitujący zdarzenie `OnAfterShow` po pełnym wyrenderowaniu formularza (po `Show` / `ShowModal`, ale **nie** po przywróceniu z minimalizacji). |
-
-> ℹ️ **`TCWSShape`** *(`CWSShape.pas`)* — lekka, bezzależnościowa kontrolka graficzna (GDI+) rysująca prostokąt lub zaokrąglony prostokąt z wypełnieniem (`Brush`) i opcjonalną ramką (`Pen`). Stanowi wewnętrzny **element bazowy**, na którym opierają się inne komponenty CWStudio — m.in. `TCWSButton`, `TCWSStoreButton` i `TCWSMenuButton` używają jej (przez kompozycję) do rysowania zaokrąglonego tła. **Nie jest rejestrowana na palecie** — to budulec dla innych komponentów, a nie kontrolka do samodzielnego upuszczania na formularz.
 
 ### Moduły kolorów Fluent
 
@@ -218,7 +223,31 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Historia wersji
 
-**Najnowsza wersja — 1.8.3:**
+**Najnowsza wersja — 1.8.8:**
+
+- **Zmiana** `TCWSAvatar`: **`ImageMargin` teraz wtapia obrazek w tło, zamiast tylko rezerwować pod niego stałą, jednolitą obwódkę.** Obrazek jest renderowany do bufora poza ekranem, którego kanał alfa jest następnie stopniowany, piksel po pikselu (na podstawie odległości od konturu `Shape`/`CornerRadius` liczonej wzorem analitycznym), od pełnej nieprzezroczystości `ImageMargin` pikseli w głąb konturu aż do pełnej przezroczystości dokładnie na nim — prawdziwy, płynny gradient, a nie twarde, zero-jedynkowe przycinanie regionem GDI+ używane w 1.8.7 do trzymania obrazka z dala od rogów kształtu. `ImageMargin = 0` nadal daje minimalną krawędź ~1px z antyaliasingiem zamiast twardego cięcia. Zweryfikowane testem próbkującym piksele w paśmie przejścia przy kilku wartościach `ImageMargin` (0, 1, 15), potwierdzającym płynny gradient skalujący się z właściwością zamiast skoku.
+
+**Wersja 1.8.7:**
+
+- **Poprawka** `TCWSAvatar`: **`ifContain`/`ifCenter` nie „wylewały” już obrazka poza kontur `Circle`/`RoundRectangle`.** Rysowały zdjęcie jako zwykły, nieprzycięty prostokąt, więc jego kwadratowe rogi zasłaniały obszar poza kształtem, który powinien pozostać przezroczysty/tłem — wizualnie zamieniając okrągłą/zaokrągloną sylwetkę awatara w kwadratowe zdjęcie z ostrymi rogami. Oba tryby są teraz przycinane do tej samej ścieżki kształtu, której używają już tło i `ifCover`/`ifStretch`.
+- **Poprawka** `TCWSAvatar`: **`ifCover`/`ifStretch` nie rysowały nic** dla zdjęcia o proporcjach innych niż 1:1 — technika `TGPTextureBrush` + `FillPath` nie umieszczała obrazu tam, gdzie zamierzono, gdy (przycięte lub pełne) źródło przestawało mieć dokładnie taki sam rozmiar jak prostokąt docelowy, po cichu nie wypełniając niczego zamiast zgłosić błąd. Wszystkie cztery tryby `ImageFit` korzystają teraz z jednej wspólnej ścieżki rysowania — dla danego trybu wybierany jest prostokąt źródłowy i docelowy, całość jest przycinana do kształtu, a skalowanie wykonuje pojedyncze `G.DrawImage` — zweryfikowane baterią testów renderujących do bitmapy w pamięci i sprawdzających konkretne piksele (przeciek poza róg kształtu oraz geometria przycinania/listwowania/naturalnego rozmiaru dla każdego trybu i kształtu).
+
+**Wersja 1.8.6:**
+
+- **Nowość** `TCWSAvatar`: **`ImageFit`** (`ifCover` / `ifContain` / `ifStretch` / `ifCenter`) — sposób dopasowania zdjęcia do jego obszaru, ta sama idea co CSS `object-fit` albo klasyczny zestaw `Stretch`+`Proportional`+`Center` z VCL-owego `TImage`. `ifCover` (domyślne, dotychczasowe zachowanie) przycina przez środek tak, by wypełnić obszar bez zniekształceń; `ifContain` skaluje z zachowaniem proporcji, żeby całe zdjęcie było widoczne, z tłem `Brush` widocznym jako „listwy”; `ifStretch` rozciąga dokładnie na cały obszar w obu osiach, mogąc zniekształcić zdjęcie, jeśli jego proporcje są inne; `ifCenter` rysuje w naturalnym rozmiarze pikselowym, wyśrodkowane, przycinane tylko gdy jest większe niż obszar.
+
+**Wersja 1.8.5:**
+
+- **Nowość** `TCWSAvatar`: komponent graficzny (`TGraphicControl`) awatara — `Shape` (`Rectangle`, `RoundRectangle`, `Circle`), `CornerRadius`, `Brush`/`Pen` dla tła i obramowania, `Picture` na zdjęcie oraz `Caption`/`Font` na wycentrowane inicjały pokazywane, gdy nie ustawiono zdjęcia. Zdjęcie jest przycinane do proporcji kształtu (dopasowanie „cover”, przez środek) i rysowane przez tę samą antyaliasowaną ścieżkę GDI+ co tło, dzięki czemu jego krawędź jest gładka i wtapia się w to, co narysowane jest pod kontrolką, zamiast pokazywać twardą, pikselową granicę; `ImageMargin` zostawia dookoła obrączkę w kolorze tła.
+- **Zmiana** `TCWSShape`: **komponent trafił na paletę narzędzi** (`CWStudio_Shapes`) — dotąd istniał tylko jako wewnętrzny element budulcowy, tworzony w kodzie przez inne komponenty (np. tło `TCWSButton`). Teraz można go kłaść na formę tak jak każdy inny komponent.
+- **Nowość** `TCWSShape`: **`Circle`** dodany do `TShapeKind` obok `Rectangle`/`RoundRectangle` — rysuje elipsę wpisaną w granice kontrolki.
+- **Zmiana** `TCWSShape`: prywatne, instancyjne `BuildPath`/`MakeGPColor` stały się publicznymi `class function BuildShapePath`/`MakeGPColor`, dzięki czemu inne graficzne komponenty CWStudio (`TCWSAvatar`) mogą zbudować dokładnie ten sam antyaliasowany kontur zamiast powielać geometrię.
+
+**Wersja 1.8.4:**
+
+- **Nowość** `TCWSButton`: **`CaptionAlignment`** — poziome wyrównanie tekstu podpisu (`taLeftJustify`, `taRightJustify`, `taCenter`). Blok podpisu był już zawsze centrowany w przycisku jako całość, ale tekst wewnątrz niego miał na sztywno `taLeftJustify`, więc wielolinijkowy podpis (np. z `sLineBreak`) miał krótsze linie przyklejone do lewej krawędzi zamiast wyśrodkowane pod dłuższymi. Ustawienie `CaptionAlignment := taCenter` centruje każdą linię niezależnie.
+
+**Wersja 1.8.3:**
 
 - **Poprawka** `TCWSComboBox`: **lewy klik na pozycji listy rozwijanej nie trafia już w kontrolkę pod spodem.** Lista zamykała się na `WM_LBUTTONDOWN` — w chwili wybrania pozycji — więc do czasu, gdy przychodziło `WM_LBUTTONUP`, warstwowe okno popupu już nie istniało, a mouse-up przechodził do tego, co było pod tym miejscem na ekranie, np. nagłówka siatki, wywołując tam własne kliknięcie (niechciane sortowanie). Wybór i zamknięcie są teraz odkładane do `WM_LBUTTONUP`: okno popupu przechwytuje mysz na button-down i zostaje otwarte aż do puszczenia przycisku, dzięki czemu to ono konsumuje komunikat mouse-up, zanim się zamknie.
 - **Poprawka** `TCWSDatePicker`: **to samo przenikanie kliknięcia** — wybór dnia albo „Dziś” w rozwijanym kalendarzu zamykał go na `WM_LBUTTONDOWN`, a następujący po nim mouse-up trafiał w kontrolkę pod popupem zamiast zostać przez niego pochłonięty. Data jest ustawiana od razu jak dawniej, ale samo okno zostaje teraz otwarte, z przechwyconą myszą, aż do `WM_LBUTTONUP`; obsłużone jest też `WM_CAPTURECHANGED`, więc przejęcie przechwycenia myszy jeszcze przed puszczeniem przycisku i tak zamyka kalendarz, zamiast zostawiać go zawieszony na ekranie.
@@ -450,14 +479,19 @@ CWStudio is a library of modern, high-quality VCL components for Delphi, designe
 | **`TCWSLabelColumn`** | Two-column label — two independent texts side by side (left / right column), each with its own font (`LeftFont` / `RightFont`), alignment and width. Automatic *marquee* when a column's text is too wide (`ScrollColumns`, independent speeds `LeftScrollStep` / `RightScrollStep`, soft edge `EdgeFade`) — flicker-free (draws itself directly, no `Invalidate`). |
 | **`TCWSLabelTrend`** | "Pill" / badge label (colored status tags, e.g. Lead / POC / Closed) — capsule-shaped GDI+ fill (`Color`) with an optional border, auto-sized to its content. An icon on the left and/or right of the text (an icon-font glyph or an `ImageList` image — same idea as `TCWSMenuButton`). Full label event surface (`OnClick`, mouse, `OnMouseEnter` / `OnMouseLeave`, `OnContextPopup`). |
 
+### Shapes
+
+| Component | Description |
+|-----------|-------------|
+| **`TCWSShape`** | A lightweight, dependency-free graphic control (`TGraphicControl`, GDI+) that draws a rectangle, rounded rectangle or circle (`Shape`: `Rectangle` / `RoundRectangle` / `Circle`) with a fill (`Brush`) and an optional border (`Pen`). It is a building block the other CWStudio components are built on — e.g. `TCWSButton`, `TCWSStoreButton` and `TCWSMenuButton` use it (by composition) to render their rounded background — but it can just as freely be dropped straight onto a form. |
+| **`TCWSAvatar`** | A circular, rectangular or rounded-rectangle avatar (`Shape`, `CornerRadius`, built on `TCWSShape`). Shows a picture (`Picture`), scaled into its area per `ImageFit` (`ifCover` — center-cropped to the area's aspect ratio, default; `ifContain` — whole picture visible, aspect preserved, background as letterboxing; `ifStretch` — stretched to fill the area, may distort; `ifCenter` — natural size, centered). The picture never spills past the shape's outline — its edge fades into the `Brush` background through a soft transparency gradient `ImageMargin` pixels wide (not a hard, all-or-nothing cut) — or, with no picture set, centered text such as initials in the given font and colour (`Caption`, `Font`). |
+
 ### Helper components
 
 | Component | Description |
 |-----------|-------------|
 | **`TCWSDimOverlay`** | Dim-the-form layered overlay — perfect under modal dialogs. Supports Win11 rounded corners, fade-in/out animation, click blocking. Built-in activity indicator (loader) in 4 styles (`cisLines`, `cisRing`, `cisSegmented`, `cisArrows`) with smooth, frame-rate-independent animation — speed configurable via `IndicatorSpeed` (degrees/s, default 300). The animation runs on its own thread, so it keeps spinning even while the main thread is busy. Optional caption below the indicator. |
 | **`TCWSAfterFormShow`** | Component that fires an `OnAfterShow` event once the form is fully painted after `Show` / `ShowModal` (but **not** on un-minimize). |
-
-> ℹ️ **`TCWSShape`** *(`CWSShape.pas`)* — a lightweight, dependency-free GDI+ graphic control that draws a rectangle or rounded rectangle with a fill (`Brush`) and an optional border (`Pen`). It is an internal **building block** the other CWStudio components are built on — e.g. `TCWSButton`, `TCWSStoreButton` and `TCWSMenuButton` use it (by composition) to render their rounded background. It is **not registered on the palette** — it's a foundation for other components, not a drop-on-form control.
 
 ### Fluent color modules
 
@@ -574,7 +608,31 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ Version history
 
-**Latest release — 1.8.3:**
+**Latest release — 1.8.8:**
+
+- **Changed** `TCWSAvatar`: **`ImageMargin` now feathers the image into the background instead of just reserving a solid ring for it.** The image is rendered into an offscreen buffer whose alpha is then ramped, pixel by pixel (via a closed-form distance to the Shape/CornerRadius outline), from fully opaque `ImageMargin` pixels inside the outline down to fully transparent right at it — a genuine soft gradient, not the hard, all-or-nothing GDI+ region clip 1.8.7 used to keep the image off the shape's corners. `ImageMargin = 0` still gets a minimal ~1px anti-aliased edge rather than a hard cut. Verified with a widened pixel-sampling test across the transition band at several `ImageMargin` values (0, 1, 15), confirming a smooth ramp scaling with the property instead of a step.
+
+**Version 1.8.7:**
+
+- **Fix** `TCWSAvatar`: **`ifContain`/`ifCenter` no longer let a picture spill past a `Circle`/`RoundRectangle` outline.** They drew the picture as a plain, unclipped rectangle, so its square corners covered the region outside the shape that is meant to stay transparent/background — visually replacing the round/rounded silhouette with a hard-edged square photo. Both modes are now clipped to the same shape path the background and `ifCover`/`ifStretch` already use.
+- **Fix** `TCWSAvatar`: **`ifCover`/`ifStretch` painted nothing at all for a non-square picture** (any width/height ratio other than 1:1) — the `TGPTextureBrush` + `FillPath` technique they used turned out not to place the image where intended once the (cropped or full) source stopped being exactly the size of the destination rectangle, silently filling with nothing instead of raising an error. All four `ImageFit` modes now share one drawing path — pick a source rectangle and a destination rectangle for the mode, clip to the shape, and let a single `G.DrawImage` do the scaling — verified against a battery of offscreen-rendered pixel checks (shape-corner leakage, and per-mode crop/letterbox/natural-size geometry) covering every mode and shape.
+
+**Version 1.8.6:**
+
+- **New** `TCWSAvatar`: **`ImageFit`** (`ifCover` / `ifContain` / `ifStretch` / `ifCenter`) — controls how the picture is resized into its area, the same idea as CSS `object-fit` or the classic VCL `TImage` `Stretch`+`Proportional`+`Center` combination. `ifCover` (default, previous behaviour) center-crops to fill the area with no distortion; `ifContain` scales down/up preserving aspect ratio so the whole picture stays visible, letterboxed by the `Brush` background; `ifStretch` fills the area exactly on both axes, distorting the picture if its aspect ratio differs; `ifCenter` draws it at its natural pixel size, centered, clipped only if larger than the area.
+
+**Version 1.8.5:**
+
+- **New** `TCWSAvatar`: a graphic (`TGraphicControl`) avatar component — `Shape` (`Rectangle`, `RoundRectangle`, `Circle`), `CornerRadius`, `Brush`/`Pen` for the background and border, `Picture` for a photo and `Caption`/`Font` for centered initials shown when no picture is set. The picture is center-cropped to the shape's aspect ratio ("cover" fit) and filled through the same anti-aliased GDI+ path used for the background, so its edge comes out smooth and blends into whatever is painted behind the control rather than showing a hard pixel boundary; `ImageMargin` leaves a ring of the background colour around it.
+- **Changed** `TCWSShape`: **published on the component palette** (`CWStudio_Shapes`) — until now it only existed as an internal building block other components created in code (e.g. `TCWSButton`'s background). It can now be dropped straight onto a form like any other component.
+- **New** `TCWSShape`: **`Circle`** added to `TShapeKind` alongside `Rectangle`/`RoundRectangle` — draws an ellipse inscribed in the control's bounds.
+- **Changed** `TCWSShape`: the private per-instance `BuildPath`/`MakeGPColor` became public `class function BuildShapePath`/`MakeGPColor`, so other CWStudio graphic controls (`TCWSAvatar`) can build the exact same anti-aliased outline instead of duplicating the geometry.
+
+**Version 1.8.4:**
+
+- **New** `TCWSButton`: **`CaptionAlignment`** — horizontal alignment of the caption text (`taLeftJustify`, `taRightJustify`, `taCenter`). The caption block was already centered in the button as a whole, but the text inside it was hard-coded to `taLeftJustify`, so a multi-line caption (e.g. containing `sLineBreak`) had its shorter lines stuck to the left edge instead of centered under the longer ones. Setting `CaptionAlignment := taCenter` centers every line independently.
+
+**Version 1.8.3:**
 
 - **Fix** `TCWSComboBox`: **a left-click on a dropdown item no longer reaches the control underneath it.** The dropdown list closed on `WM_LBUTTONDOWN` — the moment an item was picked — so by the time `WM_LBUTTONUP` arrived the layered popup window was already gone, and the mouse-up fell through to whatever sat at that screen position, e.g. a grid header, triggering its own click there (an unwanted sort). Selection and the close are now deferred to `WM_LBUTTONUP`: the popup window captures the mouse on button-down and stays open until the button is released, so it is the one to consume the up message before closing itself.
 - **Fix** `TCWSDatePicker`: **the same click-through** — choosing a day, or Today, in the calendar dropdown closed it on `WM_LBUTTONDOWN`, and the mouse-up that followed reached the control underneath the popup instead of being swallowed by it. The date is still set immediately, but the window itself now stays open, with mouse capture held, until `WM_LBUTTONUP`; `WM_CAPTURECHANGED` is handled too, so capture stolen before the button comes up still closes the dropdown instead of leaving it stuck open.
