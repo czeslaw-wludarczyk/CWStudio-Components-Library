@@ -1,4 +1,4 @@
-//////////////////////////////////////////////////////////////////////////
+﻿//////////////////////////////////////////////////////////////////////////
 //
 //   CWStudio Components Library
 //   Created by Czesław Włudarczyk 2026 CWStudio
@@ -139,6 +139,15 @@ begin
   FPen.OnChange := StyleChanged;
   FPen.Style := TShapePenStyle.Clear;
 
+  { Both sub-objects were moved away from the values TCWSShapeBrush/Pen set
+    up themselves (grey fill, no border), so the designer has to be told that
+    THESE are now the baseline. Without it the writer would compare against
+    the classes' own defaults and skip, for example, Pen.Style = Solid — the
+    border would then show in the designer and disappear at run time, because
+    the constructor's Clear would never be overwritten from the DFM. }
+  FBrush.SetDefaults;
+  FPen.SetDefaults;
+
   FShape := TShapeKind.Circle;
   FCornerRadius := 12;
   FImageMargin := 0;
@@ -250,18 +259,52 @@ end;
 
 { Signed "how far inside the shape" distance, in pixels, of point (PX, PY)
   from the Shape/CornerRadius outline of the (X, Y, W, H) box — positive and
-  growing inward, zero on the outline, negative outside it. Closed-form
-  distance fields for the three shapes (the RoundRectangle formula also
-  covers plain Rectangle, at R = 0); used to feather the image's edge — see
-  DrawImage. }
+  growing inward, zero on the outline, negative outside it. Exact for the
+  rounded rectangle (the same formula covers a plain Rectangle, at R = 0) and
+  for a circular outline; approximated for an elliptical one, see below. Used
+  to feather the image's edge — see DrawImage. }
 function TCWSAvatar.InsideDistance(X, Y, W, H, R, PX, PY: Single): Single;
 var
-  cx, cy, halfW, halfH, rad, qx, qy, outsideDist, insideDist: Single;
+  cx, cy, dx, dy, a, b, F, Gx, Gy, GLen: Single;
+  halfW, halfH, rad, qx, qy, outsideDist, insideDist: Single;
 begin
   cx := X + W / 2;
   cy := Y + H / 2;
   if FShape = TShapeKind.Circle then
-    Result := Min(W, H) / 2 - Sqrt(Sqr(PX - cx) + Sqr(PY - cy))
+  begin
+    { BuildShapePath draws an ellipse inscribed in the box, so on a control
+      that is not square the outline is an ellipse, not a circle — measuring
+      against a circle of radius Min(W, H) / 2 would fade the image along a
+      different curve than the one the Brush fills.
+
+      There is no closed form for the distance to an ellipse, so use the
+      first-order estimate -F / |grad F| of the implicit function
+      F = (dx/a)^2 + (dy/b)^2 - 1. It degrades far from the outline (near the
+      centre it over-estimates), but is accurate to a few percent within a
+      few pixels of it — and that band is the only place the feather ramp
+      actually reads it. For a == b it is exactly the circle formula anyway. }
+    a := W / 2;
+    b := H / 2;
+    if (a <= 0) or (b <= 0) then
+      Exit(-1);
+
+    dx := PX - cx;
+    dy := PY - cy;
+
+    if SameValue(a, b, 0.01) then
+      Result := a - Sqrt(Sqr(dx) + Sqr(dy))
+    else
+    begin
+      F := Sqr(dx / a) + Sqr(dy / b) - 1;
+      Gx := 2 * dx / Sqr(a);
+      Gy := 2 * dy / Sqr(b);
+      GLen := Sqrt(Sqr(Gx) + Sqr(Gy));
+      if GLen < 1E-9 then
+        Result := Min(a, b) { exactly at the centre: gradient vanishes }
+      else
+        Result := -F / GLen;
+    end;
+  end
   else
   begin
     halfW := W / 2;
@@ -306,6 +349,7 @@ var
   MS: TMemoryStream;
   StreamAdapter: IStream;
   SrcImg, Buf: TGPBitmap;
+  Fallback: TBitmap;
   G2: TGPGraphics;
   BmpData: TBitmapData;
   SrcW, SrcH, TargetAspect, SrcAspect: Single;
@@ -317,109 +361,147 @@ var
 begin
   if (W <= 0) or (H <= 0) then Exit;
 
+  SrcImg := nil;
+  Fallback := nil;
   MS := TMemoryStream.Create;
   try
-    FPicture.Graphic.SaveToStream(MS);
-    MS.Position := 0;
-    StreamAdapter := TStreamAdapter.Create(MS, soReference) as IStream;
-    SrcImg := TGPBitmap.Create(StreamAdapter);
+    { GDI+ has to keep reading from the stream for as long as the bitmap
+      lives, so MS is only released in the outer finally, after SrcImg. }
     try
-      SrcW := SrcImg.GetWidth;
-      SrcH := SrcImg.GetHeight;
-      if (SrcW <= 0) or (SrcH <= 0) then Exit;
+      FPicture.Graphic.SaveToStream(MS);
+      MS.Position := 0;
+      StreamAdapter := TStreamAdapter.Create(MS, soReference) as IStream;
+      SrcImg := TGPBitmap.Create(StreamAdapter);
+      if SrcImg.GetLastStatus <> Ok then
+        FreeAndNil(SrcImg);
+    except
+      { A graphic class whose stream format GDI+ cannot decode (icons,
+        metafiles, some exotic bitmaps) must not take the whole Paint down. }
+      FreeAndNil(SrcImg);
+    end;
 
-      CropX := 0; CropY := 0; CropW := SrcW; CropH := SrcH;
-      DstX := 0; DstY := 0; DstW := W; DstH := H;
+    if SrcImg = nil then
+    begin
+      { Fallback: let the VCL rasterise the graphic into a plain DIB and hand
+        that to GDI+ instead. Transparency is lost, so the picture is drawn
+        onto the Brush colour rather than onto black.
+        GdipCreateBitmapFromHBITMAP copies the pixels, so Fallback may be
+        freed as soon as SrcImg exists. }
+      Fallback := TBitmap.Create;
+      Fallback.PixelFormat := pf24bit;
+      Fallback.SetSize(Max(1, FPicture.Width), Max(1, FPicture.Height));
+      if FBrush.Style = TShapeBrushStyle.Solid then
+        Fallback.Canvas.Brush.Color := FBrush.Color
+      else
+        Fallback.Canvas.Brush.Color := clWhite;
+      Fallback.Canvas.FillRect(Rect(0, 0, Fallback.Width, Fallback.Height));
+      Fallback.Canvas.Draw(0, 0, FPicture.Graphic);
 
-      case FImageFit of
-        ifCover:
+      { Explicit casts: without them the (Width, Height) overload of
+        TGPBitmap.Create is also a candidate. }
+      SrcImg := TGPBitmap.Create(HBITMAP(Fallback.Handle), HPALETTE(0));
+    end;
+
+    if SrcImg.GetLastStatus <> Ok then Exit;
+
+    SrcW := SrcImg.GetWidth;
+    SrcH := SrcImg.GetHeight;
+    if (SrcW <= 0) or (SrcH <= 0) then Exit;
+
+    CropX := 0; CropY := 0; CropW := SrcW; CropH := SrcH;
+    DstX := 0; DstY := 0; DstW := W; DstH := H;
+
+    case FImageFit of
+      ifCover:
+        begin
+          TargetAspect := W / H;
+          SrcAspect := SrcW / SrcH;
+          if SrcAspect > TargetAspect then
           begin
-            TargetAspect := W / H;
-            SrcAspect := SrcW / SrcH;
-            if SrcAspect > TargetAspect then
-            begin
-              CropH := SrcH;
-              CropW := SrcH * TargetAspect;
-              CropX := (SrcW - CropW) / 2;
-            end
-            else
-            begin
-              CropW := SrcW;
-              CropH := SrcW / TargetAspect;
-              CropY := (SrcH - CropH) / 2;
-            end;
-          end;
-
-        { ifStretch needs no adjustment: full source onto the whole area. }
-        ifStretch: ;
-
-        ifContain:
+            CropH := SrcH;
+            CropW := SrcH * TargetAspect;
+            CropX := (SrcW - CropW) / 2;
+          end
+          else
           begin
-            Scale := Min(W / SrcW, H / SrcH);
-            DstW := SrcW * Scale;
-            DstH := SrcH * Scale;
-            DstX := (W - DstW) / 2;
-            DstY := (H - DstH) / 2;
+            CropW := SrcW;
+            CropH := SrcW / TargetAspect;
+            CropY := (SrcH - CropH) / 2;
           end;
+        end;
 
-        ifCenter:
-          begin
-            DstW := SrcW;
-            DstH := SrcH;
-            DstX := (W - DstW) / 2;
-            DstY := (H - DstH) / 2;
-          end;
-      end;
+      { ifStretch needs no adjustment: full source onto the whole area. }
+      ifStretch: ;
 
-      IW := Max(1, Round(W));
-      IH := Max(1, Round(H));
+      ifContain:
+        begin
+          Scale := Min(W / SrcW, H / SrcH);
+          DstW := SrcW * Scale;
+          DstH := SrcH * Scale;
+          DstX := (W - DstW) / 2;
+          DstY := (H - DstH) / 2;
+        end;
 
-      Buf := TGPBitmap.Create(IW, IH, PixelFormat32bppARGB);
+      ifCenter:
+        begin
+          DstW := SrcW;
+          DstH := SrcH;
+          DstX := (W - DstW) / 2;
+          DstY := (H - DstH) / 2;
+        end;
+    end;
+
+    IW := Max(1, Round(W));
+    IH := Max(1, Round(H));
+
+    Buf := TGPBitmap.Create(IW, IH, PixelFormat32bppARGB);
+    try
+      G2 := TGPGraphics.Create(Buf);
       try
-        G2 := TGPGraphics.Create(Buf);
-        try
-          G2.SetSmoothingMode(SmoothingModeAntiAlias);
-          G2.SetInterpolationMode(InterpolationModeHighQualityBicubic);
-          { Overwrite Buf's pixels outright (RGB and alpha) instead of
-            alpha-blending onto its initial fully-transparent black, which
-            would otherwise darken the image's own semi-transparent pixels. }
-          G2.SetCompositingMode(CompositingModeSourceCopy);
-          G2.DrawImage(SrcImg, MakeRect(DstX, DstY, DstW, DstH),
-            CropX, CropY, CropW, CropH, UnitPixel);
-        finally
-          G2.Free;
-        end;
-
-        Feather := Max(1, FImageMargin);
-
-        Buf.LockBits(MakeRect(0, 0, IW, IH), ImageLockModeRead or ImageLockModeWrite,
-          PixelFormat32bppARGB, BmpData);
-        try
-          for Row := 0 to IH - 1 do
-          begin
-            RowPtr := PByte(BmpData.Scan0) + Row * BmpData.Stride;
-            for Col := 0 to IW - 1 do
-            begin
-              Factor := InsideDistance(X, Y, W, H, FCornerRadius,
-                X + Col + 0.5, Y + Row + 0.5) / Feather;
-              if Factor < 0 then Factor := 0
-              else if Factor > 1 then Factor := 1;
-              { PixelFormat32bppARGB byte order in memory is B, G, R, A. }
-              RowPtr[Col * 4 + 3] := Round(RowPtr[Col * 4 + 3] * Factor);
-            end;
-          end;
-        finally
-          Buf.UnlockBits(BmpData);
-        end;
-
-        G.DrawImage(Buf, MakeRect(X, Y, W, H), 0, 0, IW, IH, UnitPixel);
+        G2.SetSmoothingMode(SmoothingModeAntiAlias);
+        G2.SetInterpolationMode(InterpolationModeHighQualityBicubic);
+        { Overwrite Buf's pixels outright (RGB and alpha) instead of
+          alpha-blending onto its initial fully-transparent black, which
+          would otherwise darken the image's own semi-transparent pixels. }
+        G2.SetCompositingMode(CompositingModeSourceCopy);
+        G2.DrawImage(SrcImg, MakeRect(DstX, DstY, DstW, DstH),
+          CropX, CropY, CropW, CropH, UnitPixel);
       finally
-        Buf.Free;
+        G2.Free;
       end;
+
+      Feather := Max(1, FImageMargin);
+
+      Buf.LockBits(MakeRect(0, 0, IW, IH), ImageLockModeRead or ImageLockModeWrite,
+        PixelFormat32bppARGB, BmpData);
+      try
+        for Row := 0 to IH - 1 do
+        begin
+          RowPtr := PByte(BmpData.Scan0) + Row * BmpData.Stride;
+          for Col := 0 to IW - 1 do
+          begin
+            Factor := InsideDistance(X, Y, W, H, FCornerRadius,
+              X + Col + 0.5, Y + Row + 0.5) / Feather;
+            if Factor < 0 then Factor := 0
+            else if Factor > 1 then Factor := 1;
+            { PixelFormat32bppARGB byte order in memory is B, G, R, A. }
+            RowPtr[Col * 4 + 3] := Round(RowPtr[Col * 4 + 3] * Factor);
+          end;
+        end;
+      finally
+        Buf.UnlockBits(BmpData);
+      end;
+
+      G.DrawImage(Buf, MakeRect(X, Y, W, H), 0, 0, IW, IH, UnitPixel);
     finally
-      SrcImg.Free;
+      Buf.Free;
     end;
   finally
+    { Order matters: the adapter and the stream may only go away once the
+      GDI+ bitmap built on top of them is gone. }
+    SrcImg.Free;
+    Fallback.Free;
+    StreamAdapter := nil;
     MS.Free;
   end;
 end;

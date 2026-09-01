@@ -1,4 +1,4 @@
-//////////////////////////////////////////////////////////////////////////
+﻿//////////////////////////////////////////////////////////////////////////
 //
 //   CWStudio Components Library
 //   Created by Czesław Włudarczyk 2026 CWStudio
@@ -38,45 +38,78 @@ type
     radio / check box / switch components. }
   TCWSTextPosition = (tpRight, tpLeft, tpTop, tpBottom);
 
-  { Fill description }
+  { Fill description.
+
+    Streaming note — why these properties use "stored" functions instead of
+    the usual "default" directive: a fixed "default Something" is only
+    correct as long as every owning component leaves the sub-object at the
+    values set in its constructor. TCWSAvatar, for instance, deliberately
+    starts with a grey Brush and a Clear Pen. With a fixed default the
+    designer would then refuse to save the very values that happen to match
+    that default (e.g. Pen.Style = Solid), the DFM would come out empty for
+    them, and the owner's constructor would silently win at run time — the
+    control looks right in the designer and wrong in the running program.
+
+    Instead, each instance remembers the values it was left with (see
+    SetDefaults) and stores a property only when it actually differs from
+    them. Owners that change Brush/Pen in their constructor must call
+    SetDefaults at the end of it. }
   TCWSShapeBrush = class(TPersistent)
   private
     FColor: TColor;
     FStyle: TShapeBrushStyle;
+    FDefColor: TColor;
+    FDefStyle: TShapeBrushStyle;
     FOnChange: TNotifyEvent;
     procedure SetColor(const Value: TColor);
     procedure SetStyle(const Value: TShapeBrushStyle);
+    function IsColorStored: Boolean;
+    function IsStyleStored: Boolean;
   protected
     procedure Changed;
   public
     constructor Create;
     procedure Assign(Source: TPersistent); override;
+    { Takes the current values as this instance's defaults: from now on a
+      property is written to the DFM only if it differs from them. Call it
+      at the end of the owning component's constructor, after any
+      customisation of the brush. }
+    procedure SetDefaults;
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
   published
-    property Color: TColor read FColor write SetColor default clWhite;
-    property Style: TShapeBrushStyle read FStyle write SetStyle default TShapeBrushStyle.Solid;
+    property Color: TColor read FColor write SetColor stored IsColorStored;
+    property Style: TShapeBrushStyle read FStyle write SetStyle stored IsStyleStored;
   end;
 
-  { Border description }
+  { Border description. Same streaming scheme as TCWSShapeBrush — see the
+    comment there. }
   TCWSShapePen = class(TPersistent)
   private
     FColor: TColor;
     FWidth: Integer;
     FStyle: TShapePenStyle;
+    FDefColor: TColor;
+    FDefWidth: Integer;
+    FDefStyle: TShapePenStyle;
     FOnChange: TNotifyEvent;
     procedure SetColor(const Value: TColor);
     procedure SetWidth(const Value: Integer);
     procedure SetStyle(const Value: TShapePenStyle);
+    function IsColorStored: Boolean;
+    function IsWidthStored: Boolean;
+    function IsStyleStored: Boolean;
   protected
     procedure Changed;
   public
     constructor Create;
     procedure Assign(Source: TPersistent); override;
+    { See TCWSShapeBrush.SetDefaults. }
+    procedure SetDefaults;
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
   published
-    property Color: TColor read FColor write SetColor default clBlack;
-    property Width: Integer read FWidth write SetWidth default 1;
-    property Style: TShapePenStyle read FStyle write SetStyle default TShapePenStyle.Solid;
+    property Color: TColor read FColor write SetColor stored IsColorStored;
+    property Width: Integer read FWidth write SetWidth stored IsWidthStored;
+    property Style: TShapePenStyle read FStyle write SetStyle stored IsStyleStored;
   end;
 
   { Graphic shape control }
@@ -130,6 +163,23 @@ begin
   inherited Create;
   FColor := clWhite;
   FStyle := TShapeBrushStyle.Solid;
+  SetDefaults;
+end;
+
+procedure TCWSShapeBrush.SetDefaults;
+begin
+  FDefColor := FColor;
+  FDefStyle := FStyle;
+end;
+
+function TCWSShapeBrush.IsColorStored: Boolean;
+begin
+  Result := FColor <> FDefColor;
+end;
+
+function TCWSShapeBrush.IsStyleStored: Boolean;
+begin
+  Result := FStyle <> FDefStyle;
 end;
 
 procedure TCWSShapeBrush.Changed;
@@ -176,6 +226,29 @@ begin
   FColor := clBlack;
   FWidth := 1;
   FStyle := TShapePenStyle.Solid;
+  SetDefaults;
+end;
+
+procedure TCWSShapePen.SetDefaults;
+begin
+  FDefColor := FColor;
+  FDefWidth := FWidth;
+  FDefStyle := FStyle;
+end;
+
+function TCWSShapePen.IsColorStored: Boolean;
+begin
+  Result := FColor <> FDefColor;
+end;
+
+function TCWSShapePen.IsWidthStored: Boolean;
+begin
+  Result := FWidth <> FDefWidth;
+end;
+
+function TCWSShapePen.IsStyleStored: Boolean;
+begin
+  Result := FStyle <> FDefStyle;
 end;
 
 procedure TCWSShapePen.Changed;
@@ -207,10 +280,18 @@ begin
 end;
 
 procedure TCWSShapePen.SetWidth(const Value: Integer);
+var
+  NewWidth: Integer;
 begin
-  if FWidth <> Value then
+  { A negative pen width has no meaning and would make GDI+ fail silently. }
+  if Value < 0 then
+    NewWidth := 0
+  else
+    NewWidth := Value;
+
+  if FWidth <> NewWidth then
   begin
-    FWidth := Value;
+    FWidth := NewWidth;
     Changed;
   end;
 end;
@@ -235,6 +316,13 @@ begin
   FPen.OnChange := StyleChanged;
   FShape := TShapeKind.Rectangle;
   FCornerRadius := 8;
+
+  { This control keeps the brush/pen values as created, but the call is made
+    anyway so the pattern is obvious to anyone deriving from it: whatever the
+    constructor leaves in Brush/Pen becomes the "not stored" baseline. }
+  FBrush.SetDefaults;
+  FPen.SetDefaults;
+
   Width := 65;
   Height := 65;
 end;

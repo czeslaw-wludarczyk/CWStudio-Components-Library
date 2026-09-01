@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.8.8](https://img.shields.io/badge/version-1.8.8-blue.svg)](CHANGELOG.md)
+[![Version: 1.8.9](https://img.shields.io/badge/version-1.8.9-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -223,7 +223,11 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Historia wersji
 
-**Najnowsza wersja — 1.8.8:**
+**Najnowsza wersja — 1.8.9:**
+
+- **Poprawka** `TCWSShape` / `TCWSAvatar`: **wartość `Brush` albo `Pen` ustawiona w projektancie mogła nie trafić do `.dfm` i po cichu zniknąć w działającej aplikacji.** `TCWSShapeBrush.Color`/`Style` oraz `TCWSShapePen.Color`/`Width`/`Style` były publikowane ze sztywnymi dyrektywami `default`, a te są prawdziwe tylko dla właściciela, który zostawia oba pod-obiekty dokładnie takie, jakie tworzą same klasy (białe wypełnienie, ciągła czarna ramka 1 px). `TCWSAvatar` tak nie robi — jego konstruktor celowo ustawia szary `Brush.Color` i `Pen.Style` na `Clear` — więc każda wartość zgodna z domyślną klasy była przez zapisywarkę pomijana: nadanie awatarowi ramki przez `Pen.Style := Solid` pokazywało ramkę w projektancie, nie zapisywało nic do `.dfm` i zostawiało w uruchomionym programie `Clear` z konstruktora. Każda instancja brush/pen pamięta teraz wartości, z jakimi zostawił ją konstruktor właściciela (`SetDefaults`), i zapisuje właściwość wtedy, gdy różni się od *tych* wartości — przez funkcje `stored` zamiast `default` — dzięki czemu projektant i działający program pokazują to samo. Właściciele zmieniający `Brush`/`Pen` w swoim konstruktorze muszą na końcu wywołać `SetDefaults`; sam `TCWSShape` też to robi, choć niczego nie zmienia, żeby wzorzec był oczywisty dla wszystkiego, co po nim dziedziczy.
+
+**Wersja 1.8.8:**
 
 - **Zmiana** `TCWSAvatar`: **`ImageMargin` teraz wtapia obrazek w tło, zamiast tylko rezerwować pod niego stałą, jednolitą obwódkę.** Obrazek jest renderowany do bufora poza ekranem, którego kanał alfa jest następnie stopniowany, piksel po pikselu (na podstawie odległości od konturu `Shape`/`CornerRadius` liczonej wzorem analitycznym), od pełnej nieprzezroczystości `ImageMargin` pikseli w głąb konturu aż do pełnej przezroczystości dokładnie na nim — prawdziwy, płynny gradient, a nie twarde, zero-jedynkowe przycinanie regionem GDI+ używane w 1.8.7 do trzymania obrazka z dala od rogów kształtu. `ImageMargin = 0` nadal daje minimalną krawędź ~1px z antyaliasingiem zamiast twardego cięcia. Zweryfikowane testem próbkującym piksele w paśmie przejścia przy kilku wartościach `ImageMargin` (0, 1, 15), potwierdzającym płynny gradient skalujący się z właściwością zamiast skoku.
 
@@ -608,7 +612,11 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ Version history
 
-**Latest release — 1.8.8:**
+**Latest release — 1.8.9:**
+
+- **Fix** `TCWSShape` / `TCWSAvatar`: **a `Brush` or `Pen` value set in the designer could be left out of the `.dfm` and silently lost at run time.** `TCWSShapeBrush.Color`/`Style` and `TCWSShapePen.Color`/`Width`/`Style` were published with fixed `default` directives, and those only tell the truth for an owner that leaves the two sub-objects exactly as the classes create them (white fill, solid black 1 px border). `TCWSAvatar` does not — its constructor deliberately sets a grey `Brush.Color` and a `Pen.Style` of `Clear` — so any value that happened to match the class default was skipped by the writer: giving an avatar a border with `Pen.Style := Solid` showed the border in the designer, wrote nothing to the `.dfm`, and left the constructor's `Clear` standing in the running application. Each brush/pen instance now remembers the values its owner's constructor left it with (`SetDefaults`) and streams a property whenever it differs from *those*, through `stored` functions instead of `default` — so the designer and the running program show the same thing. Owners that customise `Brush`/`Pen` in their constructor have to call `SetDefaults` at the end of it; `TCWSShape` itself calls it too, although it changes nothing, so the pattern is obvious to anything deriving from it.
+
+**Version 1.8.8:**
 
 - **Changed** `TCWSAvatar`: **`ImageMargin` now feathers the image into the background instead of just reserving a solid ring for it.** The image is rendered into an offscreen buffer whose alpha is then ramped, pixel by pixel (via a closed-form distance to the Shape/CornerRadius outline), from fully opaque `ImageMargin` pixels inside the outline down to fully transparent right at it — a genuine soft gradient, not the hard, all-or-nothing GDI+ region clip 1.8.7 used to keep the image off the shape's corners. `ImageMargin = 0` still gets a minimal ~1px anti-aliased edge rather than a hard cut. Verified with a widened pixel-sampling test across the transition band at several `ImageMargin` values (0, 1, 15), confirming a smooth ramp scaling with the property instead of a step.
 

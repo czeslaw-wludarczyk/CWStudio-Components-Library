@@ -62,15 +62,15 @@
         <GenPackage>true</GenPackage>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>
         <DCC_CBuilderOutput>All</DCC_CBuilderOutput>
-        <DCC_Description>CWStudio Components Library 1.8.8 (runtime)</DCC_Description>
+        <DCC_Description>CWStudio Components Library 1.8.9 (runtime)</DCC_Description>
         <SanitizedProjectName>CWStudio_ComponentsRT</SanitizedProjectName>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_MajorVer>1</VerInfo_MajorVer>
         <VerInfo_MinorVer>8</VerInfo_MinorVer>
-        <VerInfo_Release>8</VerInfo_Release>
+        <VerInfo_Release>9</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
         <VerInfo_Locale>1045</VerInfo_Locale>
-        <VerInfo_Keys>CompanyName=Czesław Włudarczyk;FileDescription=CWStudio Components Library (runtime);FileVersion=1.8.8.0;InternalName=CWStudio_ComponentsRT;LegalCopyright=© Czesław Włudarczyk;LegalTrademarks=;OriginalFilename=CWStudio_ComponentsRT.bpl;ProgramID=com.cwstudio.components;ProductName=CWStudio Components;ProductVersion=1.8.8.0;Comments=MIT</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=Czesław Włudarczyk;FileDescription=CWStudio Components Library (runtime);FileVersion=1.8.9.0;InternalName=CWStudio_ComponentsRT;LegalCopyright=© Czesław Włudarczyk;LegalTrademarks=;OriginalFilename=CWStudio_ComponentsRT.bpl;ProgramID=com.cwstudio.components;ProductName=CWStudio Components;ProductVersion=1.8.9.0;Comments=MIT</VerInfo_Keys>
         <DCC_UsePackage>vcl;rtl;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
