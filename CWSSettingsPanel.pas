@@ -28,18 +28,38 @@ uses
   System.Classes, Vcl.Controls, Vcl.Graphics, System.UITypes;
 
 type
+  { Which edges of the outer 1px border are painted. Dropping an edge only hides
+    that line; the panel fill and the child-clipping shape are unaffected. }
+  TCWSBorderEdge = (beTop, beLeft, beRight, beBottom);
+  TCWSBorderEdges = set of TCWSBorderEdge;
+
+  { Which corners are rounded. Each corner is independent: a corner not in the
+    set is drawn square in the body fill, the border and the child-clip region,
+    regardless of CornerRadius / InnerCornerRadius (those values are kept). }
+  TCWSCorner = (coTopLeft, coTopRight, coBottomRight, coBottomLeft);
+  TCWSCorners = set of TCWSCorner;
+
   TCWSSettingsPanel = class(TCustomControl)
   private
     FFillColor: TColor;
     FBorderColor: TColor;
     FCornerRadius: Integer;
     FInnerCornerRadius: Integer;
+    FRoundedCorners: TCWSCorners;
+    FBorderEdges: TCWSBorderEdges;
     procedure SetFillColor(const Value: TColor);
     procedure SetBorderColor(const Value: TColor);
     procedure SetCornerRadius(const Value: Integer);
     procedure SetInnerCornerRadius(const Value: Integer);
+    procedure SetRoundedCorners(const Value: TCWSCorners);
+    procedure SetBorderEdges(const Value: TCWSBorderEdges);
     function GetParentBgColor: TColor;
     procedure DrawParentBackground(DC: HDC; ARadius: Single);
+    { Strokes the enabled BorderEdges of the panel outline. Same geometry as
+      AddRoundRectPath: a corner arc is emitted only where both of its adjacent
+      edges are enabled AND that corner is in RoundedCorners. }
+    procedure DrawBorder(G: TGPGraphics; X, Y, RW, RH, D: Single;
+      Corners: TCWSCorners);
     function MakeGPColor(AColor: TColor): Cardinal;
     { Builds the inner-border clip shape (the 1px-inset rounded rectangle) in the
       coordinate system whose origin is offset by (OffsetX, OffsetY). Pass a child
@@ -85,6 +105,20 @@ type
       corners. Defaults to CornerRadius - 1 so it nests neatly inside the border. }
     property InnerCornerRadius: Integer read FInnerCornerRadius write SetInnerCornerRadius default 7;
 
+    { Which corners are rounded — each one independently. A corner removed from
+      the set is drawn square in the body fill, the border and the child-clip
+      region; CornerRadius / InnerCornerRadius still apply to the corners that
+      remain. Clear the whole set for a fully square panel. }
+    property RoundedCorners: TCWSCorners read FRoundedCorners write SetRoundedCorners
+      default [coTopLeft, coTopRight, coBottomRight, coBottomLeft];
+
+    { Which of the four border edges are painted. Drop an edge to leave that side
+      of the panel open; the fill and the child clipping are not affected. A
+      corner arc is drawn only where both of its edges remain and that corner is
+      in RoundedCorners. }
+    property BorderEdges: TCWSBorderEdges read FBorderEdges write SetBorderEdges
+      default [beTop, beLeft, beRight, beBottom];
+
     // Events in the Object Inspector
     property OnClick;
     property OnDblClick;
@@ -101,24 +135,56 @@ type
   { Cracker that exposes the parent's protected Color property. }
   TControlAccess = class(TControl);
 
-{ Adds a rounded rectangle (top-left at X,Y, size RW x RH, corner diameter D) to
-  the GDI+ path. Shared by the panel fill/border and the antialiased corner
-  overlay so both use the exact same curve. }
-procedure AddRoundRectPath(APath: TGPGraphicsPath; X, Y, RW, RH, D: Single);
+{ Adds a rectangle (top-left at X,Y, size RW x RH, corner diameter D) to the GDI+
+  path, rounding only the corners listed in Corners. Shared by the panel fill and
+  the border stroke so both use the exact same outline. Built edge-by-edge from
+  explicit endpoints (no zero-length segments) so a square corner is a true 90°
+  angle, not a chamfer. }
+procedure AddRoundRectPath(APath: TGPGraphicsPath; X, Y, RW, RH, D: Single;
+  Corners: TCWSCorners);
+var
+  HR: Single;
+  x1, x2, y1, y2: Single;
 begin
   if D > RH then D := RH;
   if D > RW then D := RW;
   if D < 0 then D := 0;
-  if D > 0 then
+
+  if (D = 0) or (Corners = []) then
   begin
-    APath.AddArc(X,              Y,              D, D, 180, 90);
-    APath.AddArc(X + RW - D,     Y,              D, D, 270, 90);
-    APath.AddArc(X + RW - D,     Y + RH - D,     D, D,   0, 90);
-    APath.AddArc(X,              Y + RH - D,     D, D,  90, 90);
-    APath.CloseFigure;
-  end
-  else
     APath.AddRectangle(MakeRect(X, Y, RW, RH));
+    Exit;
+  end;
+
+  HR := D / 2;
+
+  { Where each edge meets its corners: inset by HR at a rounded corner, flush to
+    the corner point at a square one. }
+  if coTopLeft     in Corners then x1 := X + HR       else x1 := X;
+  if coTopRight    in Corners then x2 := X + RW - HR  else x2 := X + RW;
+  APath.AddLine(x1, Y, x2, Y);                                { top edge }
+  if coTopRight in Corners then
+    APath.AddArc(X + RW - D, Y, D, D, 270, 90);
+
+  if coTopRight    in Corners then y1 := Y + HR       else y1 := Y;
+  if coBottomRight in Corners then y2 := Y + RH - HR  else y2 := Y + RH;
+  APath.AddLine(X + RW, y1, X + RW, y2);                      { right edge }
+  if coBottomRight in Corners then
+    APath.AddArc(X + RW - D, Y + RH - D, D, D, 0, 90);
+
+  if coBottomRight in Corners then x1 := X + RW - HR  else x1 := X + RW;
+  if coBottomLeft  in Corners then x2 := X + HR       else x2 := X;
+  APath.AddLine(x1, Y + RH, x2, Y + RH);                      { bottom edge }
+  if coBottomLeft in Corners then
+    APath.AddArc(X, Y + RH - D, D, D, 90, 90);
+
+  if coBottomLeft  in Corners then y1 := Y + RH - HR  else y1 := Y + RH;
+  if coTopLeft     in Corners then y2 := Y + HR       else y2 := Y;
+  APath.AddLine(X, y1, X, y2);                                { left edge }
+  if coTopLeft in Corners then
+    APath.AddArc(X, Y, D, D, 180, 90);
+
+  APath.CloseFigure;
 end;
 
 { TCWSSettingsPanel }
@@ -133,6 +199,8 @@ begin
   FBorderColor := clSilver;
   FCornerRadius := 8;
   FInnerCornerRadius := 7;
+  FRoundedCorners := [coTopLeft, coTopRight, coBottomRight, coBottomLeft];
+  FBorderEdges := [beTop, beLeft, beRight, beBottom];
 
   { Plain default size — the VCL scales it for the active DPI automatically. }
   Width := 350;
@@ -154,9 +222,25 @@ const
   BW = 1; { the 1px inner border that content is clipped inside of }
 var
   Ri, L, T, Rr, B: Integer;
+
+  { OR a square patch over one corner quadrant so that corner is not clipped
+    round. Called for every corner absent from RoundedCorners. }
+  procedure SquareOff(PatchL, PatchT, PatchR, PatchB: Integer);
+  var
+    Patch: HRGN;
+  begin
+    Patch := CreateRectRgn(PatchL, PatchT, PatchR, PatchB);
+    CombineRgn(Result, Result, Patch, RGN_OR);
+    DeleteObject(Patch);
+  end;
+
 begin
-  { Inner radius scales with DPI exactly like the outer CornerRadius. }
-  Ri := MulDiv(FInnerCornerRadius, CurrentPPI, 96);
+  { Inner radius scales with DPI exactly like the outer CornerRadius; squared off
+    entirely when no corner is rounded. }
+  if FRoundedCorners = [] then
+    Ri := 0
+  else
+    Ri := MulDiv(FInnerCornerRadius, CurrentPPI, 96);
 
   { Inner rect in client coords, inset by BW on every side. The +1 on right/bottom
     matches every other CreateRoundRectRgn / CreateRectRgn call in this library:
@@ -169,10 +253,15 @@ begin
   Rr := Width  - BW - OffsetX + 1;
   B  := Height - BW - OffsetY + 1;
 
-  if Ri > 0 then
-    Result := CreateRoundRectRgn(L, T, Rr, B, Ri * 2, Ri * 2)
-  else
-    Result := CreateRectRgn(L, T, Rr, B);
+  if Ri <= 0 then
+    Exit(CreateRectRgn(L, T, Rr, B));
+
+  { Start fully rounded, then square off the corners that are not in the set. }
+  Result := CreateRoundRectRgn(L, T, Rr, B, Ri * 2, Ri * 2);
+  if not (coTopLeft     in FRoundedCorners) then SquareOff(L,       T,       L + Ri,  T + Ri);
+  if not (coTopRight    in FRoundedCorners) then SquareOff(Rr - Ri, T,       Rr,      T + Ri);
+  if not (coBottomRight in FRoundedCorners) then SquareOff(Rr - Ri, B - Ri,  Rr,      B);
+  if not (coBottomLeft  in FRoundedCorners) then SquareOff(L,       B - Ri,  L + Ri,  B);
 end;
 
 procedure TCWSSettingsPanel.UpdateChildrenClip;
@@ -297,6 +386,64 @@ begin
   end;
 end;
 
+procedure TCWSSettingsPanel.DrawBorder(G: TGPGraphics; X, Y, RW, RH, D: Single;
+  Corners: TCWSCorners);
+var
+  Pen: TGPPen;
+  HR: Single;
+  T, L, Rt, B: Boolean;
+  { per-corner inset: half the diameter at a rounded corner, 0 at a square one }
+  iTL, iTR, iBR, iBL: Single;
+begin
+  if FBorderEdges = [] then
+    Exit;
+
+  { Clamp the diameter exactly like AddRoundRectPath so the straight parts of the
+    stroke line up with the filled body. }
+  if D > RH then D := RH;
+  if D > RW then D := RW;
+  if D < 0  then D := 0;
+  HR := D / 2;
+
+  T  := beTop    in FBorderEdges;
+  L  := beLeft   in FBorderEdges;
+  Rt := beRight  in FBorderEdges;
+  B  := beBottom in FBorderEdges;
+
+  if coTopLeft     in Corners then iTL := HR else iTL := 0;
+  if coTopRight    in Corners then iTR := HR else iTR := 0;
+  if coBottomRight in Corners then iBR := HR else iBR := 0;
+  if coBottomLeft  in Corners then iBL := HR else iBL := 0;
+
+  Pen := TGPPen.Create(MakeGPColor(FBorderColor));
+  try
+    { Straight segments — from one corner (inset if rounded) to the next. }
+    if T then
+      G.DrawLine(Pen, X + iTL,   Y,            X + RW - iTR, Y);
+    if B then
+      G.DrawLine(Pen, X + iBL,   Y + RH,       X + RW - iBR, Y + RH);
+    if L then
+      G.DrawLine(Pen, X,         Y + iTL,      X,            Y + RH - iBL);
+    if Rt then
+      G.DrawLine(Pen, X + RW,    Y + iTR,      X + RW,       Y + RH - iBR);
+
+    { Corner arcs — only where the corner is rounded and both its edges are drawn. }
+    if D > 0 then
+    begin
+      if (coTopLeft     in Corners) and T and L then
+        G.DrawArc(Pen, X,           Y,           D, D, 180, 90);
+      if (coTopRight    in Corners) and T and Rt then
+        G.DrawArc(Pen, X + RW - D,  Y,           D, D, 270, 90);
+      if (coBottomRight in Corners) and B and Rt then
+        G.DrawArc(Pen, X + RW - D,  Y + RH - D,  D, D,   0, 90);
+      if (coBottomLeft  in Corners) and B and L then
+        G.DrawArc(Pen, X,           Y + RH - D,  D, D,  90, 90);
+    end;
+  finally
+    Pen.Free;
+  end;
+end;
+
 function TCWSSettingsPanel.MakeGPColor(AColor: TColor): Cardinal;
 var
   C: TColor;
@@ -310,7 +457,6 @@ var
   G: TGPGraphics;
   Path: TGPGraphicsPath;
   Brush: TGPSolidBrush;
-  Pen: TGPPen;
   W, H, R, D: Single;
 begin
   { Corners (outside the rounding) show the parent background }
@@ -319,7 +465,10 @@ begin
 
   W := Width;
   H := Height;
-  R := MulDiv(FCornerRadius, CurrentPPI, 96);
+  if FRoundedCorners <> [] then
+    R := MulDiv(FCornerRadius, CurrentPPI, 96)
+  else
+    R := 0;
   DrawParentBackground(Canvas.Handle, R);
 
   G := TGPGraphics.Create(Canvas.Handle);
@@ -331,7 +480,7 @@ begin
 
     Path := TGPGraphicsPath.Create;
     try
-      AddRoundRectPath(Path, 0.5, 0.5, W - 1, H - 1, D);
+      AddRoundRectPath(Path, 0.5, 0.5, W - 1, H - 1, D, FRoundedCorners);
 
       Brush := TGPSolidBrush.Create(MakeGPColor(FFillColor));
       try
@@ -340,12 +489,7 @@ begin
         Brush.Free;
       end;
 
-      Pen := TGPPen.Create(MakeGPColor(FBorderColor));
-      try
-        G.DrawPath(Pen, Path);
-      finally
-        Pen.Free;
-      end;
+      DrawBorder(G, 0.5, 0.5, W - 1, H - 1, D, FRoundedCorners);
     finally
       Path.Free;
     end;
@@ -422,6 +566,25 @@ begin
     FInnerCornerRadius := V;
     UpdateChildrenClip; { re-clip windowed children to the new inner rounding }
     Invalidate;         { repaint so graphic children re-clip too }
+  end;
+end;
+
+procedure TCWSSettingsPanel.SetRoundedCorners(const Value: TCWSCorners);
+begin
+  if FRoundedCorners <> Value then
+  begin
+    FRoundedCorners := Value;
+    UpdateChildrenClip; { square / round the windowed children's clip region }
+    Invalidate;         { repaint the body, border and graphic-child clip }
+  end;
+end;
+
+procedure TCWSSettingsPanel.SetBorderEdges(const Value: TCWSBorderEdges);
+begin
+  if FBorderEdges <> Value then
+  begin
+    FBorderEdges := Value;
+    Invalidate;
   end;
 end;
 

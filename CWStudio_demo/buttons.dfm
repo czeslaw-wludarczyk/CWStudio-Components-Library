@@ -853,6 +853,7 @@ object frmButtons: TfrmButtons
         CaptionColorNormal = 2368548
         CaptionColorHover = 2368548
         CaptionColorPressed = 2368548
+        CaptionAlignment = taCenter
         BckDisabledColor = 15790320
         BorderColorDisabled = 14737632
         CaptionColorDisabled = 12434877
@@ -1047,6 +1048,31 @@ object frmButtons: TfrmButtons
       Caption = 'Exit'
       ImageIndex = 2
       ImageName = 'emergency-exit-flat'
+    end
+    object N1: TMenuItem
+      Caption = '-'
+    end
+    object Otherfunctions1: TMenuItem
+      Caption = 'Other functions'
+      object Checked1: TMenuItem
+        AutoCheck = True
+        Caption = 'Checked'
+        Checked = True
+      end
+      object N2: TMenuItem
+        Caption = '-'
+      end
+      object Radio11: TMenuItem
+        AutoCheck = True
+        Caption = 'Radio 1'
+        Checked = True
+        RadioItem = True
+      end
+      object Radio21: TMenuItem
+        AutoCheck = True
+        Caption = 'Radio 2'
+        RadioItem = True
+      end
     end
   end
 end

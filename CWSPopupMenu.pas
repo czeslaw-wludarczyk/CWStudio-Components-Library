@@ -75,6 +75,8 @@ type
     procedure ComputeScale(const X, Y: Integer);
     function FontEmSize: Single;
     function MakeGdiFont: HFONT;
+    function MakeGdiFontEx(ABold: Boolean): HFONT;
+    function ItemHasGlyph(AItem: TMenuItem): Boolean;
     function MeasureTextW(ADC: HDC; const S: string): Integer;
     function ShortCutOf(AItem: TMenuItem): string;
     procedure BuildEntries;
@@ -92,6 +94,7 @@ type
     procedure StartScrollTimer;
     procedure StopScrollTimer;
     procedure ScrollBy(ADelta: Integer);
+    function CommitPending: Boolean;
     procedure EnsureVisible(AIdx: Integer);
     procedure OpenSubmenu(AIdx: Integer);
     procedure CloseChild;
@@ -101,6 +104,7 @@ type
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure WMLButtonUp(var Msg: TWMLButtonUp); message WM_LBUTTONUP;
+    procedure WMRButtonUp(var Msg: TWMRButtonUp); message WM_RBUTTONUP;
     procedure WMCaptureChanged(var Msg: TMessage); message WM_CAPTURECHANGED;
     procedure CMMouseLeave(var Msg: TMessage); message CM_MOUSELEAVE;
     procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
@@ -440,12 +444,17 @@ begin
 end;
 
 function TCWSMenuWindow.MakeGdiFont: HFONT;
+begin
+  Result := MakeGdiFontEx(fsBold in FMenu.Font.Style);
+end;
+
+function TCWSMenuWindow.MakeGdiFontEx(ABold: Boolean): HFONT;
 var
   LF: TLogFont;
 begin
   FillChar(LF, SizeOf(LF), 0);
   LF.lfHeight := -Round(FontEmSize);
-  if fsBold in FMenu.Font.Style then LF.lfWeight := FW_BOLD
+  if ABold then LF.lfWeight := FW_BOLD
   else LF.lfWeight := FW_NORMAL;
   LF.lfItalic := Byte(fsItalic in FMenu.Font.Style);
   LF.lfUnderline := Byte(fsUnderline in FMenu.Font.Style);
@@ -510,6 +519,7 @@ var
   ScreenDC, MemDC: HDC;
   GdiFont: HFONT;
   i, IconArea, RightPad, MinW, MaxH: Integer;
+  GdiFontBold: HFONT;
   MaxCap, MaxSc, W: Single;
   HasSub, HasSc: Boolean;
   ShortcutAreaW, SubArrowW: Integer;
@@ -537,13 +547,16 @@ begin
   ScreenDC := GetDC(0);
   MemDC := CreateCompatibleDC(ScreenDC);
   GdiFont := MakeGdiFont;
+  GdiFontBold := MakeGdiFontEx(True);
   SaveDC(MemDC);
   try
-    SelectObject(MemDC, GdiFont);
     for i := 0 to High(FEntries) do
     begin
       It := FEntries[i].Item;
       if FEntries[i].Separator then Continue;
+      { pozycja domyslna jest rysowana pogrubieniem — mierzymy ja tak samo }
+      if It.Default then SelectObject(MemDC, GdiFontBold)
+      else SelectObject(MemDC, GdiFont);
       W := MeasureTextW(MemDC, It.Caption);
       if W > MaxCap then MaxCap := W;
       if It.Count > 0 then HasSub := True;
@@ -557,6 +570,7 @@ begin
   finally
     RestoreDC(MemDC, -1);
     DeleteObject(GdiFont);
+    DeleteObject(GdiFontBold);
     DeleteDC(MemDC);
     ReleaseDC(0, ScreenDC);
   end;
@@ -706,6 +720,17 @@ begin
   end;
 end;
 
+{ Czy pozycja ma wlasny obrazek (imagelist albo bitmapa). Gdy ma — znacznik
+  zaznaczenia nie jest rysowany, tak samo jak w VCL-owym TPopupMenu. }
+function TCWSMenuWindow.ItemHasGlyph(AItem: TMenuItem): Boolean;
+begin
+  Result := ((FMenu.Images <> nil) and (AItem.ImageIndex >= 0) and
+             (AItem.ImageIndex < FMenu.Images.Count) and
+             (FMenu.Images.Width > 0) and (FMenu.Images.Height > 0)) or
+            ((AItem.Bitmap <> nil) and not AItem.Bitmap.Empty and
+             (AItem.Bitmap.Width > 0) and (AItem.Bitmap.Height > 0));
+end;
+
 procedure TCWSMenuWindow.DrawIcon(G: TGPGraphics; AItem: TMenuItem;
   const ADest: TRect; AEnabled: Boolean);
 var
@@ -785,8 +810,10 @@ var
   Sz: TSize;
   CovA, ShBits, SavedA: TBytes;
   ShImg: TGPBitmap;
-  CY, ChevX, ChevSz: Single;
-  GdiFont: HFONT;
+  CY, ChevX, ChevSz, DotSz, MarkX: Single;
+  EmSz, ArmS, ArmL, VX, VY: Single;
+  Thick: Integer;
+  GdiFont, GdiFontBold: HFONT;
   PB: PByte;
 begin
   if not HandleAllocated then Exit;
@@ -898,6 +925,74 @@ begin
           R.Top + (ItemH - IconSize) div 2 + IconSize);
         DrawIcon(G, It, IconRect, It.Enabled);
 
+        { ── znacznik zaznaczenia ─────────────────────────────────────────────
+          Rysowany wektorowo w warstwie GDI+, wiec jest wygladzony i skaluje
+          sie z DPI; jak w VCL pojawia sie tylko wtedy, gdy pozycja nie ma
+          wlasnego obrazka. Kolor idzie za kolorem podpisu — tez w wersji
+          dla pozycji wylaczonej. RadioItem dostaje pelna kropke, zwykla
+          pozycja — ptaszek. }
+        if It.Checked and not ItemHasGlyph(It) then
+        begin
+          if not It.Enabled then ShCol := FMenu.DisabledTextColor
+          else if i = FHotIndex then ShCol := FMenu.HighlightTextColor
+          else ShCol := FMenu.TextColor;
+          MarkX := R.Left + IconArea / 2;
+          CY := (R.Top + R.Bottom) / 2;
+          EmSz := FontEmSize;
+          if It.RadioItem then
+          begin
+            { Kropka idzie za wysokoscia em fontu tak samo jak ptaszek — w
+              menu Windows oba znaki sa glifami rysowanymi w rozmiarze
+              podpisu. FontEmSize jest juz przeskalowany do DPI monitora,
+              wiec zmiana skalowania Windows tez ja powieksza. Srednica
+              0.42 em miesci sie w wysokosci tuszu ptaszka (ok. 0.49 em). }
+            DotSz := Max(3.0, 0.42 * EmSz);
+            Brush := TGPSolidBrush.Create(GPColor(ShCol));
+            try
+              G.FillEllipse(Brush, Single(MarkX - DotSz / 2),
+                Single(CY - DotSz / 2), Single(DotSz), Single(DotSz));
+            finally Brush.Free; end;
+          end
+          else
+          begin
+            { Ptaszek odwzorowany z natywnego menu Windows 11 (glif
+              CheckMark, U+E73E, Segoe Fluent Icons). Pomiar ze zrzutu,
+              piksel po pikselu, po srodku kreski: oba ramiona dokladnie
+              pod 45°, krotkie 2.5 px na os, dlugie 5.5 px, kreska 0.96 px,
+              konce ciete prostopadle, wierzcholek ostry (najciemniejszy
+              piksel zrzutu = zlaczenie zaostrzone, nie zaokraglone).
+              Wymiary sa ulamkiem wysokosci fontu (em), a nie stala liczba
+              pikseli — w menu Windows znak rosnie razem z podpisem, a
+              FontEmSize jest juz przeskalowany do DPI. }
+            ArmS := 0.20 * EmSz;          { krotkie ramie, na os }
+            ArmL := 0.44 * EmSz;          { dlugie ramie, na os }
+            { wierzcholek tak dobrany, by prostokat opisany na kresce byl
+              wysrodkowany w kolumnie ikon }
+            VX := MarkX - (ArmL - ArmS) / 2;
+            VY := CY + ArmL / 2;
+            { Grubosc w PELNYCH pikselach urzadzenia. Ulamkowa szerokosc
+              pod 45° rozklada sie na dwa piksele i zaden nie dostaje
+              pelnego krycia — znak wychodzil blady obok tego z WinUI 3,
+              ktory rysuje font z korekcja gamma. Zaokraglenie daje 1 px
+              przy 100% i 2 px przy 150%, czyli tyle, ile ma znak natywny
+              (pomiar: krycie 1.36 na wiersz przy 100%, 2.14 przy 150%). }
+            Thick := Max(1, Round(0.085 * EmSz));
+            Pen := TGPPen.Create(GPColor(ShCol), Thick);
+            try
+              Pen.SetStartCap(LineCapFlat);
+              Pen.SetEndCap(LineCapFlat);
+              Pen.SetLineJoin(LineJoinMiter);
+              Path := TGPGraphicsPath.Create;
+              try
+                Path.StartFigure;
+                Path.AddLine(VX - ArmS, VY - ArmS, VX, VY);
+                Path.AddLine(VX, VY, VX + ArmL, VY - ArmL);
+                G.DrawPath(Pen, Path);
+              finally Path.Free; end;
+            finally Pen.Free; end;
+          end;
+        end;
+
         { submenu arrow }
         if It.Count > 0 then
         begin
@@ -962,6 +1057,7 @@ begin
     end;
 
     GdiFont := MakeGdiFont;
+    GdiFontBold := MakeGdiFontEx(True);
     SaveDC(MemDC);
     try
       SelectObject(MemDC, GdiFont);
@@ -986,6 +1082,10 @@ begin
         end
         else TxtColor := FMenu.DisabledTextColor;
 
+        { pozycja domyslna (Default) — pogrubiona, jak w menu Windows }
+        if It.Default then SelectObject(MemDC, GdiFontBold)
+        else SelectObject(MemDC, GdiFont);
+
         TR := Rect(R.Left + IconArea, R.Top,
                    R.Right - Round(14 * FScale), R.Bottom);
 
@@ -1000,6 +1100,7 @@ begin
         begin
           if It.Enabled then ShCol := FMenu.ShortCutColor
           else ShCol := FMenu.DisabledTextColor;
+          SelectObject(MemDC, GdiFont);
           SetTextColor(MemDC, ColorToRGB(ShCol));
           TR := Rect(R.Left + IconArea, R.Top,
                      R.Right - Round(14 * FScale), R.Bottom);
@@ -1010,6 +1111,7 @@ begin
     finally
       RestoreDC(MemDC, -1);
       DeleteObject(GdiFont);
+      DeleteObject(GdiFontBold);
     end;
     GdiFlush;
 
@@ -1278,7 +1380,11 @@ var
   Idx: Integer;
 begin
   inherited;
-  if Button <> mbLeft then Exit;
+  { TrackButton (dziedziczone z TPopupMenu) mowi, ktorym przyciskiem mozna
+    wybierac pozycje w trakcie trwania menu: tbRightButton — lewym i prawym
+    (tak dziala menu Windows), tbLeftButton — wylacznie lewym. }
+  if (Button <> mbLeft) and
+     not ((Button = mbRight) and (FMenu.TrackButton = tbRightButton)) then Exit;
   Idx := IndexAt(Point(X, Y));
   if not Selectable(Idx) then Exit;
   if FEntries[Idx].Item.Count > 0 then
@@ -1293,22 +1399,20 @@ begin
   end;
 end;
 
-procedure TCWSMenuWindow.WMLButtonUp(var Msg: TWMLButtonUp);
+{ Wykonuje pozycje odlozona na mouse-down. False = nie bylo nic odlozonego,
+  komunikat ma isc dalej. Po True nie wolno dotykac pol obiektu — CloseChain
+  w ActivateItem zwalnia okna podmenu i Self moze juz nie istniec. }
+function TCWSMenuWindow.CommitPending: Boolean;
 var
   Idx: Integer;
 begin
-  if not FPendingClose then
-  begin
-    inherited;
-    Exit;
-  end;
+  if not FPendingClose then Exit(False);
+  Result := True;
 
-  { Stan czyscimy PRZED ActivateItem: CloseChain zwalnia okna podmenu,
-    wiec po tym wywolaniu Self moze juz nie istniec. }
+  { Stan czyscimy PRZED ActivateItem. }
   FPendingClose := False;
   Idx := FPendingIdx;
   FPendingIdx := -1;
-  Msg.Result := 0;         { komunikat skonsumowany - nie leci nizej }
 
   { Zwalniamy capture wlasnoscia VCL, zeby nie rozjechal sie stan TControl. }
   if MouseCapture then
@@ -1316,6 +1420,24 @@ begin
 
   if Idx >= 0 then
     ActivateItem(Idx);     { <- po tej linii nie dotykaj pol obiektu }
+end;
+
+procedure TCWSMenuWindow.WMLButtonUp(var Msg: TWMLButtonUp);
+begin
+  if CommitPending then
+    Msg.Result := 0         { komunikat skonsumowany - nie leci nizej }
+  else
+    inherited;
+end;
+
+{ Przy TrackButton = tbRightButton pozycje wybiera sie takze prawym
+  przyciskiem — wykonanie idzie tak samo dopiero na mouse-up. }
+procedure TCWSMenuWindow.WMRButtonUp(var Msg: TWMRButtonUp);
+begin
+  if CommitPending then
+    Msg.Result := 0
+  else
+    inherited;
 end;
 
 procedure TCWSMenuWindow.WMCaptureChanged(var Msg: TMessage);

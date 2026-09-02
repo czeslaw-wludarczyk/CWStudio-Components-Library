@@ -518,7 +518,7 @@ object frmMain: TfrmMain
     Font.Name = 'Segoe UI'
     Font.Style = []
     ItemHeight = 32
-    Left = 264
+    Left = 272
     Top = 104
   end
 end

@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.8.9](https://img.shields.io/badge/version-1.8.9-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.0](https://img.shields.io/badge/version-1.9.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -223,7 +223,18 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Historia wersji
 
-**Najnowsza wersja — 1.8.9:**
+**Najnowsza wersja — 1.9.0:**
+
+- **Poprawka** `TCWSPopupMenu`: **`Checked` i `Default` w ogóle nie były rysowane.** Obie właściwości działały poprawnie od strony logiki — `ActivateItem` wywołuje `TMenuItem.Click`, więc `AutoCheck`, grupowanie `RadioItem` i `GroupIndex` robiły swoje — ale renderer nigdy do nich nie zaglądał, przez co pozycja zaznaczona wyglądała identycznie jak niezaznaczona, a domyślna jak każda inna. Zaznaczona pozycja dostaje teraz znacznik w kolumnie ikon, a pozycja `Default` jest rysowana pogrubieniem: `Render` trzyma drugi, pogrubiony `HFONT` i wybiera go per pozycja, a `Measure` mierzy taki podpis tym samym pogrubionym fontem, więc najszersza domyślna pozycja nie traci ogona na wielokropek.
+- **Zmiana** `TCWSPopupMenu`: znak zaznaczenia jest rysowany **wektorowo w warstwie GDI+**, a nie jako znak z fontu — w proporcjach glifu `CheckMark` (U+E73E) z *Segoe MDL2 Assets*: oba ramiona pod 45° (krótkie 4.5 jednostki, długie 8.5 przy 16 px glifu), kreska równej grubości 1.5 px, końce cięte prostopadle (`LineCapFlat`) i ostry wierzchołek (`LineJoinMiter`). Wszystko przemnożone przez skalę DPI menu, więc rośnie razem z resztą rysunku i zostaje wyśrodkowane w kolumnie ikon przy każdym `ItemHeight`. Droga przez font oznaczałaby zależność od kroju, który akurat ma ten glif, i od jego metryk przy centrowaniu w pionie; przejściowe właściwości `CheckedGlyph` / `CheckedGlyphFont`, które to zastąpiło, zostały więc usunięte.
+- **Zmiana** `TCWSPopupMenu`: **`RadioItem` dostaje pełną kropkę** (⌀7 px × skala) zamiast ptaszka, jak w menu Windows.
+- **Zmiana** `TCWSPopupMenu`: oba znaczniki biorą **kolor podpisu swojej pozycji** — `DisabledTextColor` dla pozycji wyłączonej, `HighlightTextColor` pod kursorem, w przeciwnym razie `TextColor` — więc znacznik wyszarza się razem z pozycją, zamiast zostawać w pełnym kontraście.
+- **Zmiana** `TCWSPopupMenu`: jak w VCL-owym menu podręcznym znacznik pojawia się **tylko przy pozycji bez własnego obrazka** (bez pary `Images`/`ImageIndex` i bez `TMenuItem.Bitmap`) — obrazek wygrywa kolumnę ikon, rysowana jest zawsze dokładnie jedna rzecz.
+- **Poprawka** `TCWSPopupMenu`: **`TrackButton` znowu coś robi.** Właściwość jest dziedziczona z `TPopupMenu`, gdzie decyduje, którym przyciskiem myszy można wybierać pozycje w otwartym menu (`tbRightButton` — zachowanie Windows — lewym *i* prawym; `tbLeftButton` — wyłącznie lewym); własne okno menu obsługiwało sam lewy przycisk, więc była martwa. `MouseDown` przyjmuje teraz prawy przycisk przy `TrackButton = tbRightButton`, a `WM_RBUTTONUP` wykonuje pozycję tą samą ścieżką co lewy — wybór nadal jest tylko odnotowywany na mouse-down i wykonywany na mouse-up (`CommitPending`, wydzielone z `WMLButtonUp`), więc zabłąkany mouse-up nie trafi w kontrolkę pod menu ani w okno modalne otwarte z `Item.Click`.
+- **Nowość** `TCWSMenuButton`, `TCWSStoreButton`: opublikowane **`Enabled`**.
+- **Nowość** `TCWSSettingsPanel`: **`RoundedCorners`** i **`BorderEdges`** — zaokrąglenie i ramkę można wyłączyć osobno dla każdego rogu / każdej krawędzi.
+
+**Wersja 1.8.9:**
 
 - **Poprawka** `TCWSShape` / `TCWSAvatar`: **wartość `Brush` albo `Pen` ustawiona w projektancie mogła nie trafić do `.dfm` i po cichu zniknąć w działającej aplikacji.** `TCWSShapeBrush.Color`/`Style` oraz `TCWSShapePen.Color`/`Width`/`Style` były publikowane ze sztywnymi dyrektywami `default`, a te są prawdziwe tylko dla właściciela, który zostawia oba pod-obiekty dokładnie takie, jakie tworzą same klasy (białe wypełnienie, ciągła czarna ramka 1 px). `TCWSAvatar` tak nie robi — jego konstruktor celowo ustawia szary `Brush.Color` i `Pen.Style` na `Clear` — więc każda wartość zgodna z domyślną klasy była przez zapisywarkę pomijana: nadanie awatarowi ramki przez `Pen.Style := Solid` pokazywało ramkę w projektancie, nie zapisywało nic do `.dfm` i zostawiało w uruchomionym programie `Clear` z konstruktora. Każda instancja brush/pen pamięta teraz wartości, z jakimi zostawił ją konstruktor właściciela (`SetDefaults`), i zapisuje właściwość wtedy, gdy różni się od *tych* wartości — przez funkcje `stored` zamiast `default` — dzięki czemu projektant i działający program pokazują to samo. Właściciele zmieniający `Brush`/`Pen` w swoim konstruktorze muszą na końcu wywołać `SetDefaults`; sam `TCWSShape` też to robi, choć niczego nie zmienia, żeby wzorzec był oczywisty dla wszystkiego, co po nim dziedziczy.
 
@@ -612,7 +623,18 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ Version history
 
-**Latest release — 1.8.9:**
+**Latest release — 1.9.0:**
+
+- **Fix** `TCWSPopupMenu`: **`Checked` and `Default` were not drawn at all.** Both properties were set and read correctly — `ActivateItem` calls `TMenuItem.Click`, so `AutoCheck`, `RadioItem` grouping and `GroupIndex` all did their work — but the renderer never looked at them, so a checked item was indistinguishable from an unchecked one and the default item from the rest. A checked item now gets a mark in the icon column, and a `Default` item is drawn in bold: `Render` keeps a second, bold `HFONT` and picks it per item, and `Measure` sizes such a caption with that same bold font, so the widest default item is not the one that loses its tail to the ellipsis.
+- **Changed** `TCWSPopupMenu`: the check mark is drawn **as a vector path in the GDI+ layer**, not as a character from a font — shaped after the `CheckMark` glyph (U+E73E) of *Segoe MDL2 Assets*: both arms at 45° (4.5 units short, 8.5 long at a 16 px em), an even 1.5 px stroke, ends cut square (`LineCapFlat`) and a sharp vertex (`LineJoinMiter`). Everything is multiplied by the menu's DPI scale, so it grows with the rest of the drawing, and it is centred in the icon column at any `ItemHeight`. Going through a font would have meant depending on a face that actually carries the glyph and on its own metrics for the vertical centring; the interim `CheckedGlyph` / `CheckedGlyphFont` properties this replaced are therefore gone.
+- **Changed** `TCWSPopupMenu`: a **`RadioItem` gets a filled dot** (⌀7 px × scale) instead of the check mark, as in a Windows menu.
+- **Changed** `TCWSPopupMenu`: both marks take **the colour of the item's own caption** — `DisabledTextColor` for a disabled item, `HighlightTextColor` under the cursor, `TextColor` otherwise — so a greyed item's mark greys with it rather than staying at full contrast.
+- **Changed** `TCWSPopupMenu`: as in the VCL popup menu, the mark appears **only for an item with no image of its own** (no `Images`/`ImageIndex` pair and no `TMenuItem.Bitmap`) — the glyph wins the icon column, exactly one thing is ever drawn there.
+- **Fix** `TCWSPopupMenu`: **`TrackButton` does something again.** The property is inherited from `TPopupMenu`, where it decides which mouse button may select an item while the menu is up (`tbRightButton` — the Windows behaviour — left *and* right; `tbLeftButton` — left only); the custom menu window handled the left button alone, so it was dead. `MouseDown` now accepts the right button when `TrackButton = tbRightButton`, and `WM_RBUTTONUP` runs the item through the same path as the left button — the choice is still only recorded on button-down and carried out on button-up (`CommitPending`, factored out of `WMLButtonUp`), so a stray mouse-up cannot reach the control beneath the menu or a modal dialog opened from `Item.Click`.
+- **New** `TCWSMenuButton`, `TCWSStoreButton`: **`Enabled`** published.
+- **New** `TCWSSettingsPanel`: **`RoundedCorners`** and **`BorderEdges`** — rounding and the border can each be turned off per corner / per edge.
+
+**Version 1.8.9:**
 
 - **Fix** `TCWSShape` / `TCWSAvatar`: **a `Brush` or `Pen` value set in the designer could be left out of the `.dfm` and silently lost at run time.** `TCWSShapeBrush.Color`/`Style` and `TCWSShapePen.Color`/`Width`/`Style` were published with fixed `default` directives, and those only tell the truth for an owner that leaves the two sub-objects exactly as the classes create them (white fill, solid black 1 px border). `TCWSAvatar` does not — its constructor deliberately sets a grey `Brush.Color` and a `Pen.Style` of `Clear` — so any value that happened to match the class default was skipped by the writer: giving an avatar a border with `Pen.Style := Solid` showed the border in the designer, wrote nothing to the `.dfm`, and left the constructor's `Clear` standing in the running application. Each brush/pen instance now remembers the values its owner's constructor left it with (`SetDefaults`) and streams a property whenever it differs from *those*, through `stored` functions instead of `default` — so the designer and the running program show the same thing. Owners that customise `Brush`/`Pen` in their constructor have to call `SetDefaults` at the end of it; `TCWSShape` itself calls it too, although it changes nothing, so the pattern is obvious to anything deriving from it.
 

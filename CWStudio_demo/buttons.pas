@@ -58,6 +58,12 @@ type
     miSave: TMenuItem;
     miSep1: TMenuItem;
     miExit: TMenuItem;
+    N1: TMenuItem;
+    Otherfunctions1: TMenuItem;
+    Checked1: TMenuItem;
+    N2: TMenuItem;
+    Radio11: TMenuItem;
+    Radio21: TMenuItem;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure CWSStoreButton4Click(Sender: TObject);

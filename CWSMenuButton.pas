@@ -139,6 +139,7 @@ type
     property Font;
     property ParentFont;
     property Visible;
+    property Enabled;
 
     property IconFontName: string read FIconFontName write SetIconFontName;
     property IconFontSize: Integer read FIconFontSize write SetIconFontSize default 11;
