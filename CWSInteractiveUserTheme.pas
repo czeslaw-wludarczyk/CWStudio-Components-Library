@@ -2,45 +2,45 @@ unit CWSInteractiveUserTheme;
 
 //////////////////////////////////////////////////////////////////////////
 //                                                                      //
-//  Wykrywanie motywu (jasny/ciemny) ZALOGOWANEGO uzytkownika, nawet    //
-//  gdy proces dziala na koncie NT AUTHORITY\SYSTEM (np. uruchomiony    //
-//  przez ServiceUI.exe z Intune / MDT).                                //
+//  Detects the theme (light/dark) of the LOGGED-ON user, even when the //
+//  process runs under the NT AUTHORITY\SYSTEM account (e.g. started by //
+//  ServiceUI.exe from Intune / MDT).                                   //
 //                                                                      //
-//  Zmiany wzgledem wersji pierwotnej:                                  //
+//  Changes compared to the original version:                           //
 //                                                                      //
-//  1. Ustalanie sesji uzytkownika w trzech krokach zamiast jednego:    //
-//       a) ProcessIdToSessionId  - sesja WLASNEGO procesu; pod         //
-//          ServiceUI to juz jest sesja uzytkownika i jest to           //
-//          najpewniejsze zrodlo,                                       //
-//       b) WTSGetActiveConsoleSessionId - sesja konsoli fizycznej,     //
-//       c) WTSEnumerateSessions - pierwsza sesja w stanie WTSActive    //
-//          (ratuje przypadek RDP / odlaczonej konsoli).                //
-//     Pierwotnie uzywany byl wylacznie wariant (b), ktory zwraca 0     //
-//     lub $FFFFFFFF przy odlaczonej konsoli i w scenariuszach RDP.     //
+//  1. The user session is determined in three steps instead of one:    //
+//       a) ProcessIdToSessionId  - the session of OUR OWN process;     //
+//          under ServiceUI this already is the user session and it is  //
+//          the most reliable source,                                   //
+//       b) WTSGetActiveConsoleSessionId - the physical console session,//
+//       c) WTSEnumerateSessions - the first session in the WTSActive   //
+//          state (covers the RDP / disconnected console case).         //
+//     Originally only variant (b) was used, which returns 0 or         //
+//     $FFFFFFFF with a disconnected console and in RDP scenarios.      //
 //                                                                      //
-//  2. Zapasowa sciezka ustalania SID bez przywileju SE_TCB_NAME:       //
-//     WTSQuerySessionInformation (nazwa uzytkownika i domeny) +        //
+//  2. A fallback path for determining the SID without the SE_TCB_NAME  //
+//     privilege: WTSQuerySessionInformation (user and domain name) +   //
 //     LookupAccountName.                                               //
 //                                                                      //
-//  3. Watek obserwatora startuje przez inherited Create(False), a nie  //
-//     przez Create(True) + Start. Ten drugi wariant rzuca EThread      //
-//     'Cannot call Start on a running or suspended thread' w nowszych  //
-//     wersjach RTL. Pola ustawiamy PRZED inherited - pamiec instancji  //
-//     jest juz wyzerowana przez NewInstance, wiec Execute nigdy nie    //
-//     zobaczy niezainicjowanych wartosci.                              //
+//  3. The watcher thread is started through inherited Create(False),   //
+//     not through Create(True) + Start. The latter variant raises      //
+//     EThread 'Cannot call Start on a running or suspended thread' in  //
+//     newer RTL versions. The fields are set BEFORE inherited - the    //
+//     instance memory is already zeroed by NewInstance, so Execute     //
+//     never sees uninitialized values.                                 //
 //                                                                      //
-//  4. Logowanie diagnostyczne do %TEMP%\CWSTheme.log - wlaczane        //
-//     zmienna ThemeLogEnabled lub przelacznikiem /themelog.            //
-//     Pod SYSTEM sciezka to C:\Windows\Temp.                           //
+//  4. Diagnostic logging to %TEMP%\CWSTheme.log - enabled by the       //
+//     ThemeLogEnabled variable or the /themelog switch.                //
+//     Under SYSTEM the path is C:\Windows\Temp.                        //
 //                                                                      //
-//  UWAGA co do uzycia: motyw inicjalizuj w FormShow, NIE w FormCreate. //
-//  W FormCreate zmienna globalna formularza jest jeszcze nil, a okno   //
-//  nie ma uchwytu - wywolanie ApplyFluentTheme w tym momencie konczy   //
-//  sie naruszeniem ochrony pamieci.                                    //
+//  NOTE on usage: initialize the theme in FormShow, NOT in FormCreate. //
+//  In FormCreate the form's global variable is still nil and the window//
+//  has no handle - calling ApplyFluentTheme at that point ends with an //
+//  access violation.                                                   //
 //                                                                      //
 //    FormCreate:  RegisterThemeChange(ApplyTheme);                     //
 //    FormShow:    StartFollowingUserTheme;                             //
-//                 ApplyTheme;   // jawnie - nie polegaj na callbacku   //
+//                 ApplyTheme;   // explicit - do not rely on callback  //
 //    FormDestroy: StopFollowingUserTheme;                              //
 //                 UnregisterThemeChange(ApplyTheme);                   //
 //                                                                      //
@@ -48,30 +48,30 @@ unit CWSInteractiveUserTheme;
 
 interface
 
-/// Ustawia motyw wg ustawien zalogowanego uzytkownika i uruchamia
-/// obserwacje zmian. Bezpieczne do wielokrotnego wywolania.
-/// Wolaj z FormShow, nie z FormCreate.
+/// Applies the theme according to the logged-on user's settings and starts
+/// watching for changes. Safe to call multiple times.
+/// Call it from FormShow, not from FormCreate.
 procedure StartFollowingUserTheme;
 
-/// Zatrzymuje obserwacje. Wywolaj w FormDestroy (i tak wola to finalization).
+/// Stops watching. Call it in FormDestroy (finalization calls it anyway).
 procedure StopFollowingUserTheme;
 
-/// True gdy proces dziala na koncie NT AUTHORITY\SYSTEM (S-1-5-18).
+/// True when the process runs under the NT AUTHORITY\SYSTEM account (S-1-5-18).
 function RunningAsLocalSystem: Boolean;
 
-/// SID uzytkownika aktywnej sesji interaktywnej, np. 'S-1-5-21-...-1001'.
+/// SID of the user of the active interactive session, e.g. 'S-1-5-21-...-1001'.
 function TryGetInteractiveUserSid(out ASid: string): Boolean;
 
-/// Odczyt AppsUseLightTheme z galezi HKEY_USERS\<ASid>.
-/// Result = False oznacza brak klucza/wartosci (a nie motyw jasny).
+/// Reads AppsUseLightTheme from the HKEY_USERS\<ASid> branch.
+/// Result = False means the key/value is missing (not that the theme is light).
 function TryGetDarkModeForSid(const ASid: string; out ADark: Boolean): Boolean;
 
-/// Pelny zrzut stanu wykrywania - do diagnostyki na maszynie docelowej.
+/// A full dump of the detection state - for diagnostics on the target machine.
 function ThemeDiagnostics: string;
 
 var
-  /// Wlacza zapis logu do %TEMP%\CWSTheme.log. Ustawiane takze przez
-  /// przelacznik /themelog w wierszu polecen.
+  /// Enables writing the log to %TEMP%\CWSTheme.log. Also set by the
+  /// /themelog command line switch.
   ThemeLogEnabled: Boolean = False;
 
 implementation
@@ -94,7 +94,7 @@ const
 
   WTS_CURRENT_SERVER_HANDLE = THandle(0);
 
-{$Z4} // enumy 4-bajtowe, tak jak w naglowkach Windows
+{$Z4} // 4-byte enums, just like in the Windows headers
 type
   TWtsConnectStateClass = (WTSActive, WTSConnected, WTSConnectQuery, WTSShadow,
     WTSDisconnected, WTSIdle, WTSListen, WTSReset, WTSDown, WTSInit);
@@ -108,7 +108,7 @@ type
     State: TWtsConnectStateClass;
   end;
 
-// Deklaracje jawne, zeby unit nie zalezal od wersji naglowkow RTL.
+// Explicit declarations, so the unit does not depend on the RTL header version.
 function WTSGetActiveConsoleSessionId: DWORD; stdcall;
   external kernel32 name 'WTSGetActiveConsoleSessionId';
 
@@ -130,7 +130,7 @@ function ConvertSidToStringSidW(ASid: PSID; out AStringSid: PWideChar): BOOL; st
   external advapi32 name 'ConvertSidToStringSidW';
 
 { ------------------------------------------------------------------------ }
-{ Logowanie diagnostyczne                                                  }
+{ Diagnostic logging                                                       }
 { ------------------------------------------------------------------------ }
 
 var
@@ -167,7 +167,7 @@ begin
       LeaveCriticalSection(GLogLock);
     end;
   except
-    // Diagnostyka nie moze wywrocic aplikacji - swiadomie polykamy blad IO.
+    // Diagnostics must not bring the application down - the IO error is swallowed on purpose.
     on E: Exception do
       ;
   end;
@@ -197,7 +197,7 @@ begin
   GetTokenInformation(AToken, TokenUser, nil, 0, bufferSize);
   if bufferSize = 0 then
   begin
-    ThemeLog('TryGetTokenSidString: GetTokenInformation (sonda) blad %d',
+    ThemeLog('TryGetTokenSidString: GetTokenInformation (probe) error %d',
       [GetLastError]);
     Exit;
   end;
@@ -205,7 +205,7 @@ begin
   SetLength(buffer, bufferSize);
   if not GetTokenInformation(AToken, TokenUser, @buffer[0], bufferSize, bufferSize) then
   begin
-    ThemeLog('TryGetTokenSidString: GetTokenInformation blad %d', [GetLastError]);
+    ThemeLog('TryGetTokenSidString: GetTokenInformation error %d', [GetLastError]);
     Exit;
   end;
 
@@ -215,7 +215,7 @@ begin
 
   if not ConvertSidToStringSidW(tokenUserInfo.User.Sid, sidText) then
   begin
-    ThemeLog('TryGetTokenSidString: ConvertSidToStringSid blad %d', [GetLastError]);
+    ThemeLog('TryGetTokenSidString: ConvertSidToStringSid error %d', [GetLastError]);
     Exit;
   end;
   try
@@ -256,12 +256,12 @@ begin
 end;
 
 { ------------------------------------------------------------------------ }
-{ Ustalanie sesji uzytkownika - trzy niezalezne metody                     }
+{ Determining the user session - three independent methods                 }
 { ------------------------------------------------------------------------ }
 
 function IsUsableSessionId(ASessionId: DWORD): Boolean;
 begin
-  // Sesja 0 to sesja uslug (Session 0 Isolation) - nie ma tam uzytkownika.
+  // Session 0 is the services session (Session 0 Isolation) - no user there.
   Result := (ASessionId <> 0) and (ASessionId <> DWORD(-1));
 end;
 
@@ -269,7 +269,7 @@ function GetOwnSessionId: DWORD;
 begin
   if not ProcessIdToSessionId(GetCurrentProcessId, Result) then
   begin
-    ThemeLog('GetOwnSessionId: ProcessIdToSessionId blad %d', [GetLastError]);
+    ThemeLog('GetOwnSessionId: ProcessIdToSessionId error %d', [GetLastError]);
     Result := DWORD(-1);
   end;
 end;
@@ -288,7 +288,7 @@ begin
 
   if not WTSEnumerateSessionsW(WTS_CURRENT_SERVER_HANDLE, 0, 1, sessions, count) then
   begin
-    ThemeLog('GetFirstActiveSessionId: WTSEnumerateSessions blad %d', [GetLastError]);
+    ThemeLog('GetFirstActiveSessionId: WTSEnumerateSessions error %d', [GetLastError]);
     Exit;
   end;
 
@@ -303,7 +303,7 @@ begin
         stationName := string(entry.pWinStationName)
       else
         stationName := '';
-      ThemeLog('  sesja %d, stan %d, stacja "%s"',
+      ThemeLog('  session %d, state %d, station "%s"',
         [entry.SessionId, Ord(entry.State), stationName]);
       if (entry.State = WTSActive) and IsUsableSessionId(entry.SessionId) then
       begin
@@ -316,7 +316,7 @@ begin
   end;
 end;
 
-/// Zapasowa metoda: SID z nazwy konta uzytkownika sesji. Nie wymaga SE_TCB_NAME.
+/// Fallback method: the SID from the session user's account name. Does not require SE_TCB_NAME.
 function TryGetSessionUserSidByName(ASessionId: DWORD; out ASid: string): Boolean;
 
   function QueryString(AInfoClass: Integer): string;
@@ -355,7 +355,7 @@ begin
   userName := QueryString(cWtsUserName);
   if userName = '' then
   begin
-    ThemeLog('TryGetSessionUserSidByName: brak nazwy uzytkownika dla sesji %d',
+    ThemeLog('TryGetSessionUserSidByName: no user name for session %d',
       [ASessionId]);
     Exit;
   end;
@@ -372,7 +372,7 @@ begin
     domainSize, sidUse);
   if sidSize = 0 then
   begin
-    ThemeLog('TryGetSessionUserSidByName: LookupAccountName (sonda) blad %d',
+    ThemeLog('TryGetSessionUserSidByName: LookupAccountName (probe) error %d',
       [GetLastError]);
     Exit;
   end;
@@ -382,7 +382,7 @@ begin
   if not LookupAccountName(nil, PChar(fullName), PSID(@sidBuffer[0]), sidSize,
     domainBuffer, domainSize, sidUse) then
   begin
-    ThemeLog('TryGetSessionUserSidByName: LookupAccountName blad %d', [GetLastError]);
+    ThemeLog('TryGetSessionUserSidByName: LookupAccountName error %d', [GetLastError]);
     Exit;
   end;
 
@@ -412,13 +412,13 @@ begin
   try
     Result := TryGetTokenSidString(userToken, ASid);
     if Result then
-      ThemeLog('TryGetSidForSession: sesja %d -> %s (WTSQueryUserToken)',
+      ThemeLog('TryGetSidForSession: session %d -> %s (WTSQueryUserToken)',
         [ASessionId, ASid]);
   finally
     CloseHandle(userToken);
   end
   else
-    ThemeLog('TryGetSidForSession: WTSQueryUserToken(%d) blad %d',
+    ThemeLog('TryGetSidForSession: WTSQueryUserToken(%d) error %d',
       [ASessionId, GetLastError]);
 
   // Sciezka zapasowa - bez SE_TCB_NAME.
@@ -432,31 +432,31 @@ var
 begin
   ASid := '';
 
-  // 1. Sesja wlasnego procesu. Pod ServiceUI to juz sesja uzytkownika.
+  // 1. The session of our own process. Under ServiceUI this already is the user session.
   sessionId := GetOwnSessionId;
-  ThemeLog('TryGetInteractiveUserSid: sesja wlasna = %d', [sessionId]);
+  ThemeLog('TryGetInteractiveUserSid: own session = %d', [sessionId]);
   if TryGetSidForSession(sessionId, ASid) then
     Exit(True);
 
-  // 2. Sesja konsoli fizycznej.
+  // 2. The physical console session.
   sessionId := WTSGetActiveConsoleSessionId;
-  ThemeLog('TryGetInteractiveUserSid: sesja konsoli = %d', [sessionId]);
+  ThemeLog('TryGetInteractiveUserSid: console session = %d', [sessionId]);
   if TryGetSidForSession(sessionId, ASid) then
     Exit(True);
 
-  // 3. Pierwsza sesja w stanie WTSActive (RDP, odlaczona konsola).
-  ThemeLog('TryGetInteractiveUserSid: enumeracja sesji');
+  // 3. The first session in the WTSActive state (RDP, disconnected console).
+  ThemeLog('TryGetInteractiveUserSid: enumerating sessions');
   sessionId := GetFirstActiveSessionId;
-  ThemeLog('TryGetInteractiveUserSid: pierwsza aktywna = %d', [sessionId]);
+  ThemeLog('TryGetInteractiveUserSid: first active = %d', [sessionId]);
   if TryGetSidForSession(sessionId, ASid) then
     Exit(True);
 
-  ThemeLog('TryGetInteractiveUserSid: nie udalo sie ustalic SID');
+  ThemeLog('TryGetInteractiveUserSid: failed to determine the SID');
   Result := False;
 end;
 
 { ------------------------------------------------------------------------ }
-{ Odczyt motywu z galezi uzytkownika                                       }
+{ Reading the theme from the user's registry branch                        }
 { ------------------------------------------------------------------------ }
 
 function TryGetDarkModeForSid(const ASid: string; out ADark: Boolean): Boolean;
@@ -476,8 +476,8 @@ begin
     reg.RootKey := HKEY_USERS;
     if not reg.KeyExists(keyPath) then
     begin
-      ThemeLog('TryGetDarkModeForSid: brak klucza HKU\%s ' +
-        '(profil niezaladowany?)', [keyPath]);
+      ThemeLog('TryGetDarkModeForSid: no HKU\%s key ' +
+        '(profile not loaded?)', [keyPath]);
       Exit;
     end;
 
@@ -491,12 +491,12 @@ begin
           [Ord(not ADark), BoolToStr(ADark, True)]);
       end
       else
-        ThemeLog('TryGetDarkModeForSid: brak wartosci AppsUseLightTheme');
+        ThemeLog('TryGetDarkModeForSid: no AppsUseLightTheme value');
     finally
       reg.CloseKey;
     end
     else
-      ThemeLog('TryGetDarkModeForSid: OpenKeyReadOnly nieudane dla HKU\%s',
+      ThemeLog('TryGetDarkModeForSid: OpenKeyReadOnly failed for HKU\%s',
         [keyPath]);
   finally
     reg.Free;
@@ -504,7 +504,7 @@ begin
 end;
 
 { ------------------------------------------------------------------------ }
-{ Watek obserwujacy zmiane motywu w galezi uzytkownika                     }
+{ Thread watching for a theme change in the user's registry branch         }
 { ------------------------------------------------------------------------ }
 
 type
@@ -526,10 +526,10 @@ constructor TUserThemeWatchThread.Create(const ASid: string);
 var
   status: Longint;
 begin
-  // Pola ustawiamy PRZED inherited Create. Pamiec instancji jest juz
-  // wyzerowana przez NewInstance, a watek systemowy powstaje dopiero
-  // w inherited - Execute nigdy nie zobaczy niezainicjowanych pol.
-  // Dzieki temu nie wolamy Start, ktore po Create(True) rzuca EThread
+  // The fields are set BEFORE inherited Create. The instance memory is already
+  // zeroed by NewInstance, and the system thread is created only inside
+  // inherited - Execute never sees uninitialized fields.
+  // This way Start is never called, which after Create(True) raises EThread
   // 'Cannot call Start on a running or suspended thread'.
   FreeOnTerminate := False;
   FSid := ASid;
@@ -541,7 +541,7 @@ begin
     KEY_READ or KEY_NOTIFY, FKey);
   if status <> ERROR_SUCCESS then
   begin
-    ThemeLog('TUserThemeWatchThread: RegOpenKeyEx blad %d - obserwacja wylaczona',
+    ThemeLog('TUserThemeWatchThread: RegOpenKeyEx error %d - watching disabled',
       [status]);
     FKey := 0;
   end;
@@ -573,7 +573,7 @@ var
 begin
   if TryGetDarkModeForSid(FSid, dark) then
   begin
-    ThemeLog('Watcher: wykryto zmiane, dark=%s', [BoolToStr(dark, True)]);
+    ThemeLog('Watcher: change detected, dark=%s', [BoolToStr(dark, True)]);
     FluentSetDarkMode(dark);
   end;
 end;
@@ -624,13 +624,13 @@ var
 begin
   StopFollowingUserTheme;
 
-  ThemeLog('--- StartFollowingUserTheme, proces SID=%s, SYSTEM=%s ---',
+  ThemeLog('--- StartFollowingUserTheme, process SID=%s, SYSTEM=%s ---',
     [GetCurrentProcessSid, BoolToStr(RunningAsLocalSystem, True)]);
 
   if TryGetInteractiveUserSid(sid) then
   begin
     if not TryGetDarkModeForSid(sid, dark) then
-      dark := False; // brak wartosci = domyslnie jasny
+      dark := False; // no value = light by default
     ThemeLog('StartFollowingUserTheme: FluentSetDarkMode(%s)',
       [BoolToStr(dark, True)]);
     FluentSetDarkMode(dark);
@@ -638,7 +638,7 @@ begin
   end
   else
   begin
-    ThemeLog('StartFollowingUserTheme: fallback na FluentApplySystemTheme (HKCU)');
+    ThemeLog('StartFollowingUserTheme: falling back to FluentApplySystemTheme (HKCU)');
     FluentApplySystemTheme;
   end;
 end;
@@ -651,22 +651,22 @@ var
 begin
   lines := TStringList.Create;
   try
-    lines.Add('SID procesu:        ' + GetCurrentProcessSid);
-    lines.Add('Dziala jako SYSTEM: ' + BoolToStr(RunningAsLocalSystem, True));
-    lines.Add('Sesja procesu:      ' + IntToStr(GetOwnSessionId));
-    lines.Add('Sesja konsoli:      ' + IntToStr(WTSGetActiveConsoleSessionId));
-    lines.Add('Pierwsza aktywna:   ' + IntToStr(GetFirstActiveSessionId));
+    lines.Add('Process SID:        ' + GetCurrentProcessSid);
+    lines.Add('Running as SYSTEM:  ' + BoolToStr(RunningAsLocalSystem, True));
+    lines.Add('Process session:    ' + IntToStr(GetOwnSessionId));
+    lines.Add('Console session:    ' + IntToStr(WTSGetActiveConsoleSessionId));
+    lines.Add('First active:       ' + IntToStr(GetFirstActiveSessionId));
 
     if TryGetInteractiveUserSid(sid) then
     begin
-      lines.Add('SID uzytkownika:    ' + sid);
+      lines.Add('User SID:           ' + sid);
       if TryGetDarkModeForSid(sid, dark) then
-        lines.Add('Motyw ciemny:       ' + BoolToStr(dark, True))
+        lines.Add('Dark theme:         ' + BoolToStr(dark, True))
       else
-        lines.Add('Motyw ciemny:       BRAK WARTOSCI W REJESTRZE');
+        lines.Add('Dark theme:         NO VALUE IN THE REGISTRY');
     end
     else
-      lines.Add('SID uzytkownika:    NIE USTALONO');
+      lines.Add('User SID:           NOT DETERMINED');
 
     Result := lines.Text;
   finally

@@ -72,12 +72,12 @@
       FHoveredDayIdx: Integer;
       FHoveredBtn: Integer; // -1: none, 0: prev, 1: next, 2: label (month/year)
 
-      { Wybrano date na WM_LBUTTONDOWN, ale okno zamykamy dopiero na WM_LBUTTONUP.
-        Inaczej popup znika miedzy down a up i mouse-up trafia w kontrolke,
-        ktora byla pod spodem (np. naglowek DBGrida -> niechciane sortowanie). }
+      { The date is picked on WM_LBUTTONDOWN, but the window is closed only on
+        WM_LBUTTONUP. Otherwise the popup disappears between down and up and the
+        mouse-up hits the control underneath (e.g. a DBGrid header -> unwanted sorting). }
       FPendingClose: Boolean;
 
-      { Geometria okna warstwowego (per-pixel alpha) }
+      { Layered window geometry (per-pixel alpha) }
       FScale: Single;
       FDpi: Integer;
       FBlur, FShadowOffset, FShadow: Integer;
@@ -1965,11 +1965,11 @@
 
   procedure TCWSCalendarDropdown.BeginPendingClose;
   begin
-    { Data jest juz ustawiona; okno ZOSTAJE widoczne az do WM_LBUTTONUP,
-      dzieki czemu mouse-up konsumuje popup, a nie kontrolka pod nim.
-      SetCapture to dodatkowe zabezpieczenie na wypadek zjechania kursorem
-      poza okno przed zwolnieniem przycisku (okno ma WS_EX_NOACTIVATE,
-      wiec capture moze sie nie udac - i to jest OK). }
+    { The date is already set; the window STAYS visible until WM_LBUTTONUP, so
+      the mouse-up is consumed by the popup and not by the control below it.
+      SetCapture is an extra safeguard in case the cursor leaves the window
+      before the button is released (the window has WS_EX_NOACTIVATE, so the
+      capture may fail - and that is OK). }
     FPendingClose := True;
     if GetCapture <> Handle then
       SetCapture(Handle);
@@ -2168,7 +2168,7 @@
       if GetCapture = Handle then
         ReleaseCapture;
       FDatePicker.CloseDropdown;
-      Msg.Result := 0;   { komunikat skonsumowany - nie leci do kontrolki pod spodem }
+      Msg.Result := 0;   { message consumed - it does not reach the control underneath }
       Exit;
     end;
     inherited;
@@ -2176,7 +2176,7 @@
 
   procedure TCWSCalendarDropdown.WMCaptureChanged(var Msg: TMessage);
   begin
-    { Capture przejal ktos inny - nie zostawiaj wiszacego popupu. }
+    { Someone else took over the capture - do not leave a dangling popup. }
     if FPendingClose then
     begin
       FPendingClose := False;
@@ -2490,9 +2490,9 @@
       FInternalEdit.Invalidate;
   end;
 
-  { Prawy przycisk myszy nad samą kontrolką. Wywoływane przez TControl.WMContextMenu
-    zanim pojawi się menu — zamykamy otwarty kalendarz, żeby okno warstwowe
-    nie zasłaniało menu. }
+  { Right mouse button over the control itself. Called by TControl.WMContextMenu
+    before the menu appears — we close an open calendar so the layered window
+    does not cover the menu. }
   procedure TCWSDatePicker.DoContextPopup(MousePos: TPoint; var Handled: Boolean);
   begin
     if FDroppedDown then
@@ -2500,10 +2500,10 @@
     inherited;
   end;
 
-  { Prawy przycisk myszy nad wewnętrznym edytorem. Bez tego edit pokazałby
-    systemowe menu Cofnij/Wytnij/Kopiuj/Wklej i PopupMenu komponentu nigdy
-    by się nie pojawiło. Pozycję przeliczamy na współrzędne DatePickera,
-    a PopupComponent ustawiamy na Self, nie na ukryty edit. }
+  { Right mouse button over the internal editor. Without this the edit would show
+    the system Undo/Cut/Copy/Paste menu and the component's PopupMenu would never
+    appear. The position is converted to DatePicker coordinates, and PopupComponent
+    is set to Self, not to the hidden edit. }
   procedure TCWSDatePicker.EditContextPopup(Sender: TObject; MousePos: TPoint;
     var Handled: Boolean);
   var
@@ -2511,7 +2511,7 @@
     Menu: TPopupMenu;
   begin
     if (MousePos.X < 0) or (MousePos.Y < 0) then
-      { menu wywołane z klawiatury (VK_APPS) — pokaż pod kontrolką }
+      { menu invoked from the keyboard (VK_APPS) — show it below the control }
       P := Point(0, Height)
     else
       P := ScreenToClient(FInternalEdit.ClientToScreen(MousePos));

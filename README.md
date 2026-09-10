@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.0](https://img.shields.io/badge/version-1.9.0-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.3](https://img.shields.io/badge/version-1.9.3-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -115,6 +115,7 @@ CWStudio to zestaw nowoczesnych, wysokiej jakości komponentów VCL dla środowi
 |------|------|
 | **`CWSFluentColors`** | Pełen zestaw tokenów kolorystycznych Fluent UI v9 (Light + Dark). Pojedynczy callback przy zmianie motywu (`FluentOnThemeChange`). |
 | **`CWSFluentColorsMulti`** | Ta sama paleta tokenów, ale z obsługą **wielu** subskrybentów: `RegisterThemeChange` / `UnregisterThemeChange`. Każda forma lub kontrolka rejestruje własny handler. |
+| **`CWSInteractiveUserTheme`** | Wykrywa motyw (jasny / ciemny) **zalogowanego użytkownika** także wtedy, gdy proces działa na koncie `NT AUTHORITY\SYSTEM` (np. uruchomiony przez `ServiceUI.exe` z Intune / MDT), gdzie `HKCU` należy do konta usługi, a nie do użytkownika. `StartFollowingUserTheme` ustawia motyw i uruchamia obserwację zmian, `StopFollowingUserTheme` ją zatrzymuje. |
 
 > 🌗 **Motyw podąża za systemem** — kolory motywu (jasny / ciemny) zmieniają się automatycznie w zależności od ustawień systemu Windows. Komponenty nasłuchują zmiany motywu Windows (np. przełączenie *Ustawienia → Personalizacja → Kolory → Tryb*) i przemalowują się w locie, a każdy zarejestrowany handler dostaje powiadomienie, dzięki czemu cała aplikacja pozostaje spójna bez restartu.
 
@@ -143,6 +144,36 @@ begin
   UnregisterThemeChange(HandleThemeChange);
 end;
 ```
+
+#### Przykład — motyw zalogowanego użytkownika (`CWSInteractiveUserTheme`)
+
+Standardowe wykrywanie motywu czyta `HKCU`, więc aplikacja uruchomiona na koncie `NT AUTHORITY\SYSTEM` (np. przez `ServiceUI.exe` z Intune / MDT) dostaje ustawienia konta usługi, a nie zalogowanego użytkownika — i zawsze pokazuje motyw jasny. Ten unit ustala sesję interaktywną, jej SID, i czyta `AppsUseLightTheme` wprost z `HKEY_USERS\<SID>`.
+
+```pascal
+uses
+  CWSFluentColorsMulti, CWSInteractiveUserTheme;
+
+procedure TForm1.FormCreate(Sender: TObject);
+begin
+  RegisterThemeChange(ApplyTheme);   // tylko rejestracja — okno nie ma jeszcze uchwytu
+end;
+
+procedure TForm1.FormShow(Sender: TObject);
+begin
+  StartFollowingUserTheme;           // ustawia motyw i startuje obserwację zmian
+  ApplyTheme;                        // pierwsze pomalowanie — jawnie, nie licz na callback
+end;
+
+procedure TForm1.FormDestroy(Sender: TObject);
+begin
+  StopFollowingUserTheme;
+  UnregisterThemeChange(ApplyTheme);
+end;
+```
+
+> ⚠️ **Wołaj `StartFollowingUserTheme` w `FormShow`, nie w `FormCreate`** — w `FormCreate` zmienna globalna formularza jest jeszcze `nil`, a okno nie ma uchwytu.
+
+Diagnostyka: ustaw `ThemeLogEnabled := True` (albo uruchom aplikację z przełącznikiem `/themelog`), aby zapisać przebieg wykrywania do `%TEMP%\CWSTheme.log` (pod kontem SYSTEM: `C:\Windows\Temp`). `ThemeDiagnostics` zwraca ten sam stan jako gotowy tekst — SID procesu, numery sesji, SID użytkownika i wykryty motyw.
 
 #### 🎨 Wzornik kolorów — `CWSFluentColors_palette.html`
 
@@ -223,7 +254,23 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Historia wersji
 
-**Najnowsza wersja — 1.9.0:**
+**Najnowsza wersja — 1.9.3:**
+
+- **Nowość** `CWSInteractiveUserTheme` — unit wykrywający motyw jasny/ciemny **zalogowanego użytkownika** także wtedy, gdy sam proces działa na koncie `NT AUTHORITY\SYSTEM` (np. uruchomiony przez `ServiceUI.exe` z Intune / MDT). Zwykłe wykrywanie czyta `AppsUseLightTheme` z `HKCU`, a pod SYSTEM jest to gałąź konta usługi, nie użytkownika — taka aplikacja zawsze wstawała w motywie jasnym, niezależnie od ustawień Windows. Sesja interaktywna ustalana jest w trzech krokach: `ProcessIdToSessionId` (pod ServiceUI to już sesja użytkownika), `WTSGetActiveConsoleSessionId`, a na końcu pierwsza sesja `WTSActive` z `WTSEnumerateSessions`, co ratuje RDP i odłączoną konsolę. SID bierze się z `WTSQueryUserToken`, a bez przywileju `SE_TCB_NAME` — z `WTSQuerySessionInformation` + `LookupAccountName`. Motyw czytany jest z `HKEY_USERS\<SID>` i nakładany przez `CWSFluentColorsMulti`. `StartFollowingUserTheme` uruchamia też wątek obserwatora (`RegNotifyChangeKeyValue` na tej gałęzi), więc przełączenie *Ustawienia → Personalizacja → Kolory → Tryb* przemalowuje aplikację w locie; `StopFollowingUserTheme` go zatrzymuje (finalization woła to i tak). Do dyspozycji są także `RunningAsLocalSystem`, `TryGetInteractiveUserSid` i `TryGetDarkModeForSid`, a do diagnostyki wdrożenia — `ThemeDiagnostics` oraz `ThemeLogEnabled` (włączane również przełącznikiem `/themelog`, log do `%TEMP%\CWSTheme.log`). `StartFollowingUserTheme` wołaj w `FormShow`, nie w `FormCreate` — tam zmienna globalna formularza jest jeszcze `nil`, a okno nie ma uchwytu.
+- **Poprawka** pakiet: `CWSInteractiveUserTheme` należy teraz do **`CWStudio_ComponentsRT`** (`contains` w `.dpk` i wpis w `.dproj`). Unit leżał w repozytorium od 1.8.9, ale nie należał do żadnego pakietu — kompilował się tylko w projektach, które dodały `.pas` ręcznie.
+- **Poprawka** pakiet: `{$DESCRIPTION}` obu pakietów wciąż pokazywał **1.8.9** — znów idzie za wydaną wersją.
+- **Zmiana** komentarze w kodzie, które zostały po polsku (`CWSListBox`, `CWSPopupMenu`, `CWSDatePicker`, `CWSComboBox`, `CWSProgressCircle`, `CWStudio_Reg`, `CWSInteractiveUserTheme`), są teraz po angielsku, jak w reszcie biblioteki. Przetłumaczone zostały też stringi `ThemeLog` / `ThemeDiagnostics` z `CWSInteractiveUserTheme` — jedyny widoczny dla użytkownika tekst wśród nich — więc log zebrany z maszyny docelowej czyta się po angielsku.
+
+**Wersja 1.9.2:**
+
+- **Poprawka** `TCWSMenuButton`, `TCWSStoreButton`: **efekt `BckHoverPressedColor` pokazywał się także przy prawym przycisku myszy.** `FMouseIsDown` było ustawiane w `MouseDown` wewnętrznej warstwy myszy dla dowolnego przycisku, więc kliknięcie prawym — zwykle po to, by otworzyć menu podręczne — malowało przycisk tak, jakby zaraz miał zostać wybrany, choć żaden `Click` po nim nie następuje i `Pressed` się nie zatrzaskuje. `ChildMouseDown` i `ChildMouseUp` ruszają teraz `FMouseIsDown` wyłącznie dla `mbLeft`; opublikowane zdarzenia `OnMouseDown`/`OnMouseUp` nadal odpalają dla każdego przycisku, a wciśnięcie zsunięte poza kontrolkę wciąż anuluje `MouseLeave`.
+
+**Wersja 1.9.1:**
+
+- **Nowość** `TCWSMenuButton`, `TCWSStoreButton`: **`BckHoverPressedColor`** — osobne tło dla stanu „zaraz zostanie wybrany", pokazywane tylko wtedy, gdy przycisk myszy jest wciśnięty nad przyciskiem, który nie jest jeszcze tym wybranym. Dotąd przycisk przechodził od koloru hover od razu do zatrzaśniętego `BckPressedColor` w momencie `Click`, bez żadnej informacji zwrotnej o samym wciśnięciu. `UpdateColor` bierze teraz `BckHoverPressedColor`, gdy `FMouseIsDown and FHovering and not FPressed`. `FMouseIsDown` jest ustawiane na `MouseDown` wewnętrznej warstwy myszy, czyszczone na jej `MouseUp` oraz na `MouseLeave` — wciśnięcie zsunięte poza przycisk anuluje efekt, tak jak przy zwykłym przycisku, gdzie VCL wywołuje `MouseUp` poza kontrolką bez następującego `Click` i `Pressed` się nie zatrzaskuje. Domyślnie `clGray`.
+- **Nowość** `TCWSMenuButton`: opublikowane **`OnMouseDown`** i **`OnMouseUp`** — przekazywane z wewnętrznej warstwy myszy (`TCWSStoreButton` miał już oba).
+
+**Wersja 1.9.0:**
 
 - **Poprawka** `TCWSPopupMenu`: **`Checked` i `Default` w ogóle nie były rysowane.** Obie właściwości działały poprawnie od strony logiki — `ActivateItem` wywołuje `TMenuItem.Click`, więc `AutoCheck`, grupowanie `RadioItem` i `GroupIndex` robiły swoje — ale renderer nigdy do nich nie zaglądał, przez co pozycja zaznaczona wyglądała identycznie jak niezaznaczona, a domyślna jak każda inna. Zaznaczona pozycja dostaje teraz znacznik w kolumnie ikon, a pozycja `Default` jest rysowana pogrubieniem: `Render` trzyma drugi, pogrubiony `HFONT` i wybiera go per pozycja, a `Measure` mierzy taki podpis tym samym pogrubionym fontem, więc najszersza domyślna pozycja nie traci ogona na wielokropek.
 - **Zmiana** `TCWSPopupMenu`: znak zaznaczenia jest rysowany **wektorowo w warstwie GDI+**, a nie jako znak z fontu — w proporcjach glifu `CheckMark` (U+E73E) z *Segoe MDL2 Assets*: oba ramiona pod 45° (krótkie 4.5 jednostki, długie 8.5 przy 16 px glifu), kreska równej grubości 1.5 px, końce cięte prostopadle (`LineCapFlat`) i ostry wierzchołek (`LineJoinMiter`). Wszystko przemnożone przez skalę DPI menu, więc rośnie razem z resztą rysunku i zostaje wyśrodkowane w kolumnie ikon przy każdym `ItemHeight`. Droga przez font oznaczałaby zależność od kroju, który akurat ma ten glif, i od jego metryk przy centrowaniu w pionie; przejściowe właściwości `CheckedGlyph` / `CheckedGlyphFont`, które to zastąpiło, zostały więc usunięte.
@@ -514,6 +561,7 @@ CWStudio is a library of modern, high-quality VCL components for Delphi, designe
 |------|-------------|
 | **`CWSFluentColors`** | Full set of Fluent UI v9 color tokens (Light + Dark). Single callback on theme change (`FluentOnThemeChange`). |
 | **`CWSFluentColorsMulti`** | Same token palette but supports **multiple** subscribers: `RegisterThemeChange` / `UnregisterThemeChange`. Each form or control can register its own handler. |
+| **`CWSInteractiveUserTheme`** | Detects the theme (light / dark) of the **logged-on user** even when the process runs under the `NT AUTHORITY\SYSTEM` account (e.g. started by `ServiceUI.exe` from Intune / MDT), where `HKCU` belongs to the service account rather than to the user. `StartFollowingUserTheme` applies the theme and starts watching for changes, `StopFollowingUserTheme` stops it. |
 
 > 🌗 **The theme follows the system** — the theme colors (light / dark) change automatically according to the Windows setting. The components listen for Windows theme changes (e.g. toggling *Settings → Personalization → Colors → Mode*) and repaint on the fly, and every registered handler is notified, so the whole app stays consistent with no restart.
 
@@ -542,6 +590,36 @@ begin
   UnregisterThemeChange(HandleThemeChange);
 end;
 ```
+
+#### Example — logged-on user's theme (`CWSInteractiveUserTheme`)
+
+The standard theme detection reads `HKCU`, so an application running under `NT AUTHORITY\SYSTEM` (e.g. started by `ServiceUI.exe` from Intune / MDT) gets the service account's settings rather than the logged-on user's — and always comes up light. This unit determines the interactive session and its SID, and reads `AppsUseLightTheme` straight from `HKEY_USERS\<SID>`.
+
+```pascal
+uses
+  CWSFluentColorsMulti, CWSInteractiveUserTheme;
+
+procedure TForm1.FormCreate(Sender: TObject);
+begin
+  RegisterThemeChange(ApplyTheme);   // registration only — the window has no handle yet
+end;
+
+procedure TForm1.FormShow(Sender: TObject);
+begin
+  StartFollowingUserTheme;           // applies the theme and starts watching for changes
+  ApplyTheme;                        // first paint — explicitly, do not rely on the callback
+end;
+
+procedure TForm1.FormDestroy(Sender: TObject);
+begin
+  StopFollowingUserTheme;
+  UnregisterThemeChange(ApplyTheme);
+end;
+```
+
+> ⚠️ **Call `StartFollowingUserTheme` from `FormShow`, not from `FormCreate`** — in `FormCreate` the form's global variable is still `nil` and the window has no handle.
+
+Diagnostics: set `ThemeLogEnabled := True` (or start the application with the `/themelog` switch) to write the detection trace to `%TEMP%\CWSTheme.log` (under SYSTEM: `C:\Windows\Temp`). `ThemeDiagnostics` returns the same state as ready-made text — process SID, session ids, user SID and the detected theme.
 
 #### 🎨 Color swatch — `CWSFluentColors_palette.html`
 
@@ -623,7 +701,23 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ Version history
 
-**Latest release — 1.9.0:**
+**Latest release — 1.9.3:**
+
+- **New** `CWSInteractiveUserTheme` — a unit that detects the light/dark theme of the **logged-on user** even when the process itself runs under `NT AUTHORITY\SYSTEM` (e.g. started by `ServiceUI.exe` from Intune / MDT). The usual detection reads `AppsUseLightTheme` from `HKCU`, which under SYSTEM is the service account's hive, not the user's, so such an application always came up light no matter how the user had set Windows up. The interactive session is established in three steps — `ProcessIdToSessionId` (under ServiceUI this already is the user session), `WTSGetActiveConsoleSessionId`, then the first `WTSActive` session from `WTSEnumerateSessions`, which covers RDP and a disconnected console — and its SID is taken from `WTSQueryUserToken`, falling back to `WTSQuerySessionInformation` + `LookupAccountName` where `SE_TCB_NAME` is not held. The theme is then read from `HKEY_USERS\<SID>` and applied through `CWSFluentColorsMulti`. `StartFollowingUserTheme` also starts a watcher thread (`RegNotifyChangeKeyValue` on that branch), so switching *Settings → Personalization → Colors → Mode* repaints the application live; `StopFollowingUserTheme` ends it, and finalization calls it anyway. `RunningAsLocalSystem`, `TryGetInteractiveUserSid` and `TryGetDarkModeForSid` are published for callers that need the raw answers, and `ThemeDiagnostics` / `ThemeLogEnabled` (also switched on by the `/themelog` command line switch, logging to `%TEMP%\CWSTheme.log`) exist for diagnosing a deployment on the target machine. Call `StartFollowingUserTheme` from `FormShow`, not `FormCreate` — in `FormCreate` the form's global variable is still `nil` and the window has no handle.
+- **Fix** packaging: `CWSInteractiveUserTheme` is now part of **`CWStudio_ComponentsRT`** (`.dpk` `contains` and the `.dproj`). The unit shipped in the repository since 1.8.9 but belonged to no package, so it compiled only for projects that added the `.pas` by hand.
+- **Fix** packaging: the `{$DESCRIPTION}` of both packages still read **1.8.9** — it now follows the released version again.
+- **Changed** the source comments left in Polish in `CWSListBox`, `CWSPopupMenu`, `CWSDatePicker`, `CWSComboBox`, `CWSProgressCircle`, `CWStudio_Reg` and `CWSInteractiveUserTheme` are now in English, as everywhere else in the library. The `ThemeLog` / `ThemeDiagnostics` strings of `CWSInteractiveUserTheme` — the only user-visible text among them — are translated too, so a log collected from a target machine reads in English.
+
+**Version 1.9.2:**
+
+- **Fix** `TCWSMenuButton`, `TCWSStoreButton`: **the `BckHoverPressedColor` press feedback was also shown for the right mouse button.** `FMouseIsDown` was set from the inner mouse layer's `MouseDown` for any button, so right-clicking a button — normally to open a popup menu — painted it as if it were about to be selected, even though no `Click` follows and `Pressed` never latches. Both `ChildMouseDown` and `ChildMouseUp` now touch `FMouseIsDown` only for `mbLeft`; the published `OnMouseDown`/`OnMouseUp` events still fire for every button, and a press dragged off the control is still cancelled by `MouseLeave`.
+
+**Version 1.9.1:**
+
+- **New** `TCWSMenuButton`, `TCWSStoreButton`: **`BckHoverPressedColor`** — a separate background for the "about to be selected" state, shown only while the mouse button is held down over a button that is not already the pressed one. Until now the button went straight from the hover colour to the latched `BckPressedColor` the moment `Click` fired, with no feedback for the press itself. `UpdateColor` now picks `BckHoverPressedColor` when `FMouseIsDown and FHovering and not FPressed`. `FMouseIsDown` is set on the inner mouse layer's `MouseDown`, cleared on its `MouseUp`, and also cleared on `MouseLeave` — a press dragged off the button cancels the feedback, matching a normal button, where the VCL fires `MouseUp` outside the control with no following `Click` and `Pressed` never latches. Defaults to `clGray`.
+- **New** `TCWSMenuButton`: **`OnMouseDown`** and **`OnMouseUp`** published — routed from the internal mouse layer (`TCWSStoreButton` already carried both).
+
+**Version 1.9.0:**
 
 - **Fix** `TCWSPopupMenu`: **`Checked` and `Default` were not drawn at all.** Both properties were set and read correctly — `ActivateItem` calls `TMenuItem.Click`, so `AutoCheck`, `RadioItem` grouping and `GroupIndex` all did their work — but the renderer never looked at them, so a checked item was indistinguishable from an unchecked one and the default item from the rest. A checked item now gets a mark in the icon column, and a `Default` item is drawn in bold: `Render` keeps a second, bold `HFONT` and picks it per item, and `Measure` sizes such a caption with that same bold font, so the widest default item is not the one that loses its tail to the ellipsis.
 - **Changed** `TCWSPopupMenu`: the check mark is drawn **as a vector path in the GDI+ layer**, not as a character from a font — shaped after the `CheckMark` glyph (U+E73E) of *Segoe MDL2 Assets*: both arms at 45° (4.5 units short, 8.5 long at a 16 px em), an even 1.5 px stroke, ends cut square (`LineCapFlat`) and a sharp vertex (`LineJoinMiter`). Everything is multiplied by the menu's DPI scale, so it grows with the rest of the drawing, and it is centred in the icon column at any `ItemHeight`. Going through a font would have meant depending on a face that actually carries the glyph and on its own metrics for the vertical centring; the interim `CheckedGlyph` / `CheckedGlyphFont` properties this replaced are therefore gone.

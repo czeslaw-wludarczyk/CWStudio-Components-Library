@@ -41,6 +41,7 @@ type
     FNormalColor: TColor;
     FbckHoverColor: TColor;
     FbckPressedColor: TColor;
+    FbckHoverPressedColor: TColor;
     FCursorColor: TColor;
     FCursorHeight: Integer;
 
@@ -50,6 +51,7 @@ type
 
     FHovering: Boolean;
     FPressed: Boolean;
+    FMouseIsDown: Boolean;
     FGroupIndex: Integer;
 
     FIconColorNormal: TColor;
@@ -89,6 +91,7 @@ type
     procedure SetDescriptionText(const Value: string);
     procedure SetBckColor(const Value: TColor);
     procedure SetBckPressedColor(const Value: TColor);
+    procedure SetBckHoverPressedColor(const Value: TColor);
     procedure SetPressed(const Value: Boolean);
     procedure SetGroupIndex(const Value: Integer);
     procedure SetCursorColor(const Value: TColor);
@@ -151,6 +154,7 @@ type
     property BckNormalColor: TColor read FNormalColor write SetNormalColor stored True;
     property BckHoverColor: TColor read FbckHoverColor write SetBckColor stored True;
     property BckPressedColor: TColor read FbckPressedColor write SetBckPressedColor stored True;
+    property BckHoverPressedColor: TColor read FbckHoverPressedColor write SetBckHoverPressedColor stored True;
     property CursorColor: TColor read FCursorColor write SetCursorColor stored True;
     property CursorHeight: Integer read FCursorHeight write SetCursorHeight default 23;
 
@@ -203,9 +207,10 @@ begin
   FIconGlyphPressed := '';
   FdescriptionText  := 'Home';
 
-  FPressed    := False;
-  FHovering   := False;
-  FGroupIndex := 0;
+  FPressed     := False;
+  FHovering    := False;
+  FMouseIsDown := False;
+  FGroupIndex  := 0;
 
   FNormalColor             := clBtnFace;
   FIconColorNormal         := clGray;
@@ -215,6 +220,7 @@ begin
   FDescriptionColorHover   := clBlack;
   FDescriptionColorPressed := clGray;
   FCursorColor             := clGray;
+  FbckHoverPressedColor    := clGray;
   FCursorHeight            := 23;
 
   FIconMode          := icmGlyph;
@@ -279,9 +285,10 @@ begin
   FMouseLayer.OnMouseDown  := ChildMouseDown;
   FMouseLayer.OnMouseUp    := ChildMouseUp;
 
-  BckHoverColor   := clSilver;
-  BckPressedColor := clWhite;
-  Self.Color      := clBtnFace;
+  BckHoverColor        := clSilver;
+  BckPressedColor      := clWhite;
+  BckHoverPressedColor := clGray;
+  Self.Color           := clBtnFace;
 
   UpdateColor;
 end;
@@ -460,7 +467,10 @@ begin
   if csLoading in ComponentState then
     Exit;
 
-  if FPressed then FbckShape.Brush.Color := FbckPressedColor
+  { BckHoverPressedColor is the "about to be selected" feedback — only while the
+    button is held down and is not already the selected one. }
+  if FMouseIsDown and FHovering and not FPressed then FbckShape.Brush.Color := FbckHoverPressedColor
+  else if FPressed then FbckShape.Brush.Color := FbckPressedColor
   else if FHovering then FbckShape.Brush.Color := FbckHoverColor
   else FbckShape.Brush.Color := FNormalColor;
   FbckShape.Pen.Color := FbckShape.Brush.Color;
@@ -637,6 +647,10 @@ end;
 procedure TCWSStoreButton.ChildMouseLeave(Sender: TObject);
 begin
   FHovering := False;
+  { Pointer left while the button was held down — cancel the press feedback.
+    VCL fires MouseUp outside the control without a following Click, so Pressed
+    never latches: normal button behaviour. }
+  FMouseIsDown := False;
   UpdateColor;
   if Assigned(FOnMouseLeave) then FOnMouseLeave(Self);
 end;
@@ -650,12 +664,25 @@ end;
 procedure TCWSStoreButton.ChildMouseDown(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 begin
+  { Press feedback belongs to the left button only — the right button opens a
+    popup menu and must not paint the button as about to be selected. }
+  if Button = mbLeft then
+  begin
+    FMouseIsDown := True;
+    UpdateColor;
+  end;
   if Assigned(FOnMouseDown) then FOnMouseDown(Self, Button, Shift, X, Y);
 end;
 
 procedure TCWSStoreButton.ChildMouseUp(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 begin
+  { Released over the button: MouseClick fires next and latches Pressed. }
+  if Button = mbLeft then
+  begin
+    FMouseIsDown := False;
+    UpdateColor;
+  end;
   if Assigned(FOnMouseUp) then FOnMouseUp(Self, Button, Shift, X, Y);
 end;
 
@@ -792,6 +819,9 @@ begin FbckHoverColor := Value; UpdateColor; end;
 
 procedure TCWSStoreButton.SetBckPressedColor(const Value: TColor);
 begin FbckPressedColor := Value; UpdateColor; end;
+
+procedure TCWSStoreButton.SetBckHoverPressedColor(const Value: TColor);
+begin FbckHoverPressedColor := Value; UpdateColor; end;
 
 procedure TCWSStoreButton.SetCursorColor(const Value: TColor);
 begin

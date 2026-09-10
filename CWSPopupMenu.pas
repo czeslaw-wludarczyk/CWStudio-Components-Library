@@ -63,10 +63,10 @@ type
     FVPad: Integer;
     FHotIndex: Integer;          { index in FEntries or -1 }
 
-    { Pozycje wybrana na WM_LBUTTONDOWN wykonujemy dopiero na WM_LBUTTONUP.
-      Inaczej okno menu znika miedzy down a up, mouse-up trafia w kontrolke
-      pod spodem (np. naglowek DBGrida -> sortowanie), a Item.Click moze
-      pokazac okno modalne, ktore zlapie ten zabladzony mouse-up. }
+    { An item chosen on WM_LBUTTONDOWN is executed only on WM_LBUTTONUP.
+      Otherwise the menu window disappears between down and up, the mouse-up hits
+      the control underneath (e.g. a DBGrid header -> sorting), and Item.Click may
+      show a modal window that would catch that stray mouse-up. }
     FPendingClose: Boolean;
     FPendingIdx: Integer;
     FHotArrow: Integer;          { 0 none, 1 up, 2 down }
@@ -436,8 +436,8 @@ end;
 
 function TCWSMenuWindow.FontEmSize: Single;
 begin
-  { calkowity rozmiar w pikselach - hinting dziala skuteczniej niz przy
-    ulamkowym ppem (np. przy skalowaniu 110%) }
+  { integral size in pixels - hinting works better than with a fractional
+    em size (e.g. at 110% scaling) }
   if FMenu.Font.Size > 0 then Result := Round(FMenu.Font.Size * FDpi / 72)
   else Result := Round(Abs(FMenu.Font.Height) * FScale);
   if Result < 8 then Result := 8;
@@ -468,9 +468,9 @@ begin
   Result := CreateFontIndirect(LF);
 end;
 
-{ Pomiar tym samym silnikiem, ktorym pozniej rysujemy (GDI), inaczej szerokosci
-  sie rozjezdzaja i najdluzsza pozycja dostaje wielokropek.
-  DT_CALCRECT uwzglednia '&' jako prefiks akceleratora, tak jak rysowanie. }
+{ Measured with the same engine that later draws (GDI), otherwise the widths
+  drift apart and the longest item gets an ellipsis.
+  DT_CALCRECT treats '&' as an accelerator prefix, just like drawing does. }
 function TCWSMenuWindow.MeasureTextW(ADC: HDC; const S: string): Integer;
 var
   R: TRect;
@@ -554,7 +554,7 @@ begin
     begin
       It := FEntries[i].Item;
       if FEntries[i].Separator then Continue;
-      { pozycja domyslna jest rysowana pogrubieniem — mierzymy ja tak samo }
+      { the default item is drawn in bold — measure it the same way }
       if It.Default then SelectObject(MemDC, GdiFontBold)
       else SelectObject(MemDC, GdiFont);
       W := MeasureTextW(MemDC, It.Caption);
@@ -720,8 +720,8 @@ begin
   end;
 end;
 
-{ Czy pozycja ma wlasny obrazek (imagelist albo bitmapa). Gdy ma — znacznik
-  zaznaczenia nie jest rysowany, tak samo jak w VCL-owym TPopupMenu. }
+{ Whether the item has its own image (imagelist or bitmap). When it does, the
+  check mark is not drawn, just like in the VCL TPopupMenu. }
 function TCWSMenuWindow.ItemHasGlyph(AItem: TMenuItem): Boolean;
 begin
   Result := ((FMenu.Images <> nil) and (AItem.ImageIndex >= 0) and
@@ -925,12 +925,11 @@ begin
           R.Top + (ItemH - IconSize) div 2 + IconSize);
         DrawIcon(G, It, IconRect, It.Enabled);
 
-        { ── znacznik zaznaczenia ─────────────────────────────────────────────
-          Rysowany wektorowo w warstwie GDI+, wiec jest wygladzony i skaluje
-          sie z DPI; jak w VCL pojawia sie tylko wtedy, gdy pozycja nie ma
-          wlasnego obrazka. Kolor idzie za kolorem podpisu — tez w wersji
-          dla pozycji wylaczonej. RadioItem dostaje pelna kropke, zwykla
-          pozycja — ptaszek. }
+        { ── check mark ───────────────────────────────────────────────────────
+          Drawn vectorially in the GDI+ layer, so it is antialiased and scales
+          with DPI; as in the VCL it appears only when the item has no image of
+          its own. The color follows the caption color — including the disabled
+          variant. A RadioItem gets a solid dot, a regular item — a check. }
         if It.Checked and not ItemHasGlyph(It) then
         begin
           if not It.Enabled then ShCol := FMenu.DisabledTextColor
@@ -941,11 +940,11 @@ begin
           EmSz := FontEmSize;
           if It.RadioItem then
           begin
-            { Kropka idzie za wysokoscia em fontu tak samo jak ptaszek — w
-              menu Windows oba znaki sa glifami rysowanymi w rozmiarze
-              podpisu. FontEmSize jest juz przeskalowany do DPI monitora,
-              wiec zmiana skalowania Windows tez ja powieksza. Srednica
-              0.42 em miesci sie w wysokosci tuszu ptaszka (ok. 0.49 em). }
+            { The dot follows the font em height just like the check mark — in
+              the Windows menu both symbols are glyphs drawn at the caption
+              size. FontEmSize is already scaled to the monitor DPI, so a change
+              of the Windows scaling enlarges it too. A diameter of 0.42 em fits
+              within the ink height of the check mark (about 0.49 em). }
             DotSz := Max(3.0, 0.42 * EmSz);
             Brush := TGPSolidBrush.Create(GPColor(ShCol));
             try
@@ -955,27 +954,27 @@ begin
           end
           else
           begin
-            { Ptaszek odwzorowany z natywnego menu Windows 11 (glif
-              CheckMark, U+E73E, Segoe Fluent Icons). Pomiar ze zrzutu,
-              piksel po pikselu, po srodku kreski: oba ramiona dokladnie
-              pod 45°, krotkie 2.5 px na os, dlugie 5.5 px, kreska 0.96 px,
-              konce ciete prostopadle, wierzcholek ostry (najciemniejszy
-              piksel zrzutu = zlaczenie zaostrzone, nie zaokraglone).
-              Wymiary sa ulamkiem wysokosci fontu (em), a nie stala liczba
-              pikseli — w menu Windows znak rosnie razem z podpisem, a
-              FontEmSize jest juz przeskalowany do DPI. }
-            ArmS := 0.20 * EmSz;          { krotkie ramie, na os }
-            ArmL := 0.44 * EmSz;          { dlugie ramie, na os }
-            { wierzcholek tak dobrany, by prostokat opisany na kresce byl
-              wysrodkowany w kolumnie ikon }
+            { Check mark reproduced from the native Windows 11 menu (CheckMark
+              glyph, U+E73E, Segoe Fluent Icons). Measured from a screenshot,
+              pixel by pixel, along the center of the stroke: both arms exactly
+              at 45°, the short one 2.5 px per axis, the long one 5.5 px, stroke
+              0.96 px, ends cut square, the vertex sharp (the darkest pixel of
+              the screenshot = a mitered, not rounded, join).
+              The dimensions are a fraction of the font height (em), not a fixed
+              pixel count — in the Windows menu the symbol grows together with
+              the caption, and FontEmSize is already scaled to DPI. }
+            ArmS := 0.20 * EmSz;          { short arm, per axis }
+            ArmL := 0.44 * EmSz;          { long arm, per axis }
+            { the vertex is chosen so that the bounding rectangle of the stroke
+              is centered within the icon column }
             VX := MarkX - (ArmL - ArmS) / 2;
             VY := CY + ArmL / 2;
-            { Grubosc w PELNYCH pikselach urzadzenia. Ulamkowa szerokosc
-              pod 45° rozklada sie na dwa piksele i zaden nie dostaje
-              pelnego krycia — znak wychodzil blady obok tego z WinUI 3,
-              ktory rysuje font z korekcja gamma. Zaokraglenie daje 1 px
-              przy 100% i 2 px przy 150%, czyli tyle, ile ma znak natywny
-              (pomiar: krycie 1.36 na wiersz przy 100%, 2.14 przy 150%). }
+            { Thickness in WHOLE device pixels. A fractional width at 45°
+              spreads over two pixels and neither gets full coverage — the
+              symbol came out pale next to the WinUI 3 one, which draws the font
+              with gamma correction. Rounding gives 1 px at 100% and 2 px at
+              150%, which is what the native symbol has (measured: coverage 1.36
+              per row at 100%, 2.14 at 150%). }
             Thick := Max(1, Round(0.085 * EmSz));
             Pen := TGPPen.Create(GPColor(ShCol), Thick);
             try
@@ -1039,14 +1038,14 @@ begin
       G.Free; GBmp.Free;
     end;
 
-    { ══ warstwa 2: podpisy - GDI z ClearType ══════════════════════════════
-      GDI+ nie renderuje ClearType na bitmapie z kanalem alfa - cicho schodzi
-      do skali szarosci, przez co tekst menu wygladal miekko obok reszty
-      aplikacji rysowanej przez GDI. Napisy idą wiec zwyklym GDI wprost do
-      DIB-a. GDI nie zna alfy i zeruje ja w pikselach glifow, dlatego kanal
-      alfa zapamietujemy przed rysowaniem i odtwarzamy po nim. Tlo pod
-      tekstem jest w pelni nieprzezroczyste, wiec ClearType blenduje sie
-      poprawnie. }
+    { ══ layer 2: captions - GDI with ClearType ════════════════════════════
+      GDI+ does not render ClearType on a bitmap with an alpha channel - it
+      silently falls back to grayscale, which made the menu text look soft next
+      to the rest of the application drawn with GDI. The captions therefore go
+      through plain GDI straight into the DIB. GDI knows nothing about alpha and
+      zeroes it in the glyph pixels, so the alpha channel is saved before drawing
+      and restored afterwards. The background under the text is fully opaque, so
+      ClearType blends correctly. }
     N := FWinW * FWinH;
     SetLength(SavedA, N);
     PB := Bits; Inc(PB, 3);
@@ -1082,7 +1081,7 @@ begin
         end
         else TxtColor := FMenu.DisabledTextColor;
 
-        { pozycja domyslna (Default) — pogrubiona, jak w menu Windows }
+        { the default item (Default) — bold, as in the Windows menu }
         if It.Default then SelectObject(MemDC, GdiFontBold)
         else SelectObject(MemDC, GdiFont);
 
@@ -1380,9 +1379,9 @@ var
   Idx: Integer;
 begin
   inherited;
-  { TrackButton (dziedziczone z TPopupMenu) mowi, ktorym przyciskiem mozna
-    wybierac pozycje w trakcie trwania menu: tbRightButton — lewym i prawym
-    (tak dziala menu Windows), tbLeftButton — wylacznie lewym. }
+  { TrackButton (inherited from TPopupMenu) says which button may be used to
+    pick items while the menu is up: tbRightButton — left and right (this is how
+    the Windows menu behaves), tbLeftButton — left only. }
   if (Button <> mbLeft) and
      not ((Button = mbRight) and (FMenu.TrackButton = tbRightButton)) then Exit;
   Idx := IndexAt(Point(X, Y));
@@ -1391,17 +1390,17 @@ begin
     OpenSubmenu(Idx)
   else
   begin
-    { Nie wykonuj pozycji teraz - okno musi przezyc do WM_LBUTTONUP.
-      Capture ustawil juz VCL (TCustomControl ma csCaptureMouse), wiec
-      mouse-up i tak przyjdzie tutaj. }
+    { Do not execute the item now - the window must survive until WM_LBUTTONUP.
+      The capture has already been set by the VCL (TCustomControl has
+      csCaptureMouse), so the mouse-up will arrive here anyway. }
     FPendingIdx := Idx;
     FPendingClose := True;
   end;
 end;
 
-{ Wykonuje pozycje odlozona na mouse-down. False = nie bylo nic odlozonego,
-  komunikat ma isc dalej. Po True nie wolno dotykac pol obiektu — CloseChain
-  w ActivateItem zwalnia okna podmenu i Self moze juz nie istniec. }
+{ Executes the item deferred on mouse-down. False = nothing was deferred, the
+  message should travel on. After True the object's fields must not be touched —
+  CloseChain in ActivateItem frees the submenu windows and Self may no longer exist. }
 function TCWSMenuWindow.CommitPending: Boolean;
 var
   Idx: Integer;
@@ -1409,29 +1408,29 @@ begin
   if not FPendingClose then Exit(False);
   Result := True;
 
-  { Stan czyscimy PRZED ActivateItem. }
+  { The state is cleared BEFORE ActivateItem. }
   FPendingClose := False;
   Idx := FPendingIdx;
   FPendingIdx := -1;
 
-  { Zwalniamy capture wlasnoscia VCL, zeby nie rozjechal sie stan TControl. }
+  { Release the capture through the VCL property, so the TControl state stays consistent. }
   if MouseCapture then
     MouseCapture := False;
 
   if Idx >= 0 then
-    ActivateItem(Idx);     { <- po tej linii nie dotykaj pol obiektu }
+    ActivateItem(Idx);     { <- past this line do not touch the object's fields }
 end;
 
 procedure TCWSMenuWindow.WMLButtonUp(var Msg: TWMLButtonUp);
 begin
   if CommitPending then
-    Msg.Result := 0         { komunikat skonsumowany - nie leci nizej }
+    Msg.Result := 0         { message consumed - it does not travel further down }
   else
     inherited;
 end;
 
-{ Przy TrackButton = tbRightButton pozycje wybiera sie takze prawym
-  przyciskiem — wykonanie idzie tak samo dopiero na mouse-up. }
+{ With TrackButton = tbRightButton items can also be picked with the right
+  button — execution likewise happens only on mouse-up. }
 procedure TCWSMenuWindow.WMRButtonUp(var Msg: TWMRButtonUp);
 begin
   if CommitPending then
@@ -1442,9 +1441,9 @@ end;
 
 procedure TCWSMenuWindow.WMCaptureChanged(var Msg: TMessage);
 begin
-  { Capture przejal ktos inny jeszcze przed zwolnieniem przycisku - porzuc
-    odlozony wybor, zeby pozniejszy mouse-up nie wykonal pozycji.
-    Menu zamknie hook myszy przy nastepnym kliknieciu. }
+  { Someone else took over the capture before the button was released - drop the
+    deferred choice so a later mouse-up does not execute the item.
+    The mouse hook will close the menu on the next click. }
   FPendingClose := False;
   FPendingIdx := -1;
   inherited;

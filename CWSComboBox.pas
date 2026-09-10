@@ -61,9 +61,9 @@ type
     FScrollDragStartPos: Integer;
     FScrollAreaHovered: Boolean;
 
-    { Pozycje klikanej na WM_LBUTTONDOWN zatwierdzamy dopiero na WM_LBUTTONUP.
-      Inaczej lista znika miedzy down a up i mouse-up trafia w kontrolke, ktora
-      byla pod nia (np. naglowek DBGrida -> niechciane sortowanie). }
+    { An item clicked on WM_LBUTTONDOWN is committed only on WM_LBUTTONUP.
+      Otherwise the list disappears between down and up and the mouse-up hits the
+      control underneath (e.g. a DBGrid header -> unwanted sorting). }
     FPendingClose: Boolean;
     FPendingIdx: Integer;
 
@@ -1556,8 +1556,8 @@ begin
     Idx := IndexAtBodyY(BY);
     if (Idx >= 0) and (Idx < FCombo.FItems.Count) then
     begin
-      { Wybor i zamkniecie odkladamy do WM_LBUTTONUP - okno musi przezyc
-        caly klik, zeby skonsumowac mouse-up. }
+      { Selection and closing are deferred to WM_LBUTTONUP - the window must
+        survive the whole click in order to consume the mouse-up. }
       FPendingIdx   := Idx;
       FPendingClose := True;
       if GetCapture <> Handle then
@@ -1570,8 +1570,8 @@ procedure TCWSDropdownWindow.WMLButtonUp(var Msg: TWMLButtonUp);
 var
   Idx: Integer;
 begin
-  { Zatwierdzenie pozycji klikanej na mouse-down. Ma pierwszenstwo przed
-    obsluga scrollbara i konsumuje komunikat, zeby nie poszedl nizej. }
+  { Commits the item clicked on mouse-down. Takes precedence over the scrollbar
+    handling and consumes the message so it does not travel further down. }
   if FPendingClose then
   begin
     FPendingClose := False;

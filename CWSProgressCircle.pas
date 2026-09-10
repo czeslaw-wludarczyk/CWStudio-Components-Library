@@ -480,7 +480,7 @@ begin
       GPFont := TGPFont.Create(GPFamily, MainFontSize, FontStyleBold, UnitPixel);
       try
 
-        // ── CustomText lub ShowPercent=False: prosty wycentrowany napis ─────
+        // ── CustomText or ShowPercent=False: a simple centered caption ─────
         if (FCustomText <> '') or (not FShowPercent) then
         begin
           if FCustomText <> '' then

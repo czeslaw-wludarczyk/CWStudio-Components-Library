@@ -245,7 +245,7 @@ begin
   if (AListWidth <= 0) or (AListHeight <= 0) or (AMaxHeight <= 0) then
     Exit;
 
-  // Wymuszamy spójną maksymalną wysokość ikony (max 16px), niezależnie od wysokości wiersza
+  // Force a consistent maximum icon height (max 16px), regardless of the row height
   AvailableH := Min(16, Max(1, AMaxHeight - 2));
 
   if AListHeight > AvailableH then

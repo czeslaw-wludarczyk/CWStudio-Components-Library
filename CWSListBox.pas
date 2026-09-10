@@ -21,8 +21,8 @@
 //////////////////////////////////////////////////////////////////////////
 unit CWSListBox;
 
-{ Odkomentuj, aby włączyć log diagnostyczny zaznaczenia (OutputDebugString).
-  Podgląd: okno Event Log w IDE albo DebugView od Sysinternals. }
+{ Uncomment to enable the diagnostic selection log (OutputDebugString).
+  Viewing: the Event Log window in the IDE or DebugView from Sysinternals. }
 {.$DEFINE CWSLB_SELDEBUG}
 
 interface
@@ -47,26 +47,27 @@ type
     FDragSuppressed: Boolean;
     FSavedDragMode: TDragMode;
 
-    { --- Gest "przytrzymaj na zaznaczonym" (zachowanie Eksploratora Windows) ---
-      Wciśnięcie bez modyfikatora na już zaznaczonej pozycji przy wielokrotnym
-      zaznaczeniu jest niejednoznaczne: może zaczynać przeciąganie całego
-      zaznaczenia albo być zwykłym kliknięciem redukującym je do jednej pozycji.
-      Natywny listbox rozstrzyga to od razu przy wciśnięciu — redukuje — co
-      uniemożliwia przeciągnięcie wielu pozycji. Dlatego przechwytujemy taki
-      WM_LBUTTONDOWN, wstrzymujemy natywną obsługę i rozstrzygamy sami:
-        ruch powyżej progu  -> BeginDrag, zaznaczenie nietknięte,
-        zwolnienie w miejscu -> redukcja do klikniętej pozycji.
-      Cały gest jest obsługiwany własnym przechwyceniem myszy, więc nie zależy od
-      tego, kiedy VCL wywoła DoStartDrag ani czy dostarczy MouseUp. }
-    FHoldTracking: Boolean;   { trwa rozstrzyganie gestu }
-    FHoldIdx: Integer;        { indeks wciśniętej pozycji (-1 = brak) }
-    FDownPos: TPoint;         { pozycja wciśnięcia, do pomiaru dystansu }
+    { --- The "hold on a selected item" gesture (Windows Explorer behavior) ---
+      A press without a modifier on an already selected item within a multiple
+      selection is ambiguous: it may start dragging the whole selection, or it
+      may be a plain click reducing it to a single item.
+      The native listbox resolves this immediately on the press — it reduces —
+      which makes dragging multiple items impossible. That is why such a
+      WM_LBUTTONDOWN is intercepted, the native handling is suspended and the
+      decision is made here:
+        movement beyond the threshold -> BeginDrag, the selection untouched,
+        release in place              -> reduce to the clicked item.
+      The whole gesture is handled with our own mouse capture, so it does not
+      depend on when the VCL calls DoStartDrag or whether it delivers MouseUp. }
+    FHoldTracking: Boolean;   { the gesture is being resolved }
+    FHoldIdx: Integer;        { index of the pressed item (-1 = none) }
+    FDownPos: TPoint;         { press position, for measuring the distance }
     function  HoldBegin(const Msg: TWMLButtonDown): Boolean;
     procedure HoldTrack(const Msg: TWMMouseMove);
     procedure HoldFinish(const Msg: TWMLButtonUp);
     procedure HoldCancel;
     procedure CollapseSelectionTo(AIndex: Integer);
-    { Nadaje fokus liście, gdy VCL pominął to przy WM_LBUTTONDOWN (ścieżka auto-draga) }
+    { Focuses the list when the VCL skipped that on WM_LBUTTONDOWN (the auto-drag path) }
     procedure EnsureFocused;
     procedure NewWindowProc(var Message: TMessage);
   protected
@@ -77,17 +78,17 @@ type
     procedure CreateParams(var Params: TCreateParams); override;
     procedure CreateWnd; override;
 
-    { *** Przekazywanie zdarzeń do FOwner przez OVERRIDE, nie przez sloty ***
-      Wcześniej komponent zajmował sloty zdarzeń tej listy (FListBox.OnClick := …).
-      Slot mieści jeden handler, więc przypisanie czegokolwiek na ListBox.OnClick
-      z zewnątrz po cichu wyrzucało handler komponentu — razem z pracą, którą on
-      wykonuje (odświeżenie paska, tło stanu, przemalowanie). Override nic nie
-      zajmuje: sloty tej listy zostają wolne dla użytkownika, a komponent i tak
-      dostaje swoje wywołanie.
-      Wyjątki, które MUSZĄ zostać na slotach — VCL nie daje dla nich wirtualnego
-      haka: OnData, OnDataFind, OnDataObject (TCustomListBox.DoGetData i spółka
-      nie są virtual). Ścieżka myszy (MouseDown/MouseMove/MouseUp) też zostaje
-      na slotach — jest spleciona z auto-dragiem VCL i nie ruszamy jej tutaj. }
+    { *** Events are forwarded to FOwner through OVERRIDE, not through slots ***
+      Previously the component occupied this list's event slots (FListBox.OnClick := …).
+      A slot holds one handler, so assigning anything to ListBox.OnClick from the
+      outside silently threw the component's handler away — together with the work
+      it does (refreshing the bar, the state background, repainting). An override
+      occupies nothing: this list's slots stay free for the user, and the
+      component still gets its call.
+      The exceptions that MUST stay on slots — the VCL provides no virtual hook
+      for them: OnData, OnDataFind, OnDataObject (TCustomListBox.DoGetData and
+      friends are not virtual). The mouse path (MouseDown/MouseMove/MouseUp) also
+      stays on slots — it is interwoven with the VCL auto-drag and is left alone here. }
     procedure Click; override;
     procedure DblClick; override;
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
@@ -310,9 +311,9 @@ type
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
-    { Prawy przycisk poza wnętrzem listy (pasek przewijania, etykieta) trafia
-      wprost tutaj — TControl.WMContextMenu sam pokaże PopupMenu, my dokładamy
-      tylko wywołanie zdarzenia OnContextPopup komponentu. }
+    { A right click outside the list interior (scrollbar, label) arrives straight
+      here — TControl.WMContextMenu shows the PopupMenu by itself, we only add
+      the call to the component's OnContextPopup event. }
     procedure DoContextPopup(MousePos: TPoint; var Handled: Boolean); override;
     { When the scrollbar is visible the inner list box is narrower, so the
       scrollbar strip belongs to this outer window. Forward the wheel to the
@@ -405,9 +406,9 @@ type
     property TabOrder;
     property TabStop;
     property Visible;
-    { Menu kontekstowe całego komponentu — działa zarówno nad pozycjami listy,
-      jak i nad paskiem przewijania czy etykietą. Przyjmuje TPopupMenu i
-      TCWSPopupMenu (Popup jest wirtualne). }
+    { The context menu of the whole component — works both over the list items
+      and over the scrollbar or the label. Accepts TPopupMenu and
+      TCWSPopupMenu (Popup is virtual). }
     property PopupMenu;
     property OnClick: TNotifyEvent read FOnClick write FOnClick;
     property OnDblClick: TNotifyEvent read FOnDblClick write FOnDblClick;
@@ -561,8 +562,8 @@ end;
 procedure TCWSInternalListBox.NewWindowProc(var Message: TMessage);
 begin
   case Message.Msg of
-    { Gest "przytrzymaj na zaznaczonym" — obsługujemy go w całości sami, natywny
-      listbox tych trzech komunikatów wtedy nie widzi (patrz opis pól FHold*). }
+    { The "hold on a selected item" gesture — handled entirely here, the native
+      listbox then never sees these three messages (see the FHold* field notes). }
     WM_LBUTTONDOWN:
       begin
         if HoldBegin(TWMLButtonDown(Message)) then
@@ -625,21 +626,21 @@ begin
   if (csDesigning in ComponentState) or not MultiSelect then
     Exit;
 
-  { Ctrl i Shift mają znaczenie modyfikujące zaznaczenie — te kliknięcia oddajemy
-    natywnemu listboksowi bez zmian }
+  { Ctrl and Shift modify the selection — those clicks are handed to the native
+    listbox unchanged }
   Shift := KeysToShiftState(Msg.Keys);
   if ([ssShift, ssCtrl] * Shift) <> [] then
     Exit;
 
   P := Point(Msg.XPos, Msg.YPos);
   Idx := ItemAtPos(P, True);
-  { Przechwytujemy wyłącznie przypadek niejednoznaczny: wciśnięcie na pozycji, która
-    już należy do wielokrotnego zaznaczenia. Każde inne kliknięcie idzie natywnie. }
+  { Only the ambiguous case is intercepted: a press on an item that already
+    belongs to a multiple selection. Every other click goes through natively. }
   if (Idx < 0) or (SelCount <= 1) or not Selected[Idx] then
     Exit;
 
-  { Fokus nadajemy PRZED przechwyceniem myszy — zmiana aktywnej kontrolki
-    przechodzi przez SendCancelMode, które przechwycenie by zwolniło }
+  { The focus is set BEFORE capturing the mouse — changing the active control
+    goes through SendCancelMode, which would release the capture }
   EnsureFocused;
 
   FDownPos      := P;
@@ -656,8 +657,8 @@ begin
      (Abs(Msg.YPos - FDownPos.Y) <= Mouse.DragThreshold) then
     Exit;
 
-  { Próg przekroczony — to przeciąganie. Zaznaczenia NIE ruszamy, żeby poszły
-    wszystkie zaznaczone pozycje. Przechwycenie oddajemy menedżerowi przeciągania. }
+  { The threshold was crossed — this is a drag. The selection is NOT touched, so
+    that all selected items go along. The capture is handed to the drag manager. }
   FHoldTracking := False;
   FHoldIdx      := -1;
   MouseCapture  := False;
@@ -674,13 +675,13 @@ begin
   FHoldIdx      := -1;
   MouseCapture  := False;
 
-  { Zwolnienie bez ruchu — to było kliknięcie, więc zaznaczenie redukujemy do
-    klikniętej pozycji, dokładnie jak zwykły listbox Windows. }
+  { Released without movement — that was a click, so the selection is reduced to
+    the clicked item, exactly like an ordinary Windows listbox. }
   if (Idx >= 0) and (Idx < Items.Count) then
   begin
     CollapseSelectionTo(Idx);
-    { Natywny listbox tego kliknięcia nie widział, więc LBN_SELCHANGE nie poszło —
-      OnClick wywołujemy sami i dokładnie raz }
+    { The native listbox never saw this click, so no LBN_SELCHANGE was sent —
+      OnClick is fired here, exactly once }
     Click;
   end;
 {$IFDEF CWSLB_SELDEBUG}SelDbg(Self, 'HoldFinish', Idx);{$ENDIF}
@@ -699,10 +700,10 @@ procedure TCWSInternalListBox.CollapseSelectionTo(AIndex: Integer);
 begin
   if not HandleAllocated then
     Exit;
-  { LB_SETSEL zamiast pętli po Selected[] — jedno przemalowanie zamiast N.
-    Świadomie NIE używamy właściwości ItemIndex: jej setter w trybie MultiSelect
-    potrafi wyczyścić zaznaczenie, zanim ustawi caret. LB_SETCARETINDEX wysyłamy
-    wprost, bo ten komunikat samego zaznaczenia nie rusza. }
+  { LB_SETSEL instead of a loop over Selected[] — one repaint instead of N.
+    The ItemIndex property is deliberately NOT used: in MultiSelect mode its
+    setter may clear the selection before setting the caret. LB_SETCARETINDEX is
+    sent directly, because that message does not touch the selection itself. }
   SendMessage(Handle, LB_SETSEL, 0, LPARAM(-1));
   SendMessage(Handle, LB_SETSEL, 1, LPARAM(AIndex));
   SendMessage(Handle, LB_SETCARETINDEX, WPARAM(AIndex), 0);
@@ -712,20 +713,20 @@ end;
 
 procedure TCWSInternalListBox.EnsureFocused;
 begin
-  { Wchodząc w ścieżkę auto-draga VCL pomija standardowe nadanie fokusu
-    towarzyszące kliknięciu. Lista zostaje nieaktywna — rysowanie uzależnione od
-    Focused nie pokazuje zaznaczenia, a klawiatura do niej nie trafia. }
+  { When entering the auto-drag path the VCL skips the standard focus assignment
+    that accompanies a click. The list stays inactive — drawing that depends on
+    Focused does not show the selection, and the keyboard does not reach it. }
   if not Focused and CanFocus and not (csDesigning in ComponentState) then
     SetFocus;
 end;
 
-{ *** Zdarzenia przekazywane do FOwner (patrz komentarz przy deklaracjach) ***
-  Ciała obsługi zostają tam, gdzie były — w TCWSListBox.ListBox*. Zmienia się
-  wyłącznie to, skąd są wołane: z override'u zamiast ze slotu zdarzenia. }
+{ *** Events forwarded to FOwner (see the comment at the declarations) ***
+  The handler bodies stay where they were — in TCWSListBox.ListBox*. The only
+  change is where they are called from: an override instead of an event slot. }
 
 procedure TCWSInternalListBox.Click;
 begin
-  inherited;                       { odpali OnClick tej listy, jeśli ktoś go ustawił }
+  inherited;                       { fires this list's OnClick, if anyone set it }
   if FOwner <> nil then
     FOwner.ListBoxClick(Self);
 end;
@@ -783,10 +784,10 @@ end;
 procedure TCWSInternalListBox.DrawItem(Index: Integer; Rect: TRect;
   State: TOwnerDrawState);
 begin
-  { Owner-draw w całości należy do komponentu: maluje tło stanu, a potem oddaje
-    rysowanie handlerowi użytkownika (FOwner.OnDrawItem) albo rysuje domyślnie.
-    Dlatego NIE wołamy inherited — dokładnie jak dotąd, gdy nasz handler siedział
-    w slocie OnDrawItem i zastępował domyślne rysowanie TCustomListBox. }
+  { Owner-draw belongs entirely to the component: it paints the state background
+    and then hands the drawing to the user's handler (FOwner.OnDrawItem) or draws
+    the default. That is why inherited is NOT called — exactly as before, when our
+    handler sat in the OnDrawItem slot and replaced the default TCustomListBox drawing. }
   if FOwner <> nil then
     FOwner.ListBoxDrawItem(Self, Index, Rect, State)
   else
@@ -850,9 +851,9 @@ var
   AllowDrag: Boolean;
 begin
 {$IFDEF CWSLB_SELDEBUG}SelDbg(Self, 'MouseDown');{$ENDIF}
-  { Uwaga: wciśnięcie na pozycji należącej do wielokrotnego zaznaczenia tu nie
-    dociera — przechwytuje je HoldBegin w NewWindowProc. Zostają przypadki
-    jednoznaczne, obsługiwane jak dotąd. }
+  { Note: a press on an item belonging to a multiple selection never gets here —
+    HoldBegin in NewWindowProc intercepts it. What is left are the unambiguous
+    cases, handled as before. }
 
   { When DragMode = dmAutomatic, the VCL starts dragging on every
     press + move — even over an empty area (the "no-drop circle" cursor).
@@ -884,7 +885,7 @@ begin
     FDragSuppressed := False;
   end;
 
-  { Dopiero teraz — przechwycenie myszy nie jest już potrzebne, a SetFocus je zwalnia }
+  { Only now — the mouse capture is no longer needed, and SetFocus releases it }
   if Button = mbLeft then
     EnsureFocused;
 end;
@@ -894,9 +895,9 @@ end;
 procedure TCWSInternalListBox.DoStartDrag(var DragObject: TDragObject);
 begin
 {$IFDEF CWSLB_SELDEBUG}SelDbg(Self, 'DoStartDrag');{$ENDIF}
-  { UWAGA: VCL wywołuje DoStartDrag także po zwykłym kliknięciu (już po MouseUp),
-    domykając wykrywanie auto-draga — to miejsce NIE jest wiarygodnym sygnałem
-    "rozpoczęto przeciąganie". Rozstrzygnięcie gestu robi HoldTrack. }
+  { NOTE: the VCL calls DoStartDrag also after an ordinary click (already after
+    MouseUp), wrapping up the auto-drag detection — this place is NOT a reliable
+    "a drag has started" signal. The gesture is resolved by HoldTrack. }
 
   { SOURCE FIX: We create a TDragControlObject pointing at FOwner.
     This makes the Source parameter in OnDragOver/OnDragDrop on any target
@@ -908,7 +909,7 @@ procedure TCWSInternalListBox.DoEndDrag(Target: TObject; X, Y: Integer);
 begin
 {$IFDEF CWSLB_SELDEBUG}SelDbg(Self, 'DoEndDrag');{$ENDIF}
   HoldCancel;
-  { Asekuracja: gdy MouseUp nie dotarł, DragMode zostałby na stałe w dmManual }
+  { Safety net: if MouseUp never arrived, DragMode would stay in dmManual forever }
   if FDragSuppressed then
   begin
     DragMode        := FSavedDragMode;
@@ -918,8 +919,8 @@ begin
   if Assigned(FOwner.OnEndDrag) then
     FOwner.OnEndDrag(FOwner, Target, X, Y);
 
-  { Po dropie MouseUp może już nie dotrzeć do tej kontrolki — domykamy fokus tu,
-    ale tylko gdy nie oddaliśmy go świadomie liście docelowej }
+  { After a drop MouseUp may no longer reach this control — the focus is settled
+    here, but only when it was not deliberately handed to the target list }
   if (Target = nil) or (Target = Self) or (Target = FOwner) then
     EnsureFocused;
 end;
@@ -989,12 +990,12 @@ begin
 
   FListBox := TCWSInternalListBox.Create(Self);
   FListBox.Parent := Self;
-  { Zdarzenia przekazywane przez override'y w TCWSInternalListBox (Click, DblClick,
-    Key*, DoEnter/DoExit, DoContextPopup, DrawItem, MeasureItem) NIE zajmują tu
-    slotów — te pozostają wolne dla użytkownika.
-    Na slotach zostają tylko te, dla których VCL nie daje wirtualnego haka
-    (OnData / OnDataFind / OnDataObject) oraz ścieżka myszy, świadomie nietknięta,
-    bo jest spleciona z auto-dragiem VCL. }
+  { Events forwarded through overrides in TCWSInternalListBox (Click, DblClick,
+    Key*, DoEnter/DoExit, DoContextPopup, DrawItem, MeasureItem) do NOT occupy
+    slots here — those stay free for the user.
+    Only those for which the VCL gives no virtual hook stay on slots
+    (OnData / OnDataFind / OnDataObject), plus the mouse path, deliberately left
+    alone because it is interwoven with the VCL auto-drag. }
   FListBox.OnMouseDown    := ListBoxMouseDown;
   FListBox.OnMouseMove    := ListBoxMouseMove;
   FListBox.OnMouseUp      := ListBoxMouseUp;
@@ -1559,9 +1560,9 @@ var
   OwnerPos, ScreenPos: TPoint;
   Menu: TPopupMenu;
 begin
-  { MousePos przychodzi w koordynatach wewnętrznej listy, a zdarzenie dostaje
-    Sender = Self — przeliczamy je więc na klienta komponentu. Wywołanie menu
-    z klawiatury (Shift+F10, klawisz menu) daje (-1,-1) i zostaje bez zmian. }
+  { MousePos arrives in the internal list's coordinates while the event gets
+    Sender = Self — so it is converted to the component's client area. Invoking
+    the menu from the keyboard (Shift+F10, menu key) gives (-1,-1) and is left as is. }
   if (MousePos.X < 0) or (MousePos.Y < 0) then
     OwnerPos := MousePos
   else
@@ -1572,11 +1573,11 @@ begin
   if Handled then
     Exit;
 
-  { Wewnętrzna lista wypełnia wnętrze komponentu, więc prawy przycisk nad
-    pozycjami trafia w nią, a nie w TCWSListBox — menu z właściwości PopupMenu
-    pokazujemy tutaj sami, dokładnie tak, jak zrobiłby to TControl.WMContextMenu.
-    Handled := True zamyka temat po stronie listy: nie przekaże już komunikatu
-    dalej do rodzica, więc menu nie pojawi się dwa razy. }
+  { The internal list fills the component's interior, so a right click over the
+    items hits it and not TCWSListBox — the menu from the PopupMenu property is
+    shown here manually, exactly as TControl.WMContextMenu would do it.
+    Handled := True settles it on the list's side: it will not pass the message
+    on to the parent, so the menu does not appear twice. }
   Menu := PopupMenu;
   if (Menu <> nil) and Menu.AutoPopup then
   begin

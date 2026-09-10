@@ -25,7 +25,7 @@ package CWStudio_ComponentsRT;
 {$IMAGEBASE $400000}
 {$DEFINE RELEASE}
 {$ENDIF IMPLICITBUILDING}
-{$DESCRIPTION 'CWStudio Components Library 1.8.9 (runtime)'}
+{$DESCRIPTION 'CWStudio Components Library 1.9.3 (runtime)'}
 {$IMPLICITBUILD ON}
 
 requires
@@ -63,6 +63,7 @@ contains
   CWSDatePicker in 'CWSDatePicker.pas',
   CWSScrollBox in 'CWSScrollBox.pas',
   CWSFluentColorsMulti in 'CWSFluentColorsMulti.pas',
+  CWSInteractiveUserTheme in 'CWSInteractiveUserTheme.pas',
   CWSListBox in 'CWSListBox.pas',
   CWSStringGrid in 'CWSStringGrid.pas',
   CWSDBGrid in 'CWSDBGrid.pas',
