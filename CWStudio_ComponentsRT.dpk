@@ -25,7 +25,7 @@ package CWStudio_ComponentsRT;
 {$IMAGEBASE $400000}
 {$DEFINE RELEASE}
 {$ENDIF IMPLICITBUILDING}
-{$DESCRIPTION 'CWStudio Components Library 1.9.3 (runtime)'}
+{$DESCRIPTION 'CWStudio Components Library 1.9.5 (runtime)'}
 {$IMPLICITBUILD ON}
 
 requires
@@ -48,6 +48,7 @@ contains
   CWSProgressBar in 'CWSProgressBar.pas',
   CWSIndicatorLoading in 'CWSIndicatorLoading.pas',
   CWSPopupMenu in 'CWSPopupMenu.pas',
+  CWSFlayoutPopupMenu in 'CWSFlayoutPopupMenu.pas',
   CWSSystemMenu in 'CWSSystemMenu.pas',
   CWSButton in 'CWSButton.pas',
   CWSRadioButton in 'CWSRadioButton.pas',
@@ -68,6 +69,7 @@ contains
   CWSStringGrid in 'CWSStringGrid.pas',
   CWSDBGrid in 'CWSDBGrid.pas',
   CWSLabelColumn in 'CWSLabelColumn.pas',
-  CWSLabelTrend in 'CWSLabelTrend.pas';
+  CWSLabelTrend in 'CWSLabelTrend.pas',
+  CWSHint in 'CWSHint.pas';
 
 end.

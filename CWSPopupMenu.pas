@@ -150,7 +150,7 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Popup(X, Y: Integer); override;
-    procedure CloseMenu;
+    procedure CloseMenu; virtual;
   published
     property Font: TFont read FFont write SetFont;
     property BackgroundColor: TColor read FBackgroundColor write FBackgroundColor default $00F9F9F9;

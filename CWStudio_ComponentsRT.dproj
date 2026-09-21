@@ -2,7 +2,7 @@
     <PropertyGroup>
         <ProjectGuid>{1C06401F-43CC-4D54-89DC-D44133A01DE4}</ProjectGuid>
         <MainSource>CWStudio_ComponentsRT.dpk</MainSource>
-        <ProjectVersion>20.4</ProjectVersion>
+        <ProjectVersion>20.5</ProjectVersion>
         <FrameworkType>VCL</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
@@ -62,15 +62,15 @@
         <GenPackage>true</GenPackage>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>
         <DCC_CBuilderOutput>All</DCC_CBuilderOutput>
-        <DCC_Description>CWStudio Components Library 1.9.3 (runtime)</DCC_Description>
+        <DCC_Description>CWStudio Components Library 1.9.5 (runtime)</DCC_Description>
         <SanitizedProjectName>CWStudio_ComponentsRT</SanitizedProjectName>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_MajorVer>1</VerInfo_MajorVer>
         <VerInfo_MinorVer>9</VerInfo_MinorVer>
-        <VerInfo_Release>3</VerInfo_Release>
+        <VerInfo_Release>5</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
         <VerInfo_Locale>1045</VerInfo_Locale>
-        <VerInfo_Keys>CompanyName=Czesław Włudarczyk;FileDescription=CWStudio Components Library (runtime);FileVersion=1.9.3.0;InternalName=CWStudio_ComponentsRT;LegalCopyright=© Czesław Włudarczyk;LegalTrademarks=;OriginalFilename=CWStudio_ComponentsRT.bpl;ProgramID=com.cwstudio.components;ProductName=CWStudio Components;ProductVersion=1.9.3.0;Comments=MIT</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=Czesław Włudarczyk;FileDescription=CWStudio Components Library (runtime);FileVersion=1.9.5.0;InternalName=CWStudio_ComponentsRT;LegalCopyright=© Czesław Włudarczyk;LegalTrademarks=;OriginalFilename=CWStudio_ComponentsRT.bpl;ProgramID=com.cwstudio.components;ProductName=CWStudio Components;ProductVersion=1.9.5.0;Comments=MIT</VerInfo_Keys>
         <DCC_UsePackage>vcl;rtl;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
@@ -129,6 +129,7 @@
         <DCCReference Include="CWSProgressBar.pas"/>
         <DCCReference Include="CWSIndicatorLoading.pas"/>
         <DCCReference Include="CWSPopupMenu.pas"/>
+        <DCCReference Include="CWSFlayoutPopupMenu.pas"/>
         <DCCReference Include="CWSSystemMenu.pas"/>
         <DCCReference Include="CWSButton.pas"/>
         <DCCReference Include="CWSRadioButton.pas"/>
@@ -150,6 +151,7 @@
         <DCCReference Include="CWSDBGrid.pas"/>
         <DCCReference Include="CWSLabelColumn.pas"/>
         <DCCReference Include="CWSLabelTrend.pas"/>
+        <DCCReference Include="CWSHint.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -67,10 +67,12 @@ uses
   CWSProgressBar,
   CWSIndicatorLoading,
   CWSPopupMenu,
+  CWSFlayoutPopupMenu,
   CWSSystemMenu,
   CWSScrollBox,
   CWSDimOverlay,
   CWSAfterFormShow,
+  CWSHint,
   CWSListBox,
   CWSStringGrid,
   CWSDBGrid,
@@ -459,11 +461,11 @@ begin
   RegisterComponents('CWStudio_ProgressBars',
     [TCWSProgressCircle, TCWSProgressBar, TCWSIndicatorLoading]);
   RegisterComponents('CWStudio_Menus',
-    [TCWSPopupMenu, TCWSSystemMenu]);
+    [TCWSPopupMenu, TCWSFlayoutPopupMenu, TCWSSystemMenu]);
   RegisterComponents('CWStudio_ScrollBoxes',
     [TCWSScrollBox]);
   RegisterComponents('CWStudio_Forms',
-    [TCWSDimOverlay, TCWSAfterFormShow]);
+    [TCWSDimOverlay, TCWSAfterFormShow, TCWSHint]);
   RegisterComponents('CWStudio_ListBoxes',
     [TCWSListBox]);
   RegisterComponents('CWStudio_Grids',
