@@ -71,6 +71,7 @@ type
 
     { Colors }
     FAccentColor: TColor;
+    FShowAccentBar: Boolean;
     FBackgroundColor: TColor;
     FBackgroundHoverColor: TColor;
     FBackgroundFocusColor: TColor;
@@ -178,6 +179,7 @@ type
     procedure SetCaretPos(const Value: TPoint);
 
     procedure SetAccentColor(const Value: TColor);
+    procedure SetShowAccentBar(const Value: Boolean);
     procedure SetBackgroundColor(const Value: TColor);
     procedure SetBackgroundHoverColor(const Value: TColor);
     procedure SetBackgroundFocusColor(const Value: TColor);
@@ -293,6 +295,7 @@ type
     property Alignment: TAlignment read GetAlignment write SetAlignment default taLeftJustify;
     property HideSelection: Boolean read GetHideSelection write SetHideSelection default True;
     property AccentColor: TColor read FAccentColor write SetAccentColor default $D47800;
+    property ShowAccentBar: Boolean read FShowAccentBar write SetShowAccentBar default True;
     property BackgroundColor: TColor read FBackgroundColor write SetBackgroundColor default clWhite;
     property BackgroundHoverColor: TColor read FBackgroundHoverColor write SetBackgroundHoverColor default $F9F9F9;
     property BackgroundFocusColor: TColor read FBackgroundFocusColor write SetBackgroundFocusColor default clWhite;
@@ -557,6 +560,7 @@ begin
   FBackgroundFocusColor := clWhite;
   FBorderColor := $D6D6D6;
   FAccentColor := $D47800;
+  FShowAccentBar := True;
   FScrollThumbColor := $C0C0C0;
   FScrollThumbHoverColor := $909090;
   FDisabledColor := $F7F7F7;
@@ -906,6 +910,15 @@ procedure TCWSMemo.SetAccentColor(const Value: TColor);
 begin
   FAccentColor := Value;
   Invalidate;
+end;
+
+procedure TCWSMemo.SetShowAccentBar(const Value: Boolean);
+begin
+  if FShowAccentBar <> Value then
+  begin
+    FShowAccentBar := Value;
+    Invalidate;
+  end;
 end;
 
 procedure TCWSMemo.SetBackgroundColor(const Value: TColor);
@@ -1552,7 +1565,7 @@ begin
     end;
 
     { Accent bar on focus (only when editable) }
-    if Enabled and FFocused and not FMemo.ReadOnly then
+    if Enabled and FFocused and FShowAccentBar and not FMemo.ReadOnly then
     begin
       AccentH := Scale(2);
       Path := CreateRoundRectPath(0.0, 0.0, W, H, R);
