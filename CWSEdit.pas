@@ -47,6 +47,19 @@ type
     FInnerLeftMargin: Integer;
     procedure PaintCustomSelection;
     procedure ApplyInnerMargins;
+    { Password mode is painted by us, not by the EDIT control. Windows draws
+      the mask character on the text baseline like any other letter, so a
+      bullet (U+25CF) sits visibly below the middle of the line while '*'
+      floats above it. We keep every horizontal position the control uses
+      (EM_POSFROMCHAR + the same font, so caret and hit-testing still match)
+      and only move the glyph vertically: its ink box is centred on the
+      middle of the line box — the caret's centre, and with it the centre
+      of the plain text shown when the password is revealed (WinUI 3
+      PasswordBox). Works for any PasswordChar, measured per glyph. }
+    function IsTextMasked: Boolean;
+    function MaskedGlyphOffset(DC: HDC; Ch: Char): Integer;
+    procedure PaintMaskedText(DC: HDC);
+    procedure RepaintMaskedText;
   protected
     procedure CreateParams(var Params: TCreateParams); override;
     procedure CreateWnd; override;
@@ -298,6 +311,62 @@ implementation
 type
   TControlAccess = class(TControl);
 
+{ Height of a glyph's ink top above the baseline, or 0 when it cannot be
+  measured. }
+function GlyphTopAboveBaseline(DC: HDC; Ch: Char): Integer;
+var
+  GM: TGlyphMetrics;
+  M: TMat2;
+begin
+  Result := 0;
+  FillChar(M, SizeOf(M), 0);
+  M.eM11.value := 1;
+  M.eM22.value := 1;
+  if GetGlyphOutline(DC, Ord(Ch), GGO_METRICS, GM, 0, nil, M) <> GDI_ERROR then
+    Result := Max(GM.gmptGlyphOrigin.Y, 0);
+end;
+
+{ Height above the baseline of the text's optical centre, used both to place
+  the text in the control and to place the password glyphs on it, so the two
+  line up when the password is revealed. A password is mostly lower-case, so
+  the middle of the capitals alone reads too high against it; the centre is
+  taken halfway between the x-height and cap-height middles. The line box
+  (tmHeight) is not used: it includes the internal leading above the
+  capitals, so its middle lies ~0.1 em higher than the text. Heights come
+  from the rendered 'H' and 'x' glyphs, because OUTLINETEXTMETRIC's
+  otmsCapEmHeight / otmsXHeight are unreliable (Segoe UI reports 7 px and
+  3 px for a 9 px capital and a 7 px x-height). Falls back to the line-box
+  centre when the glyphs cannot be measured. }
+function TextCentreAboveBaseline(DC: HDC; const TM: TTextMetric): Double;
+var
+  CapH, XH: Integer;
+begin
+  CapH := GlyphTopAboveBaseline(DC, 'H');
+  XH := GlyphTopAboveBaseline(DC, 'x');
+  if (CapH > 0) and (XH > 0) then
+    Result := (CapH + XH) / 4
+  else if CapH > 0 then
+    Result := CapH / 2
+  else
+    Result := TM.tmAscent - TM.tmHeight / 2;
+end;
+
+{ Top of the line box that puts the text's optical centre on the middle of
+  an area AreaHeight pixels tall - where the inner edit is placed. A
+  half-pixel tie goes down, as in the WinUI 3 TextBox: at the default 32 px
+  height and Segoe UI 10 pt the baseline lands 20 px from the top and the
+  x-height fills rows 13..19, the WinUI layout to the pixel. Falls back to
+  centring the line box when the font cannot be measured. }
+function CentredTextTop(DC: HDC; AreaHeight, TextHeight: Integer): Integer;
+var
+  TM: TTextMetric;
+begin
+  if GetTextMetrics(DC, TM) then
+    Result := Floor(AreaHeight / 2 + TextCentreAboveBaseline(DC, TM) - TM.tmAscent + 0.5)
+  else
+    Result := (AreaHeight - TextHeight) div 2;
+end;
+
   { TCWSBufferedEdit }
 
 procedure TCWSBufferedEdit.CreateParams(var Params: TCreateParams);
@@ -340,11 +409,166 @@ begin
   Msg.Result := 1;
 end;
 
+function TCWSBufferedEdit.IsTextMasked: Boolean;
+begin
+  // Empty text keeps the native path, so the cue banner (TextHint) is
+  // still drawn by Windows.
+  Result := HandleAllocated
+    and (SendMessage(Handle, EM_GETPASSWORDCHAR, 0, 0) <> 0)
+    and (GetWindowTextLength(Handle) > 0);
+end;
+
+function TCWSBufferedEdit.MaskedGlyphOffset(DC: HDC; Ch: Char): Integer;
+var
+  TM: TTextMetric;
+  GM: TGlyphMetrics;
+  M: TMat2;
+  InkAboveBaseline: Double;
+begin
+  // Vertical shift that puts the glyph's ink centre on the optical centre of
+  // the text (TextCentreAboveBaseline). gmptGlyphOrigin.Y is the ink top above
+  // the baseline.
+  Result := 0;
+  if not GetTextMetrics(DC, TM) then
+    Exit;
+  FillChar(M, SizeOf(M), 0);
+  M.eM11.value := 1;
+  M.eM22.value := 1;
+  if GetGlyphOutline(DC, Ord(Ch), GGO_METRICS, GM, 0, nil, M) = GDI_ERROR then
+    Exit;
+  if GM.gmBlackBoxY = 0 then
+    Exit;
+  InkAboveBaseline := GM.gmptGlyphOrigin.Y - GM.gmBlackBoxY / 2;
+  // Screen Y grows downwards: ink above the target needs a positive
+  // (downward) shift, ink below it a negative one. A half-pixel tie goes
+  // up — a solid disc reads heavier, so it looks lower than it is.
+  Result := Ceil(InkAboveBaseline - TextCentreAboveBaseline(DC, TM) - 0.5);
+end;
+
+procedure TCWSBufferedEdit.PaintMaskedText(DC: HDC);
+var
+  FmtRect, SelRect: TRect;
+  HFontToUse, OldFont: HFONT;
+  PwdChar: Char;
+  Masked, SelStr: string;
+  StartPos, EndPos: DWORD;
+  SelS, SelE: Integer;
+  X0, X1, X2, Y: Integer;
+  Sz: TSize;
+  SelBrush: HBRUSH;
+  SavedDC: Integer;
+begin
+  PwdChar := Char(SendMessage(Handle, EM_GETPASSWORDCHAR, 0, 0));
+  Masked := StringOfChar(PwdChar, GetWindowTextLength(Handle));
+  SendMessage(Handle, EM_GETRECT, 0, LPARAM(@FmtRect));
+
+  SavedDC := SaveDC(DC);
+  try
+    // Background: the same brush VCL hands the control in WM_CTLCOLOR*.
+    Winapi.Windows.FillRect(DC, ClientRect, Brush.Handle);
+    IntersectClipRect(DC, FmtRect.Left, FmtRect.Top, FmtRect.Right, FmtRect.Bottom);
+
+    HFontToUse := SendMessage(Handle, WM_GETFONT, 0, 0);
+    if HFontToUse = 0 then
+      HFontToUse := Font.Handle;
+    OldFont := SelectObject(DC, HFontToUse);
+
+    // X of the first character, already reflecting alignment, margins and
+    // horizontal scrolling (negative when scrolled out on the left).
+    X0 := SmallInt(LoWord(SendMessage(Handle, EM_POSFROMCHAR, 0, 0)));
+    Y := FmtRect.Top + MaskedGlyphOffset(DC, PwdChar);
+
+    SetBkMode(DC, TRANSPARENT);
+    if IsWindowEnabled(Handle) then
+      Winapi.Windows.SetTextColor(DC, ColorToRGB(Font.Color))
+    else
+      Winapi.Windows.SetTextColor(DC, GetSysColor(COLOR_GRAYTEXT));
+    Winapi.Windows.TextOut(DC, X0, Y, PChar(Masked), Length(Masked));
+
+    // Selection — shown while focused, or always with ES_NOHIDESEL,
+    // exactly when the native control would show it.
+    SendMessage(Handle, EM_GETSEL, WPARAM(@StartPos), LPARAM(@EndPos));
+    SelS := Min(Integer(StartPos), Length(Masked));
+    SelE := Min(Integer(EndPos), Length(Masked));
+    if (SelE > SelS) and ((GetFocus = Handle) or
+      (GetWindowLong(Handle, GWL_STYLE) and ES_NOHIDESEL <> 0)) then
+    begin
+      GetTextExtentPoint32(DC, PChar(Masked), SelS, Sz);
+      X1 := X0 + Sz.cx;
+      GetTextExtentPoint32(DC, PChar(Masked), SelE, Sz);
+      X2 := X0 + Sz.cx;
+      SelRect := Rect(X1, 0, X2, ClientHeight);
+
+      if FUseCustomSelection and (FSelectionColor <> clNone) then
+        SelBrush := CreateSolidBrush(ColorToRGB(FSelectionColor))
+      else
+        SelBrush := CreateSolidBrush(ColorToRGB(clHighlight));
+      Winapi.Windows.FillRect(DC, SelRect, SelBrush);
+      DeleteObject(SelBrush);
+
+      if FUseCustomSelection and (FSelectionTextColor <> clNone) then
+        Winapi.Windows.SetTextColor(DC, ColorToRGB(FSelectionTextColor))
+      else
+        Winapi.Windows.SetTextColor(DC, ColorToRGB(clHighlightText));
+      SelStr := Copy(Masked, SelS + 1, SelE - SelS);
+      Winapi.Windows.TextOut(DC, X1, Y, PChar(SelStr), Length(SelStr));
+    end;
+
+    SelectObject(DC, OldFont);
+  finally
+    RestoreDC(DC, SavedDC);
+  end;
+end;
+
+procedure TCWSBufferedEdit.RepaintMaskedText;
+begin
+  // The EDIT control also draws outside WM_PAINT (typing, selecting with
+  // the mouse or keyboard, focus changes). Repaint synchronously right
+  // after such a message, so its baseline-placed glyphs never reach the
+  // screen.
+  if IsTextMasked then
+  begin
+    InvalidateRect(Handle, nil, False);
+    UpdateWindow(Handle);
+  end;
+end;
+
 procedure TCWSBufferedEdit.WndProc(var Message: TMessage);
 var
   StartPos, EndPos: DWORD;
+  PS: TPaintStruct;
+  DC: HDC;
 begin
+  if (Message.Msg = WM_PAINT) and IsTextMasked then
+  begin
+    if Message.WParam <> 0 then
+      PaintMaskedText(HDC(Message.WParam))
+    else
+    begin
+      DC := BeginPaint(Handle, PS); // hides the caret until EndPaint
+      try
+        PaintMaskedText(DC);
+      finally
+        EndPaint(Handle, PS);
+      end;
+    end;
+    Message.Result := 0;
+    Exit;
+  end;
+
   inherited WndProc(Message);
+
+  if HandleAllocated then
+    case Message.Msg of
+      WM_CHAR, WM_KEYDOWN, WM_SETTEXT, WM_CUT, WM_PASTE, WM_CLEAR, WM_UNDO,
+      EM_UNDO, EM_REPLACESEL, EM_SETSEL, WM_SETFOCUS, WM_KILLFOCUS, WM_ENABLE,
+      WM_LBUTTONDOWN, WM_LBUTTONUP, WM_LBUTTONDBLCLK:
+        RepaintMaskedText;
+      WM_MOUSEMOVE, WM_TIMER:
+        // drag-selection and its auto-scroll timer
+        if GetCapture = Handle then
+          RepaintMaskedText;
+    end;
 
   if (Message.Msg = WM_PAINT) and FUseCustomSelection and Focused then
   begin
@@ -486,7 +710,7 @@ begin
   inherited Create(AOwner);
   ControlStyle := ControlStyle + [csOpaque];
   Width := 120;
-  Height := 35;
+  Height := 32;
   TabStop := True;
   Cursor := crIBeam;
   FBuffer := TBitmap.Create;
@@ -923,7 +1147,7 @@ begin
             LblColor := FLabelColor;
           TextBrush := TGPSolidBrush.Create(MakeGPColor(LblColor));
           try
-            G.DrawString(FLabel, -1, GPFont, MakePoint(R + ScaleF(8), ScaleF(5)), TextBrush);
+            G.DrawString(FLabel, -1, GPFont, MakePoint(R + ScaleF(6), ScaleF(5)), TextBrush);
           finally
             TextBrush.Free;
           end;
@@ -953,7 +1177,9 @@ var
 begin
   if (FEdit = nil) or (FEdit.Font = nil) then
     Exit;
-  Margin := Scale(8) + Round(ScaleF(FCornerRadius));
+  // WinUI 3 TextBox: the first glyph's ink starts 11 px from the outer
+  // edge (1 px border + 10 px padding) at the default CornerRadius of 4.
+  Margin := Scale(6) + Round(ScaleF(FCornerRadius));
   L := Margin;
   if FButtonStyle <> ebsNone then
     RightMargin := Width - GetButtonRect.Left + Scale(2)
@@ -980,7 +1206,12 @@ begin
   if FLabel <> '' then
     T := Scale(18) + Scale(6)
   else
-    T := (Height - Canvas.TextHeight('Ag')) div 2;
+  begin
+    // Centre the text itself, not its line box (CentredTextTop). TextHeight
+    // runs first so the canvas already has the font selected.
+    B := Canvas.TextHeight('Ag');
+    T := CentredTextTop(Canvas.Handle, Height, B);
+  end;
   B := T + Canvas.TextHeight('Ag');
   if R <= L then
     R := L + 1;
@@ -1435,11 +1666,14 @@ begin
     Exit;
   Canvas.Font.Assign(Font);
   if FLabel <> '' then
-    NewH := Scale(18) + Canvas.TextHeight('Ag') + Scale(12)
+  begin
+    NewH := Scale(18) + Canvas.TextHeight('Ag') + Scale(12);
+    if NewH < Scale(28) then
+      NewH := Scale(28);
+  end
   else
-    NewH := Canvas.TextHeight('Ag') + Scale(12);
-  if NewH < Scale(28) then
-    NewH := Scale(28);
+    // WinUI 3 TextBox: 32 px (MinHeight), taller only for a large font.
+    NewH := Max(Scale(32), Canvas.TextHeight('Ag') + Scale(12));
   if Height <> NewH then
     Height := NewH;
 end;

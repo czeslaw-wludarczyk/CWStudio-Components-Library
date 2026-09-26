@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.6](https://img.shields.io/badge/version-1.9.6-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.7](https://img.shields.io/badge/version-1.9.7-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -256,7 +256,13 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Historia wersji
 
-**Najnowsza wersja — 1.9.6:**
+**Najnowsza wersja — 1.9.7:**
+
+- **Zmiana** `TCWSEdit`, `TCWSEditMask`: **tekst ułożony jak w `TextBox` z WinUI 3, domyślna wysokość 32 px.** Przy Segoe UI 10 pt linia bazowa wypada 20 px od górnej krawędzi, małe litery zajmują wiersze 13..19, a tekst zaczyna się 11 px od lewej krawędzi — co do piksela jak w WinUI. Bez `LabelText` wysokość to `Max(32, wysokość tekstu + 12)` (wcześniej 29 px przy Segoe UI 10 pt). Etykieta `LabelText` przesunęła się razem z tekstem. Przy `AutoSizeHeight = True` istniejące pola bez etykiety urosną do 32 px przy ładowaniu formularza.
+- **Poprawka** `TCWSEdit`, `TCWSEditMask`: **tekst jest wyśrodkowany w pionie według swojego optycznego środka, a nie wysokości linii.** Ten środek leży w połowie między środkiem wielkich liter a środkiem małych; wysokości mierzone są z glifów `H` i `x`, bo `otmsCapEmHeight` / `otmsXHeight` bywają błędne.
+- **Poprawka** `TCWSEdit`, `TCWSEditMask`: **znaki hasła są wyśrodkowane na tekście**, jak w `PasswordBox` z WinUI 3. Windows rysował `PasswordChar` na linii bazowej, więc `●` był za nisko, a `*` za wysoko. Wewnętrzny edit sam rysuje zamaskowany tekst na tym samym optycznym środku co tekst, dla dowolnego `PasswordChar`, więc przy odkrywaniu i ukrywaniu hasła nic nie skacze. Kursor, zaznaczenie (z `SelectionColor` / `SelectionTextColor`) i klikanie myszą działają jak wcześniej; puste pole nadal pokazuje `TextHint`.
+
+**Wersja 1.9.6:**
 
 - **Nowość** `TCWSMemo`: **`ShowAccentBar`** (domyślnie `True`) — wyłącza akcentowy pasek rysowany u dołu kontrolki przy fokusie, tak jak w `TCWSListBox`. Kolor etykiety przy fokusie nadal pochodzi z `AccentColor`.
 
@@ -719,7 +725,13 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ Version history
 
-**Latest release — 1.9.6:**
+**Latest release — 1.9.7:**
+
+- **Changed** `TCWSEdit`, `TCWSEditMask`: **text laid out like the WinUI 3 `TextBox`, default height 32 px.** At Segoe UI 10 pt the baseline lies 20 px below the top edge, the x-height fills rows 13..19 and the text starts 11 px from the left edge — the WinUI layout to the pixel. Without a `LabelText` the height is `Max(32, text height + 12)` (it was 29 px at Segoe UI 10 pt). The `LabelText` caption moves with the text. With `AutoSizeHeight = True`, existing controls without a label grow to 32 px when the form loads.
+- **Fix** `TCWSEdit`, `TCWSEditMask`: **the text is vertically centred on its optical centre, not on its line box.** That centre lies halfway between the middle of the capitals and the middle of the x-height; both heights are measured from the `H` and `x` glyphs, because `otmsCapEmHeight` / `otmsXHeight` can be wrong.
+- **Fix** `TCWSEdit`, `TCWSEditMask`: **the password characters are centred on the text**, as in the WinUI 3 `PasswordBox`. Windows drew `PasswordChar` on the baseline, so `●` sat too low and `*` too high. The inner edit now paints the masked text itself on the same optical centre as the text, for any `PasswordChar`, so nothing jumps when the password is revealed and hidden. Caret, selection (honouring `SelectionColor` / `SelectionTextColor`) and mouse hit-testing work as before; an empty field still shows `TextHint`.
+
+**Version 1.9.6:**
 
 - **New** `TCWSMemo`: **`ShowAccentBar`** (default `True`) — turns off the accent bar drawn along the bottom edge on focus, as in `TCWSListBox`. The label colour on focus still comes from `AccentColor`.
 
