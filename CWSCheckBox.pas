@@ -147,6 +147,7 @@ type
     procedure CMFontChanged(var Message: TMessage); message CM_FONTCHANGED;
     procedure CMParentFontChanged(var Message: TMessage); message CM_PARENTFONTCHANGED;
     procedure WMGetDlgCode(var Message: TWMGetDlgCode); message WM_GETDLGCODE;
+    procedure WMEraseBkgnd(var Message: TWMEraseBkgnd); message WM_ERASEBKGND;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -721,6 +722,16 @@ begin
   inherited;
   { Receive Space for keyboard activation, like a VCL check box. }
   Message.Result := Message.Result or DLGC_WANTCHARS;
+end;
+
+procedure TCWSCheckBox.WMEraseBkgnd(var Message: TWMEraseBkgnd);
+begin
+  { Box, check glyph and caption are child controls; everything around them
+    must show the parent's real background, not a flat fill with Color. When
+    double-buffered, erase only the memory DC (wParam = lParam). }
+  if not DoubleBuffered or (TMessage(Message).WParam = WPARAM(TMessage(Message).LParam)) then
+    CWSPaintParentBackground(Self, Message.DC);
+  Message.Result := 1;
 end;
 
 procedure TCWSCheckBox.KeyDown(var Key: Word; Shift: TShiftState);

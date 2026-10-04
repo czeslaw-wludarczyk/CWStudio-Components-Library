@@ -134,6 +134,9 @@ type
     procedure SetLabel(const Value: string);
     procedure SyncMemoFont;
     procedure UpdateMemoPosition;
+    { Clips the inner memo to the rounded interior of the border. }
+    procedure UpdateMemoRegion;
+    procedure SetCornerRadius(const Value: Single);
     procedure UpdateScrollbarMetrics;
     procedure StartTrackRepeat(Vert: Boolean; Dir: Integer);
     procedure StopTrackRepeat;
@@ -309,7 +312,7 @@ type
     property ScrollbarThumbWidth: Integer read FScrollbarThumbWidth write SetScrollbarThumbWidth default 4;
     property ScrollbarThumbHoverWidth: Integer read FScrollbarThumbHoverWidth write SetScrollbarThumbHoverWidth default 6;
     property ScrollBars: TScrollStyle read FScrollBars write SetScrollBars default ssVertical;
-    property CornerRadius: Single read FCornerRadius write FCornerRadius;
+    property CornerRadius: Single read FCornerRadius write SetCornerRadius;
     property PopupMenu;
     property Align;
     property Anchors;
@@ -365,6 +368,8 @@ begin
   begin
     FOwner.FContentDirty := True;
     FOwner.UpdateScrollbarMetrics;
+    { a window region belongs to one HWND — apply it to the new one }
+    FOwner.UpdateMemoRegion;
     FOwner.Invalidate;
   end;
 end;
@@ -1327,7 +1332,6 @@ end;
 procedure TCWSMemo.DrawParentBackground(DC: HDC; ARadius: Single);
 var
   SaveIdx: Integer;
-  Rgn: HRGN;
   D: Integer;
 begin
   { The GetParentBgColor fill done by the caller is only a correct guess when the
@@ -1336,23 +1340,25 @@ begin
     of sync with what it actually paints all leave visible wrong-colored
     triangles outside our rounded corners — so let the parent render its real
     background here instead.
-    Skipped at design time: a form's PaintWindow draws the designer dot grid,
-    which would then bleed into the corners. }
-  if (Parent = nil) or (csDesigning in ComponentState) then
+    Done at design time too: the corners are transparent, so they show what the
+    parent really paints there — a TCWSShadow under the control, and the
+    designer dot grid of a form. }
+  if Parent = nil then
     Exit;
   SaveIdx := SaveDC(DC);
   try
-    { Clip to the sliver outside the rounded body (inset by 1 px so the
+    { Clip to the sliver outside the rounded body (inset 2 px, concentric, so the whole
       antialiased edge blends against real parent pixels). Keeps the parent's
-      paint cheap — it is repeated on every hover/focus repaint. Region
-      coordinates are device units, so this must happen before MoveWindowOrg. }
+      paint cheap — it is repeated on every hover/focus repaint. A clip path
+      is in logical units (a region would be in device units and miss the corners
+      in a double-buffered partial paint, whose memory DC is offset to the update
+      rectangle); it must still be set before MoveWindowOrg. }
     D := Round(ARadius) * 2;
-    Rgn := CreateRoundRectRgn(1, 1, Width, Height, D, D);
-    try
-      ExtSelectClipRgn(DC, Rgn, RGN_DIFF);
-    finally
-      DeleteObject(Rgn);
-    end;
+    if D < 4 then D := 4;
+    BeginPath(DC);
+    RoundRect(DC, 2, 2, Width - 1, Height - 1, D - 4, D - 4);
+    EndPath(DC);
+    SelectClipPath(DC, RGN_DIFF);
     { Shift the origin so the parent paints in its own coordinate system. }
     MoveWindowOrg(DC, -Left, -Top);
     Parent.Perform(WM_ERASEBKGND, WPARAM(DC), 0);
@@ -1403,7 +1409,50 @@ begin
   else
     FHScrollTrackRect := Rect(0, 0, 0, 0);
 
+  UpdateMemoRegion;
   UpdateScrollbarMetrics;
+end;
+
+procedure TCWSMemo.UpdateMemoRegion;
+var
+  L, T, D: Integer;
+  Rgn: HRGN;
+begin
+  if not FMemo.HandleAllocated then
+    Exit;
+  { Only the left edge is inset by half the radius; on the right (scrollbar
+    area) and at the top/bottom margins the rectangular inner memo reaches past
+    the rounding once CornerRadius grows beyond the margins, and its white
+    background poked out of the rounded border. }
+  D := Round(ScaleF(FCornerRadius) * 2);
+  if D <= 2 then
+  begin
+    SetWindowRgn(FMemo.Handle, 0, True);
+    Exit;
+  end;
+  { The rounded interior inside the 1 px border (radius R - 1), in the inner
+    memo's own coordinates. The +1 on right/bottom compensates the exclusive
+    right/bottom edge of CreateRoundRectRgn. }
+  L := FMemo.Left;
+  T := FMemo.Top;
+  Rgn := CreateRoundRectRgn(1 - L, 1 - T, Width - 1 - L + 1, Height - 1 - T + 1,
+    D - 2, D - 2);
+  if SetWindowRgn(FMemo.Handle, Rgn, True) = 0 then
+    DeleteObject(Rgn);
+end;
+
+procedure TCWSMemo.SetCornerRadius(const Value: Single);
+var
+  NewValue: Single;
+begin
+  NewValue := Max(0, Value);
+  if FCornerRadius <> NewValue then
+  begin
+    FCornerRadius := NewValue;
+    { the left inset and the inner memo's clip both follow the radius }
+    UpdateMemoPosition;
+    Invalidate;
+  end;
 end;
 
 procedure TCWSMemo.UpdateScrollbarMetrics;

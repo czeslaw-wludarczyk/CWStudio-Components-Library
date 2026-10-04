@@ -488,6 +488,9 @@ type
 
 implementation
 
+uses
+  CWSShadow;
+
 const
   cThumbMinLen = 24;              { minimum thumb length (px @96 dpi) }
   cTrackMargin = 2;               { track end margin (px @96 dpi) }
@@ -1970,6 +1973,7 @@ var
   var
     I: Integer;
     C: TControl;
+    A: TAnchors;
   begin
     if Host = nil then
       Exit;
@@ -1999,10 +2003,19 @@ var
           begin
             { akRight → Left or Width depends on parent width → skip W.
               akBottom → Top or Height depends on parent height → skip H.
-              Only measure the axis where the control has a fixed position. }
-            if not (akRight in C.Anchors) then
+              Only measure the axis where the control has a fixed position.
+              A TCWSShadow sticks out past its target (blur pad + offset) and
+              moves with it, so it is measured by the TARGET's anchors —
+              otherwise the shadow of an akBottom/akRight target, still at its
+              old place, pins the content at the old size and the target stays
+              hidden under the border after a fast shrink. }
+            if (C is TCWSShadow) and (TCWSShadow(C).Control <> nil) then
+              A := TCWSShadow(C).Control.Anchors
+            else
+              A := C.Anchors;
+            if not (akRight in A) then
               W := Max(W, C.Left + AddX + C.Width);
-            if not (akBottom in C.Anchors) then
+            if not (akBottom in A) then
               H := Max(H, C.Top + AddY + C.Height);
           end;
         alLeft:

@@ -111,17 +111,6 @@ type
     FLeft: TCWSScrollCol;
     FRight: TCWSScrollCol;
 
-    // The two edge-fade strips, pre-rendered once as premultiplied 32-bit
-    // bitmaps and alpha-blended per frame. The fade does not depend on the
-    // marquee offset — only on its width, the column height and Color — so
-    // building it per frame (a TGPGraphics plus a TGPLinearGradientBrush, in
-    // GDI+, twice a column) was rebuilding an identical picture 33 times a
-    // second. FFadeKeyW/H/Color is what the cached pair was built for.
-    FFadeL, FFadeR: TBitmap;
-    FFadeKeyW, FFadeKeyH: Integer;
-    FFadeKeyColor: TColor;
-    procedure EnsureFadeStrips(AW, AH: Integer);
-
     procedure SetLeftText(const Value: string);
     procedure SetRightText(const Value: string);
     procedure SetLeftFont(Value: TFont);
@@ -155,8 +144,11 @@ type
     procedure DrawColumn(ACanvas: TCanvas; const ARect: TRect; const AText: string;
       AFont: TFont; AAlignment: TAlignment; AScrolling: Boolean; AOffset: Integer;
       AEllipsis: Boolean);
-    procedure DrawEdgeFade(ACanvas: TCanvas; const ARect: TRect;
-      AFadeLeft, AFadeRight: Boolean);
+    procedure FadeEdgesToBackground(ABuf, ABg: TBitmap; AFadeLeft, AFadeRight: Boolean);
+    procedure ComposeColumn(var Col: TCWSScrollCol; AW, AH: Integer;
+      const AText: string; AFont: TFont);
+    procedure PaintScrollingColumn(var Col: TCWSScrollCol; const ARect: TRect;
+      const AText: string; AFont: TFont);
 
     procedure CMColorChanged(var Message: TMessage); message CM_COLORCHANGED;
   protected
@@ -188,8 +180,9 @@ type
     property RightScrollStep: Integer read FRightScrollStep write SetRightScrollStep default 1;
     property ScrollPause: Integer read FScrollPause write SetScrollPause default 1500;
     // Soft fade-out on a scrolling column's edges so the text blends into the
-    // background instead of being hard-clipped. The fade target is Color, so for
-    // a transparent label set ParentColor := True (or match Color to the parent).
+    // background instead of being hard-clipped. The fade target is the real
+    // background under the column (the parent's pixels when Transparent, Color
+    // otherwise), so it works on dark, gradient or card backgrounds alike.
     property EdgeFade: Boolean read FEdgeFade write SetEdgeFade default True;
     property EdgeFadeWidth: Integer read FEdgeFadeWidth write SetEdgeFadeWidth default 18;
 
@@ -260,9 +253,6 @@ begin
   FRight.Bg := TBitmap.Create;
   FRight.Bg.PixelFormat := pf32bit;
 
-  FFadeL := TBitmap.Create;
-  FFadeR := TBitmap.Create;
-
   FTimer := TTimer.Create(nil);
   FTimer.Enabled  := False;
   FTimer.Interval := FScrollInterval;
@@ -274,8 +264,6 @@ begin
   FTimer.Free;
   FMeasureBmp.Free;
   FScrollBuf.Free;
-  FFadeL.Free;
-  FFadeR.Free;
   FLeft.Bg.Free;
   FRight.Bg.Free;
   FLeftFont.Free;
@@ -283,64 +271,91 @@ begin
   inherited Destroy;
 end;
 
-{ (Re)build the two edge-fade strips for a column AW wide and AH tall.
-  The ramp is the one TGPLinearGradientBrush produced: a linear interpolation of
-  ALPHA from fully opaque at the outer edge to fully transparent inward, over a
-  constant Color. Written straight into a premultiplied 32-bit DIB, it is then
-  put on by TCanvas.Draw, which for afPremultiplied goes to AlphaBlend — the same
-  picture as before, minus a GDI+ rendering context and two gradient brushes
-  constructed and destroyed on every frame. }
-procedure TCWSLabelColumn.EnsureFadeStrips(AW, AH: Integer);
-var
-  cr: LongInt;
-  R, G, B: Byte;
-  X, Y, A: Integer;
-  RowL, RowR: PCardinal;
-begin
-  if (AW <= 0) or (AH <= 0) then
-    Exit;
-  if (FFadeKeyW = AW) and (FFadeKeyH = AH) and (FFadeKeyColor = Color) and
-     (FFadeL.Width = AW) and (FFadeL.Height = AH) then
-    Exit;
+{ Soft fade on a scrolling column's edges: the composed frame ABuf (background +
+  shifted text) is blended back into the clean background ABg, fully at the
+  outer edge and not at all EdgeFadeWidth pixels inward — the same linear ramp
+  the old flat-colour strips had. Blending into the real background instead of
+  a constant Color is what makes the ends vanish into a dark, gradient or card
+  background alike: with Transparent the snapshot IS the parent's pixels, so a
+  fade towards Color (whatever it happened to be — often still the light
+  default) drew pale smudges at both ends of the marquee on a dark form.
+  The left edge only fades once text has scrolled off the left and the right
+  edge only while there is still text to reveal, so a fully visible end never
+  gets dimmed. Both bitmaps are pf32bit and the same size. }
+procedure TCWSLabelColumn.FadeEdgesToBackground(ABuf, ABg: TBitmap;
+  AFadeLeft, AFadeRight: Boolean);
 
-  cr := ColorToRGB(Color);
-  R := GetRValue(cr);
-  G := GetGValue(cr);
-  B := GetBValue(cr);
-
-  FFadeL.PixelFormat := pf32bit;
-  FFadeR.PixelFormat := pf32bit;
-  FFadeL.SetSize(AW, AH);
-  FFadeR.SetSize(AW, AH);
-  { SetSize resets the format on some paths — pin it, and only then declare the
-    channel premultiplied, or TBitmap will try to convert what we are about to
-    write instead of taking it as given. }
-  FFadeL.PixelFormat := pf32bit;
-  FFadeR.PixelFormat := pf32bit;
-
-  for Y := 0 to AH - 1 do
+  procedure Mix(Dst, Src: PByte; A: Integer); inline;
+  var
+    I: Integer;
   begin
-    RowL := FFadeL.ScanLine[Y];
-    RowR := FFadeR.ScanLine[Y];
-    for X := 0 to AW - 1 do
-    begin
-      { Opaque at the outer edge, clear inward — mirrored for the right strip. }
-      A := 255 - MulDiv(X, 255, AW);
-      { Premultiplied: the colour channels carry the coverage already. }
-      PCardinal(PByte(RowL) + X * 4)^ :=
-        (Cardinal(A) shl 24) or (Cardinal(R * A div 255) shl 16) or
-        (Cardinal(G * A div 255) shl 8) or Cardinal(B * A div 255);
-      PCardinal(PByte(RowR) + (AW - 1 - X) * 4)^ :=
-        (Cardinal(A) shl 24) or (Cardinal(R * A div 255) shl 16) or
-        (Cardinal(G * A div 255) shl 8) or Cardinal(B * A div 255);
-    end;
+    for I := 0 to 2 do
+      PByte(Dst + I)^ := (PByte(Dst + I)^ * (255 - A) + PByte(Src + I)^ * A + 127) div 255;
   end;
 
-  FFadeL.AlphaFormat := afPremultiplied;
-  FFadeR.AlphaFormat := afPremultiplied;
-  FFadeKeyW := AW;
-  FFadeKeyH := AH;
-  FFadeKeyColor := Color;
+var
+  W, H, FadeW, X, Y, A: Integer;
+  RowBuf, RowBg: PByte;
+begin
+  W := ABuf.Width;
+  H := ABuf.Height;
+  if (W <= 0) or (H <= 0) or not (AFadeLeft or AFadeRight) or
+     (ABg.Width <> W) or (ABg.Height <> H) then
+    Exit;
+  FadeW := Min(FEdgeFadeWidth, W div 2);
+  if FadeW <= 0 then
+    Exit;
+  { the text went in through GDI — make sure it is in the DIB before reading it }
+  GdiFlush;
+  for Y := 0 to H - 1 do
+  begin
+    RowBuf := ABuf.ScanLine[Y];
+    RowBg := ABg.ScanLine[Y];
+    for X := 0 to FadeW - 1 do
+    begin
+      { background weight: 255 at the outer edge, falling to 0 inward }
+      A := 255 - MulDiv(X, 255, FadeW);
+      if AFadeLeft then
+        Mix(RowBuf + X * 4, RowBg + X * 4, A);
+      if AFadeRight then
+        Mix(RowBuf + (W - 1 - X) * 4, RowBg + (W - 1 - X) * 4, A);
+    end;
+  end;
+end;
+
+{ One column frame, composed off-screen in FScrollBuf: the clean background
+  snapshot, the text shifted by the marquee offset, and the edge fade. Used by
+  both Paint and the timer, so the first paint and every scroll step are the
+  same picture. }
+procedure TCWSLabelColumn.ComposeColumn(var Col: TCWSScrollCol; AW, AH: Integer;
+  const AText: string; AFont: TFont);
+begin
+  if (FScrollBuf.Width <> AW) or (FScrollBuf.Height <> AH) then
+    FScrollBuf.SetSize(AW, AH);
+  BitBlt(FScrollBuf.Canvas.Handle, 0, 0, AW, AH, Col.Bg.Canvas.Handle, 0, 0, SRCCOPY);
+  DrawColumn(FScrollBuf.Canvas, Rect(0, 0, AW, AH), AText, AFont, taLeftJustify,
+    True, Col.Offset, False);
+  if FEdgeFade then
+    FadeEdgesToBackground(FScrollBuf, Col.Bg, Col.Offset > 0, Col.Offset < Col.MaxOffset);
+end;
+
+{ A scrolling column inside a full Paint. The background snapshot was taken just
+  before (CaptureColBackground), so the frame can be composed and put on in one
+  blit; without one the text is drawn plainly, unfaded. }
+procedure TCWSLabelColumn.PaintScrollingColumn(var Col: TCWSScrollCol;
+  const ARect: TRect; const AText: string; AFont: TFont);
+var
+  W, H: Integer;
+begin
+  W := ARect.Right - ARect.Left;
+  H := ARect.Bottom - ARect.Top;
+  if Col.BgValid and (Col.Bg.Width = W) and (Col.Bg.Height = H) then
+  begin
+    ComposeColumn(Col, W, H, AText, AFont);
+    BitBlt(Canvas.Handle, ARect.Left, ARect.Top, W, H, FScrollBuf.Canvas.Handle, 0, 0, SRCCOPY);
+  end
+  else
+    DrawColumn(Canvas, ARect, AText, AFont, taLeftJustify, True, Col.Offset, False);
 end;
 
 procedure TCWSLabelColumn.Loaded;
@@ -804,41 +819,6 @@ begin
   Winapi.Windows.DrawText(ACanvas.Handle, PChar(AText), Length(AText), R, Flags);
 end;
 
-{ Soft alpha fade on a scrolling column's edges. Drawn over the text with GDI+,
-  blending into the background color (Color). The left edge only fades once text
-  has scrolled off the left (offset > 0) and the right edge only while there is
-  still text to reveal (offset < MaxOffset), so a fully visible end never gets
-  dimmed. }
-procedure TCWSLabelColumn.DrawEdgeFade(ACanvas: TCanvas; const ARect: TRect;
-  AFadeLeft, AFadeRight: Boolean);
-var
-  FadeW, H: Integer;
-begin
-  H := ARect.Bottom - ARect.Top;
-  if (H <= 0) or not (AFadeLeft or AFadeRight) then
-    Exit;
-
-  FadeW := FEdgeFadeWidth;
-  if FadeW > (ARect.Right - ARect.Left) div 2 then
-    FadeW := (ARect.Right - ARect.Left) div 2;
-  if FadeW <= 0 then
-    Exit;
-
-  { Both strips are built once for this width/height/colour and then simply
-    blended on — see EnsureFadeStrips. This is the marquee's per-frame path and
-    it used to construct a GDI+ rendering context and up to two gradient brushes
-    every time through it, per column, ~33 times a second, for a picture that
-    never changed. }
-  EnsureFadeStrips(FadeW, H);
-  if (FFadeL.Width <> FadeW) or (FFadeL.Height <> H) then
-    Exit;
-
-  if AFadeLeft then
-    ACanvas.Draw(ARect.Left, ARect.Top, FFadeL);
-  if AFadeRight then
-    ACanvas.Draw(ARect.Right - FadeW, ARect.Top, FFadeR);
-end;
-
 { Snapshot the clean background of a column (no text yet) so that the per-frame
   scroll can repaint over it without going through the parent. Called from Paint,
   right after the background is present on the Canvas and before the text. }
@@ -869,7 +849,6 @@ procedure TCWSLabelColumn.DrawColumnFrame(var Col: TCWSScrollCol; const ARect: T
   const AText: string; AFont: TFont);
 var
   W, H: Integer;
-  LocalR: TRect;
 begin
   if (Parent = nil) or not Parent.HandleAllocated or not Visible or
      not Parent.Showing then
@@ -916,14 +895,7 @@ begin
       Exit;
     end;
 
-    if (FScrollBuf.Width <> W) or (FScrollBuf.Height <> H) then
-      FScrollBuf.SetSize(W, H);
-
-    LocalR := Rect(0, 0, W, H);
-    BitBlt(FScrollBuf.Canvas.Handle, 0, 0, W, H, Col.Bg.Canvas.Handle, 0, 0, SRCCOPY);
-    DrawColumn(FScrollBuf.Canvas, LocalR, AText, AFont, taLeftJustify, True, Col.Offset, False);
-    if FEdgeFade then
-      DrawEdgeFade(FScrollBuf.Canvas, LocalR, Col.Offset > 0, Col.Offset < Col.MaxOffset);
+    ComposeColumn(Col, W, H, AText, AFont);
 
     Canvas.Lock;
     try
@@ -964,21 +936,13 @@ begin
 
   // Left column.
   if FLeft.Active then
-  begin
-    DrawColumn(Canvas, LeftR, FLeftText, FLeftFont, FLeftAlignment, True, FLeft.Offset, False);
-    if FEdgeFade then
-      DrawEdgeFade(Canvas, LeftR, FLeft.Offset > 0, FLeft.Offset < FLeft.MaxOffset);
-  end
+    PaintScrollingColumn(FLeft, LeftR, FLeftText, FLeftFont)
   else
     DrawColumn(Canvas, LeftR, FLeftText, FLeftFont, FLeftAlignment, False, 0, True);
 
   // Right column.
   if FRight.Active then
-  begin
-    DrawColumn(Canvas, RightR, FRightText, FRightFont, FRightAlignment, True, FRight.Offset, False);
-    if FEdgeFade then
-      DrawEdgeFade(Canvas, RightR, FRight.Offset > 0, FRight.Offset < FRight.MaxOffset);
-  end
+    PaintScrollingColumn(FRight, RightR, FRightText, FRightFont)
   else
     DrawColumn(Canvas, RightR, FRightText, FRightFont, FRightAlignment, False, 0, True);
 end;

@@ -181,6 +181,7 @@ type
     procedure CMFontChanged(var Message: TMessage); message CM_FONTCHANGED;
     procedure CMParentFontChanged(var Message: TMessage); message CM_PARENTFONTCHANGED;
     procedure WMGetDlgCode(var Message: TWMGetDlgCode); message WM_GETDLGCODE;
+    procedure WMEraseBkgnd(var Message: TWMEraseBkgnd); message WM_ERASEBKGND;
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure KeyUp(var Key: Word; Shift: TShiftState); override;
     procedure KeyPress(var Key: Char); override;
@@ -729,6 +730,17 @@ begin
   // The standard VCL button returns DLGC_BUTTON; we also want arrow keys
   // and Space (keyboard activation like TButton).
   Message.Result := Message.Result or DLGC_WANTARROWS or DLGC_WANTCHARS;
+end;
+
+procedure TCWSButton.WMEraseBkgnd(var Message: TWMEraseBkgnd);
+begin
+  { The rounded body is drawn by FbckShape; the corners outside it must show
+    the parent's real background, not a flat fill with Color. Same rule as
+    TWinControl: when double-buffered, erase only the memory DC
+    (wParam = lParam) — the screen DC is overwritten by the buffer anyway. }
+  if not DoubleBuffered or (TMessage(Message).WParam = WPARAM(TMessage(Message).LParam)) then
+    CWSPaintParentBackground(Self, Message.DC);
+  Message.Result := 1;
 end;
 
 { --- Klawiatura --- }

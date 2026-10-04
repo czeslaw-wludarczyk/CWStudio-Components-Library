@@ -2270,7 +2270,6 @@ end;
 procedure TCWSDBGrid.DrawParentBackground(DC: HDC; ARadius: Single);
 var
   SaveIdx: Integer;
-  Rgn: HRGN;
   D: Integer;
 begin
   { The GetParentBgColor fill done by the caller is only a correct guess when the
@@ -2279,23 +2278,25 @@ begin
     of sync with what it actually paints all leave visible wrong-colored
     triangles outside our rounded corners — so let the parent render its real
     background here instead.
-    Skipped at design time: a form's PaintWindow draws the designer dot grid,
-    which would then bleed into the corners. }
-  if (Parent = nil) or (csDesigning in ComponentState) then
+    Done at design time too: the corners are transparent, so they show what the
+    parent really paints there — a TCWSShadow under the control, and the
+    designer dot grid of a form. }
+  if Parent = nil then
     Exit;
   SaveIdx := SaveDC(DC);
   try
-    { Clip to the sliver outside the rounded body (inset by 1 px so the
+    { Clip to the sliver outside the rounded body (inset 2 px, concentric, so the whole
       antialiased edge blends against real parent pixels). Keeps the parent's
-      paint cheap — it is repeated on every hover/focus repaint. Region
-      coordinates are device units, so this must happen before MoveWindowOrg. }
+      paint cheap — it is repeated on every hover/focus repaint. A clip path
+      is in logical units (a region would be in device units and miss the corners
+      in a double-buffered partial paint, whose memory DC is offset to the update
+      rectangle); it must still be set before MoveWindowOrg. }
     D := Round(ARadius) * 2;
-    Rgn := CreateRoundRectRgn(1, 1, Width, Height, D, D);
-    try
-      ExtSelectClipRgn(DC, Rgn, RGN_DIFF);
-    finally
-      DeleteObject(Rgn);
-    end;
+    if D < 4 then D := 4;
+    BeginPath(DC);
+    RoundRect(DC, 2, 2, Width - 1, Height - 1, D - 4, D - 4);
+    EndPath(DC);
+    SelectClipPath(DC, RGN_DIFF);
     { Shift the origin so the parent paints in its own coordinate system. }
     MoveWindowOrg(DC, -Left, -Top);
     Parent.Perform(WM_ERASEBKGND, WPARAM(DC), 0);

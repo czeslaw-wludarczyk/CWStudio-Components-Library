@@ -28,7 +28,7 @@ uses
   System.Classes, Vcl.Controls, Vcl.Graphics, System.UITypes;
 
 type
-  { Which edges of the outer 1px border are painted. Dropping an edge only hides
+  { Which edges of the outer border (BorderWidth thick) are painted. Dropping an edge only hides
     that line; the panel fill and the child-clipping shape are unaffected. }
   TCWSBorderEdge = (beTop, beLeft, beRight, beBottom);
   TCWSBorderEdges = set of TCWSBorderEdge;
@@ -39,6 +39,13 @@ type
   TCWSCorner = (coTopLeft, coTopRight, coBottomRight, coBottomLeft);
   TCWSCorners = set of TCWSCorner;
 
+  { OnPaint of TCWSSettingsPanel. ACanvas covers the whole panel (client
+    coordinates) and is already filled with FillColor; ARect is the area inside
+    the border. Anything drawn is clipped to the panel's rounded body with
+    antialiased corners, and the border is painted over it afterwards. }
+  TCWSPanelPaintEvent = procedure(Sender: TObject; ACanvas: TCanvas;
+    const ARect: TRect) of object;
+
   TCWSSettingsPanel = class(TCustomControl)
   private
     FFillColor: TColor;
@@ -47,18 +54,24 @@ type
     FInnerCornerRadius: Integer;
     FRoundedCorners: TCWSCorners;
     FBorderEdges: TCWSBorderEdges;
+    FBorderWidth: Integer;
+    FOnPaint: TCWSPanelPaintEvent;
+    procedure SetOnPaint(const Value: TCWSPanelPaintEvent);
     procedure SetFillColor(const Value: TColor);
     procedure SetBorderColor(const Value: TColor);
     procedure SetCornerRadius(const Value: Integer);
     procedure SetInnerCornerRadius(const Value: Integer);
     procedure SetRoundedCorners(const Value: TCWSCorners);
     procedure SetBorderEdges(const Value: TCWSBorderEdges);
+    procedure SetBorderWidth(const Value: Integer);
+    { BorderWidth scaled to the current DPI (0 = no border). }
+    function ScaledBorderWidth: Integer;
     function GetParentBgColor: TColor;
     procedure DrawParentBackground(DC: HDC; ARadius: Single);
     { Strokes the enabled BorderEdges of the panel outline. Same geometry as
       AddRoundRectPath: a corner arc is emitted only where both of its adjacent
       edges are enabled AND that corner is in RoundedCorners. }
-    procedure DrawBorder(G: TGPGraphics; X, Y, RW, RH, D: Single;
+    procedure DrawBorder(G: TGPGraphics; X, Y, RW, RH, D, PenWidth: Single;
       Corners: TCWSCorners);
     function MakeGPColor(AColor: TColor): Cardinal;
     { Builds the inner-border clip shape (the 1px-inset rounded rectangle) in the
@@ -119,6 +132,11 @@ type
     property BorderEdges: TCWSBorderEdges read FBorderEdges write SetBorderEdges
       default [beTop, beLeft, beRight, beBottom];
 
+    { Thickness of the outer border in pixels at 96 DPI (scaled with the monitor).
+      The border grows inwards — the outer outline and CornerRadius stay put — and
+      hosted windowed controls are clipped inside it. 0 hides the border. }
+    property BorderWidth: Integer read FBorderWidth write SetBorderWidth default 1;
+
     // Events in the Object Inspector
     property OnClick;
     property OnDblClick;
@@ -127,6 +145,9 @@ type
     property OnMouseUp;
     property OnMouseEnter;
     property OnMouseLeave;
+    { Custom drawing inside the panel body (accent strip along an edge, gradient,
+      ...), clipped to the rounded body with smooth antialiased corners. }
+    property OnPaint: TCWSPanelPaintEvent read FOnPaint write SetOnPaint;
   end;
 
 implementation
@@ -201,6 +222,7 @@ begin
   FInnerCornerRadius := 7;
   FRoundedCorners := [coTopLeft, coTopRight, coBottomRight, coBottomLeft];
   FBorderEdges := [beTop, beLeft, beRight, beBottom];
+  FBorderWidth := 1;
 
   { Plain default size — the VCL scales it for the active DPI automatically. }
   Width := 350;
@@ -218,9 +240,8 @@ begin
 end;
 
 function TCWSSettingsPanel.CreateInnerRgn(OffsetX, OffsetY: Integer): HRGN;
-const
-  BW = 1; { the 1px inner border that content is clipped inside of }
 var
+  BW: Integer; { the border that content is clipped inside of }
   Ri, L, T, Rr, B: Integer;
 
   { OR a square patch over one corner quadrant so that corner is not clipped
@@ -235,6 +256,7 @@ var
   end;
 
 begin
+  BW := ScaledBorderWidth;
   { Inner radius scales with DPI exactly like the outer CornerRadius; squared off
     entirely when no corner is rounded. }
   if FRoundedCorners = [] then
@@ -350,7 +372,6 @@ end;
 procedure TCWSSettingsPanel.DrawParentBackground(DC: HDC; ARadius: Single);
 var
   SaveIdx: Integer;
-  Rgn: HRGN;
   D: Integer;
 begin
   { The GetParentBgColor fill done by the caller is only a correct guess when the
@@ -359,22 +380,25 @@ begin
     of sync with what it actually paints all leave visible wrong-colored
     triangles outside our rounded corners — so let the parent render its real
     background here instead.
-    Skipped at design time: a form's PaintWindow draws the designer dot grid,
-    which would then bleed into the corners. }
-  if (Parent = nil) or (csDesigning in ComponentState) then
+    Done at design time too: the corners are transparent, so they show what the
+    parent really paints there — a TCWSShadow under the panel, and the designer
+    dot grid of a form (the flat fill used to cover the shadow and made an
+    smShape shadow come out square). }
+  if Parent = nil then
     Exit;
   SaveIdx := SaveDC(DC);
   try
-    { Clip to the sliver outside the rounded body (inset by 1 px so the
-      antialiased edge blends against real parent pixels). Region coordinates
-      are device units, so this must happen before MoveWindowOrg. }
+    { Clip to the sliver outside the rounded body (inset 2 px, concentric, so the whole
+      antialiased edge blends against real parent pixels). A clip path is in
+      logical units (a region would be in device units and miss the corners in
+      a double-buffered partial paint, whose memory DC is offset to the update
+      rectangle); it must still be set before MoveWindowOrg. }
     D := Round(ARadius) * 2;
-    Rgn := CreateRoundRectRgn(1, 1, Width, Height, D, D);
-    try
-      ExtSelectClipRgn(DC, Rgn, RGN_DIFF);
-    finally
-      DeleteObject(Rgn);
-    end;
+    if D < 4 then D := 4;
+    BeginPath(DC);
+    RoundRect(DC, 2, 2, Width - 1, Height - 1, D - 4, D - 4);
+    EndPath(DC);
+    SelectClipPath(DC, RGN_DIFF);
     { Shift the origin so the parent paints in its own coordinate system. }
     MoveWindowOrg(DC, -Left, -Top);
     Parent.Perform(WM_ERASEBKGND, WPARAM(DC), 0);
@@ -386,16 +410,16 @@ begin
   end;
 end;
 
-procedure TCWSSettingsPanel.DrawBorder(G: TGPGraphics; X, Y, RW, RH, D: Single;
+procedure TCWSSettingsPanel.DrawBorder(G: TGPGraphics; X, Y, RW, RH, D, PenWidth: Single;
   Corners: TCWSCorners);
 var
   Pen: TGPPen;
-  HR: Single;
+  HR, HP: Single;
   T, L, Rt, B: Boolean;
   { per-corner inset: half the diameter at a rounded corner, 0 at a square one }
   iTL, iTR, iBR, iBL: Single;
 begin
-  if FBorderEdges = [] then
+  if (FBorderEdges = []) or (PenWidth <= 0) then
     Exit;
 
   { Clamp the diameter exactly like AddRoundRectPath so the straight parts of the
@@ -415,7 +439,16 @@ begin
   if coBottomRight in Corners then iBR := HR else iBR := 0;
   if coBottomLeft  in Corners then iBL := HR else iBL := 0;
 
-  Pen := TGPPen.Create(MakeGPColor(FBorderColor));
+  { A thick pen with flat caps would leave a notch at a square corner where two
+    drawn edges meet — stretch both lines outwards by half the pen width there
+    (a negative inset) so they overlap into a solid corner. }
+  HP := PenWidth / 2;
+  if (iTL = 0) and T and L  then iTL := -HP;
+  if (iTR = 0) and T and Rt then iTR := -HP;
+  if (iBR = 0) and B and Rt then iBR := -HP;
+  if (iBL = 0) and B and L  then iBL := -HP;
+
+  Pen := TGPPen.Create(MakeGPColor(FBorderColor), PenWidth);
   try
     { Straight segments — from one corner (inset if rounded) to the next. }
     if T then
@@ -456,8 +489,11 @@ procedure TCWSSettingsPanel.Paint;
 var
   G: TGPGraphics;
   Path: TGPGraphicsPath;
-  Brush: TGPSolidBrush;
-  W, H, R, D: Single;
+  Brush: TGPBrush;
+  Content: TBitmap;
+  ContentImg: TGPBitmap;
+  ContentRect: TRect;
+  W, H, R, D, BW, Inset: Single;
 begin
   { Corners (outside the rounding) show the parent background }
   Canvas.Brush.Color := GetParentBgColor;
@@ -476,20 +512,67 @@ begin
     G.SetSmoothingMode(SmoothingModeAntiAlias);
     G.SetPixelOffsetMode(PixelOffsetModeHalf);
 
-    D := R * 2;
+    { The stroke is centred on the outline, so the outline sits half the pen
+      width inside the client edge and its diameter shrinks by the same amount
+      — the outer edge of the border keeps CornerRadius whatever its width. At
+      BorderWidth 1 (or 0) this is the original 0.5 px inset and full 2R. }
+    BW := ScaledBorderWidth;
+    if BW > 1 then
+      Inset := BW / 2
+    else
+      Inset := 0.5;
+    D := R * 2 - (Inset - 0.5) * 2;
+    if D < 0 then
+      D := 0;
 
     Path := TGPGraphicsPath.Create;
     try
-      AddRoundRectPath(Path, 0.5, 0.5, W - 1, H - 1, D, FRoundedCorners);
+      AddRoundRectPath(Path, Inset, Inset, W - Inset * 2, H - Inset * 2, D, FRoundedCorners);
 
-      Brush := TGPSolidBrush.Create(MakeGPColor(FFillColor));
-      try
-        G.FillPath(Brush, Path);
-      finally
-        Brush.Free;
+      if Assigned(FOnPaint) then
+      begin
+        { OnPaint draws into an off-screen copy of the body (pre-filled with
+          FillColor), which then fills the body path through a texture brush.
+          The body outline is antialiased, so whatever the handler paints up to
+          the panel edge — an accent strip, a gradient — gets smooth rounded
+          corners, unlike a GDI clip region. The border is stroked on top. }
+        Content := TBitmap.Create;
+        try
+          Content.PixelFormat := pf32bit;
+          Content.SetSize(Width, Height);
+          Content.Canvas.Brush.Color := FFillColor;
+          Content.Canvas.FillRect(Rect(0, 0, Width, Height));
+          ContentRect := Rect(0, 0, Width, Height);
+          InflateRect(ContentRect, -Round(BW), -Round(BW));
+          Content.Canvas.Font := Font;
+          FOnPaint(Self, Content.Canvas, ContentRect);
+
+          ContentImg := TGPBitmap.Create(Content.Handle, 0);
+          try
+            Brush := TGPTextureBrush.Create(ContentImg, WrapModeClamp);
+            try
+              G.FillPath(Brush, Path);
+            finally
+              Brush.Free;
+            end;
+          finally
+            ContentImg.Free;
+          end;
+        finally
+          Content.Free;
+        end;
+      end
+      else
+      begin
+        Brush := TGPSolidBrush.Create(MakeGPColor(FFillColor));
+        try
+          G.FillPath(Brush, Path);
+        finally
+          Brush.Free;
+        end;
       end;
 
-      DrawBorder(G, 0.5, 0.5, W - 1, H - 1, D, FRoundedCorners);
+      DrawBorder(G, Inset, Inset, W - Inset * 2, H - Inset * 2, D, BW, FRoundedCorners);
     finally
       Path.Free;
     end;
@@ -532,7 +615,13 @@ begin
   if FFillColor <> Value then
   begin
     FFillColor := Value;
-    Invalidate;
+    { WS_CLIPCHILDREN keeps a plain Invalidate from reaching hosted controls, but
+      children that blend into the card (TCWSProgressBar corners) take FillColor
+      as their background, so they must repaint too. }
+    if HandleAllocated then
+      RedrawWindow(Handle, nil, 0, RDW_INVALIDATE or RDW_ALLCHILDREN)
+    else
+      Invalidate;
   end;
 end;
 
@@ -584,6 +673,32 @@ begin
   if FBorderEdges <> Value then
   begin
     FBorderEdges := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TCWSSettingsPanel.SetOnPaint(const Value: TCWSPanelPaintEvent);
+begin
+  FOnPaint := Value;
+  Invalidate;
+end;
+
+function TCWSSettingsPanel.ScaledBorderWidth: Integer;
+begin
+  Result := MulDiv(FBorderWidth, CurrentPPI, 96);
+end;
+
+procedure TCWSSettingsPanel.SetBorderWidth(const Value: Integer);
+var
+  V: Integer;
+begin
+  V := Value;
+  if V < 0 then
+    V := 0;
+  if FBorderWidth <> V then
+  begin
+    FBorderWidth := V;
+    UpdateChildrenClip; { hosted windowed controls stay inside the thicker border }
     Invalidate;
   end;
 end;

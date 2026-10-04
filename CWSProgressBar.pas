@@ -26,7 +26,7 @@ interface
 uses
   System.SysUtils, System.Classes, System.UITypes, Vcl.Controls, Vcl.Graphics,
   Winapi.Windows, Winapi.Messages, System.Math,
-  Winapi.GDIPAPI, Winapi.GDIPOBJ;
+  Winapi.GDIPAPI, Winapi.GDIPOBJ, CWSShape;
 
 type
   TCWSProgressBar = class(TCustomControl)
@@ -109,6 +109,9 @@ type
   end;
 
 implementation
+
+uses
+  System.TypInfo;
 
 type
   TControlAccess = class(TControl);
@@ -194,13 +197,24 @@ begin
   Result := EnsureRange(Result, FMinValue, FMaxValue);
 end;
 
-{ Corners outside the capsule always take the parent colour — the bar blends in. }
+{ Corners outside the capsule always take the parent colour — the bar blends in.
+  Card containers (TCWSSettingsPanel, TCWSOptionsPanel) paint their body with
+  FillColor while Color stays the colour of *their* parent, so a published
+  FillColor wins over Color. }
 function TCWSProgressBar.ParentBackColor: TColor;
+var
+  Info: PPropInfo;
 begin
-  if Parent <> nil then
-    Result := TControlAccess(Parent).Color
-  else
-    Result := clBtnFace;
+  if Parent = nil then
+    Exit(clBtnFace);
+  Info := GetPropInfo(Parent, 'FillColor', [tkInteger]);
+  if (Info <> nil) and (Info^.PropType^ = TypeInfo(TColor)) then
+  begin
+    Result := TColor(GetOrdProp(Parent, Info));
+    if Result <> clNone then
+      Exit;
+  end;
+  Result := TControlAccess(Parent).Color;
 end;
 
 function TCWSProgressBar.DisplayText: string;
@@ -392,10 +406,11 @@ begin
   if (W < 2) or (H < 2) then
     Exit;
 
-  { control background (corners outside the capsule) — always the parent colour (blend) }
-  Canvas.Brush.Color := ParentBackColor;
-  Canvas.Brush.Style := bsSolid;
-  Canvas.FillRect(ClientRect);
+  { control background (corners outside the capsule) — the parent's real
+    background, so the antialiased rounded ends blend into whatever lies under
+    the bar (a card, an image, a drop shadow) instead of a flat parent colour;
+    the flat colour is only the fallback where the parent paints nothing }
+  CWSPaintParentBackground(Self, Canvas.Handle, ParentBackColor);
 
   NormPct := NormalizedPercent;
 

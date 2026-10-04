@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.7](https://img.shields.io/badge/version-1.9.7-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.10](https://img.shields.io/badge/version-1.9.10-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -110,6 +110,7 @@ CWStudio to zestaw nowoczesnych, wysokiej jakości komponentów VCL dla środowi
 | **`TCWSDimOverlay`** | Warstwa przyciemniająca formularz (layered window) — idealna pod modalne dialogi. Wsparcie zaokrąglonych narożników Win11, animacja fade-in/out, blokowanie kliknięć. Wbudowany wskaźnik aktywności (loader) w 4 stylach (`cisLines`, `cisRing`, `cisSegmented`, `cisArrows`) z płynną, niezależną od FPS animacją — prędkość konfigurowalna przez `IndicatorSpeed` (stopnie/s, domyślnie 300). Animacja działa we własnym wątku, więc kręci się nawet gdy główny wątek jest zajęty. Opcjonalny tekst pod wskaźnikiem. |
 | **`TCWSAfterFormShow`** | Komponent emitujący zdarzenie `OnAfterShow` po pełnym wyrenderowaniu formularza (po `Show` / `ShowModal`, ale **nie** po przywróceniu z minimalizacji). |
 | **`TCWSHint`** | Zastępuje standardowy hint **całej aplikacji** dymkiem w stylu Windows 11 — wystarczy upuścić jeden na formę główną (`Active`). Zaokrąglone rogi (`CornerRadius`), kolory tła i ramki (`Color`, `BorderColor`, `BorderThickness`), czcionka (`Font`), marginesy i maksymalna szerokość, miękki cień (`Shadow`, `ShadowSize`), czasy opóźnienia i wyświetlania (`HintPause`, `HintHidePause`, `HintShortPause`), skróty klawiszowe w treści (`HintShortCuts`) oraz zdarzenie `OnShowHint` (zmiana tekstu, pozycji, czasu lub koloru pojedynczego hintu). Rysowany jak `TCWSPopupMenu` — okno warstwowe z gotową bitmapą, bez migania tła przy pokazywaniu. |
+| **`TCWSShadow`** | Miękki, półprzezroczysty cień (AlphaBlend) dla **dowolnej** kontrolki — wystarczy upuścić na formę i wskazać ją we właściwości `Control`; cień sam ustawia się pod nią na tym samym rodzicu i podąża za jej pozycją, rozmiarem i widocznością (także w IDE). Kierunek (`Direction`, stopnie), odległość (`Distance`), wielkość (`Size`, jak *spread* w CSS), miękkość (`Softness`), krycie (`Opacity`) i kolor (`Color`). Dwa tryby: `smShape` (domyślny) — cień faktycznego kształtu narysowanej kontrolki (tekst, także wielowierszowy `TLabel`, kształty, przezroczysty obraz), jak CSS `drop-shadow()` czy FMX `TShadowEffect`, z rozmyciem Gaussa; `smBox` — cień zaokrąglonego prostokąta (`CornerRadius`), jak CSS `box-shadow`; `IgnoreChildLabels` pomija przy tym podpisy (np. przełącznik rzuca cień samym wskaźnikiem). `TGraphicControl` — rysowany na płótnie rodzica, więc prześwituje przez niego tło i kontrolki graficzne; kliknięcia przechodzą przez cień. |
 
 ### Moduły kolorów Fluent
 
@@ -256,7 +257,33 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Historia wersji
 
-**Najnowsza wersja — 1.9.7:**
+**Najnowsza wersja — 1.9.10:**
+
+- **Poprawka** `TCWSScrollBox` + `TCWSShadow`: **kontrolka zakotwiczona do dołu (`akBottom`) lub do prawej (`akRight`) nie chowa się już pod ramką** przy szybkim zmniejszaniu scrollboxa. Cień, który wystaje poza kontrolkę, był liczony do rozmiaru zawartości według własnych kotwic i trzymał zawartość przy starym rozmiarze; teraz jest liczony według kotwic swojej kontrolki.
+
+**Wersja 1.9.9:**
+
+- **Nowość** `TCWSSettingsPanel`: **`BorderWidth`** (domyślnie `1`) — grubość ramki w pikselach przy 96 DPI, skalowana z monitorem; `0` ukrywa ramkę. Ramka rośnie do środka: zewnętrzny obrys i `CornerRadius` się nie zmieniają, a osadzone kontrolki okienkowe są przycinane wewnątrz grubszej ramki. W kwadratowym rogu grube krawędzie łączą się w pełny narożnik, bez ząbka.
+- **Nowość** `TCWSSettingsPanel`: **`OnPaint`** (`Sender`, `ACanvas`, `const ARect: TRect`) — własne rysowanie wewnątrz karty: pasek akcentu przy krawędzi, gradient, nagłówek. `ACanvas` obejmuje cały panel (współrzędne klienta) i jest już wypełniony `FillColor`; `ARect` to obszar wewnątrz ramki. To, co narysujesz aż do krawędzi, dostaje te same gładkie, wygładzone rogi co zwykłe wypełnienie, a ramka jest rysowana na wierzchu.
+- **Poprawka** `TCWSMemo`: **wewnętrzne pole jest przycinane do zaokrąglonego wnętrza ramki**, więc przy dużym `CornerRadius` jego białe tło nie wystaje już poza zaokrąglenie (z prawej, u góry i u dołu). Zmiana `CornerRadius` w czasie działania programu od razu przelicza układ i odświeża kontrolkę.
+- **Zmiana** `TCWSShadow`: **`Size` (*spread*) powiększa kształt kołem**, jak w CSS, a nie kwadratem — cień zaokrąglonej kontrolki ma teraz promień + spread i nie wypełnia kwadratowego rogu za zaokrągleniem.
+- **Zmiana** `TCWSShadow`: **dużo szybsza zmiana rozmiaru.** W trybie `smShape` stara warstwa jest rozciągana metodą *nine-slice* (bez przeskalowania pikseli) i budowana od nowa raz, 150 ms po ustaleniu rozmiaru; `smBox` rysuje małą warstwę i rozciąga ją tak samo. Przy przesuwaniu odświeżany jest tylko pierścień wokół kontrolki, a nie ona sama i jej sąsiedzi.
+- **Zmiana** `TCWSShadow`: **cień `smShape` nadąża za zmianą kształtu w czasie działania programu** (`CornerRadius`, `RoundedCorners` itp.) — kontrolka i cień zmieniają się w tej samej klatce; seria odświeżeń (hover, animacja) jest sprawdzana najwyżej co 100 ms.
+- **Poprawka** `TCWSShadow`: **koniec ciemnych kwadratowych plam w zaokrąglonych rogach** `TCWSStringGrid`, `TCWSDBGrid` i `TCWSListBox` w trybie `smShape` — przy przechwytywaniu kształtu wewnętrzne kontrolki są przycinane do swoich regionów okna.
+- **Poprawka** kontrolki z zaokrąglonymi rogami (`TCWSSettingsPanel`, `TCWSOptionsPanel`, `TCWSEdit`, `TCWSEditMask`, `TCWSMemo`, `TCWSComboBox`, `TCWSListBox`, `TCWSDatePicker`, `TCWSStringGrid`, `TCWSDBGrid`, `TCWSProgressBar` i inne korzystające z `CWSPaintParentBackground`): **rogi pokazują prawdziwe tło rodzica także w projektancie formularzy**, więc `TCWSShadow` jest tam widoczny (i nie wychodzi kwadratowy); przez rogi widać też siatkę projektanta, jak pod przezroczystym `TLabel`.
+- **Poprawka** `TCWSProgressBar` na `TCWSSettingsPanel` / `TCWSOptionsPanel`: **rogi poza zaokrąglonymi końcami mają kolor `FillColor` karty**, a nie `Color`; zmiana `FillColor` karty odświeża też osadzone kontrolki.
+- **Poprawka** `TCWSListBox`: **„Control has no parent window"**, gdy właściwość przeliczająca układ (np. `CornerRadius`) była ustawiana w kodzie przed `Parent`.
+
+**Wersja 1.9.8:**
+
+
+- **Nowość** `TCWSShadow` (paleta *CWStudio_Miscellaneous*) — miękki, półprzezroczysty cień (AlphaBlend) dla **dowolnej** kontrolki: wystarczy wskazać ją we właściwości `Control`, a cień sam ustawia się pod nią i podąża za jej pozycją, rozmiarem i widocznością (także w IDE). `Direction`, `Distance`, `Size` (*spread*), `Softness`, `Opacity`, `Color`. Tryb `smShape` (domyślny) rzuca cień faktycznego kształtu kontrolki — tekstu (także wielowierszowego `TLabel`), kształtów, przezroczystego obrazu — z rozmyciem Gaussa, jak CSS `drop-shadow()` czy FMX `TShadowEffect`; `IgnoreChildLabels` pomija podpisy (przełącznik rzuca cień samym wskaźnikiem). Tryb `smBox` to cień zaokrąglonego prostokąta (`CornerRadius`), jak CSS `box-shadow`. Kliknięcia przechodzą przez cień.
+- **Poprawka** `TCWSButton`, `TCWSStoreButton`, `TCWSSwitch`, `TCWSCheckBox`: **pod zaokrąglonymi rogami i wokół wskaźnika widać prawdziwe tło rodzica** zamiast płaskiego koloru `Color` — koniec szarych prostokątów na kartach `TCWSSettingsPanel`, jasnych rogów przy najechaniu na `TCWSStoreButton` i rogów zasłaniających cień lub obraz. Wspólna procedura `CWSPaintParentBackground` w `CWSShape`.
+- **Poprawka** `TCWSProgressBar`: **rogi poza zaokrąglonymi końcami** pokazują prawdziwe tło rodzica, więc wygładzone końce nie mają już jasnych plam na karcie, obrazie czy cieniu.
+- **Poprawka** `TCWSLabelColumn`: **`EdgeFade` przewijanej kolumny wtapia tekst w rzeczywiste tło** pod etykietą, a nie w płaski `Color` — na ciemnym tle, karcie czy gradiencie końce nie mają już jasnych ani ciemnych prostokątów.
+- **Poprawka** `TCWSSettingsPanel`, `TCWSOptionsPanel`, `TCWSEdit`, `TCWSEditMask`, `TCWSMemo`, `TCWSComboBox`, `TCWSListBox`, `TCWSDatePicker`, `TCWSStringGrid`, `TCWSDBGrid`: **koniec jasnej obwódki lub kwadratowego ząbka w zaokrąglonych rogach po częściowym odświeżeniu** (zmiana rozmiaru okna, przesuwanie innego okna nad kontrolką). Region wykluczający wnętrze był w jednostkach urządzenia i w częściowo odświeżanym buforze trafiał obok; teraz to ścieżka przycinająca w jednostkach logicznych, cofnięta o 2 px, więc cała wygładzona krawędź łączy się z prawdziwym tłem.
+
+**Wersja 1.9.7:**
 
 - **Zmiana** `TCWSEdit`, `TCWSEditMask`: **tekst ułożony jak w `TextBox` z WinUI 3, domyślna wysokość 32 px.** Przy Segoe UI 10 pt linia bazowa wypada 20 px od górnej krawędzi, małe litery zajmują wiersze 13..19, a tekst zaczyna się 11 px od lewej krawędzi — co do piksela jak w WinUI. Bez `LabelText` wysokość to `Max(32, wysokość tekstu + 12)` (wcześniej 29 px przy Segoe UI 10 pt). Etykieta `LabelText` przesunęła się razem z tekstem. Przy `AutoSizeHeight = True` istniejące pola bez etykiety urosną do 32 px przy ładowaniu formularza.
 - **Poprawka** `TCWSEdit`, `TCWSEditMask`: **tekst jest wyśrodkowany w pionie według swojego optycznego środka, a nie wysokości linii.** Ten środek leży w połowie między środkiem wielkich liter a środkiem małych; wysokości mierzone są z glifów `H` i `x`, bo `otmsCapEmHeight` / `otmsXHeight` bywają błędne.
@@ -578,6 +605,7 @@ CWStudio is a library of modern, high-quality VCL components for Delphi, designe
 | **`TCWSDimOverlay`** | Dim-the-form layered overlay — perfect under modal dialogs. Supports Win11 rounded corners, fade-in/out animation, click blocking. Built-in activity indicator (loader) in 4 styles (`cisLines`, `cisRing`, `cisSegmented`, `cisArrows`) with smooth, frame-rate-independent animation — speed configurable via `IndicatorSpeed` (degrees/s, default 300). The animation runs on its own thread, so it keeps spinning even while the main thread is busy. Optional caption below the indicator. |
 | **`TCWSAfterFormShow`** | Component that fires an `OnAfterShow` event once the form is fully painted after `Show` / `ShowModal` (but **not** on un-minimize). |
 | **`TCWSHint`** | Replaces the standard hint of the **whole application** with a Windows 11 style bubble — drop one on the main form (`Active`). Rounded corners (`CornerRadius`), background and border colours (`Color`, `BorderColor`, `BorderThickness`), font (`Font`), padding and maximum width, soft shadow (`Shadow`, `ShadowSize`), show delay and display time (`HintPause`, `HintHidePause`, `HintShortPause`), action shortcuts in the text (`HintShortCuts`) and an `OnShowHint` event (change the text, position, timeout or colour of a single hint). Drawn like `TCWSPopupMenu` — a layered window that receives its finished bitmap before it is shown, so no background flash on show. |
+| **`TCWSShadow`** | A soft, alpha-blended shadow for **any** control — drop it on the form and point `Control` at the control; the shadow puts itself under it on the same parent and follows its position, size and visibility (at design time too). Direction (`Direction`, degrees), offset (`Distance`), spread (`Size`, as in CSS), blur (`Softness`), opacity (`Opacity`) and colour (`Color`). Two modes: `smShape` (default) — shadow of the control's actual painted shape (text, a multi-line `TLabel` included, shapes, a transparent image), like CSS `drop-shadow()` or the FMX `TShadowEffect`, with a Gaussian blur; `smBox` — shadow of a rounded rectangle (`CornerRadius`), like CSS `box-shadow`; `IgnoreChildLabels` leaves captions out of it (e.g. a switch casts the shadow of its indicator only). A `TGraphicControl` painted on the parent's canvas, so the background and graphic controls show through it; clicks pass through the shadow. |
 
 ### Fluent color modules
 
@@ -725,7 +753,33 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ Version history
 
-**Latest release — 1.9.7:**
+**Latest release — 1.9.10:**
+
+- **Fix** `TCWSScrollBox` + `TCWSShadow`: **a control anchored to the bottom (`akBottom`) or right (`akRight`) no longer hides under the border** when the scrollbox shrinks quickly. The shadow, which sticks out past its control, was measured into the content size by its own anchors and held the content at the old size; it is now measured by its control's anchors.
+
+**Version 1.9.9:**
+
+- **New** `TCWSSettingsPanel`: **`BorderWidth`** (default `1`) — the border thickness in pixels at 96 DPI, scaled with the monitor; `0` hides the border. The border grows inwards: the outer outline and `CornerRadius` stay put, and hosted windowed controls are clipped inside the thicker border. At a square corner thick edges join into a solid corner, with no notch.
+- **New** `TCWSSettingsPanel`: **`OnPaint`** (`Sender`, `ACanvas`, `const ARect: TRect`) — custom drawing inside the card: an accent strip along an edge, a gradient, a header band. `ACanvas` covers the whole panel (client coordinates) and is already filled with `FillColor`; `ARect` is the area inside the border. Whatever is painted up to the edge gets the same smooth antialiased corners as the plain fill, and the border is drawn on top.
+- **Fix** `TCWSMemo`: **the inner memo is clipped to the rounded interior of the border**, so with a large `CornerRadius` its white background no longer pokes out of the rounding (right, top and bottom). Changing `CornerRadius` at run time now re-lays out and repaints the control.
+- **Changed** `TCWSShadow`: **`Size` (the spread) grows the shape by a disc**, as CSS does, not by a square — the shadow of a rounded control now has radius + spread and no longer fills the square corner behind the rounding.
+- **Changed** `TCWSShadow`: **much faster resizing.** In `smShape` mode the old layer is stretched nine-sliced (no pixel resampling) and rebuilt once, 150 ms after the size settles; `smBox` renders a small layer and stretches it the same way. While following a moved target, only the ring around it is invalidated, not the target and its neighbours.
+- **Changed** `TCWSShadow`: **the `smShape` shadow follows shape changes at run time** (`CornerRadius`, `RoundedCorners`, ...) — the control and its shadow change in the same frame; a burst of invalidations (hover, animation) is checked at most every 100 ms.
+- **Fix** `TCWSShadow`: **no dark square patches at the rounded corners** of `TCWSStringGrid`, `TCWSDBGrid` and `TCWSListBox` in `smShape` mode — the inner controls are clipped to their window regions while the shape is captured.
+- **Fix** rounded controls (`TCWSSettingsPanel`, `TCWSOptionsPanel`, `TCWSEdit`, `TCWSEditMask`, `TCWSMemo`, `TCWSComboBox`, `TCWSListBox`, `TCWSDatePicker`, `TCWSStringGrid`, `TCWSDBGrid`, `TCWSProgressBar` and the others using `CWSPaintParentBackground`): **the corners show the parent's real background in the form designer too**, so a `TCWSShadow` is visible there (and not square); the designer dot grid shows through the corners as well, like under a transparent `TLabel`.
+- **Fix** `TCWSProgressBar` on a `TCWSSettingsPanel` / `TCWSOptionsPanel`: **the corners outside the rounded ends take the card's `FillColor`**, not its `Color`; changing the card's `FillColor` repaints the hosted controls too.
+- **Fix** `TCWSListBox`: **"Control has no parent window"** when a property that re-lays out the control (e.g. `CornerRadius`) was set in code before `Parent`.
+
+**Version 1.9.8:**
+
+
+- **New** `TCWSShadow` (palette *CWStudio_Miscellaneous*) — a soft, alpha-blended shadow for **any** control: point `Control` at it and the shadow puts itself underneath and follows its position, size and visibility (at design time too). `Direction`, `Distance`, `Size` (*spread*), `Softness`, `Opacity`, `Color`. `smShape` (default) casts the shadow of the control's actual shape — text (a multi-line `TLabel` included), shapes, a transparent image — with a Gaussian blur, like CSS `drop-shadow()` or the FMX `TShadowEffect`; `IgnoreChildLabels` leaves captions out (a switch casts the shadow of its indicator only). `smBox` is the shadow of a rounded rectangle (`CornerRadius`), like CSS `box-shadow`. Clicks pass through the shadow.
+- **Fix** `TCWSButton`, `TCWSStoreButton`, `TCWSSwitch`, `TCWSCheckBox`: **the rounded corners and the area around the indicator show the parent's real background** instead of a flat `Color` — no more grey rectangles on `TCWSSettingsPanel` cards, light corners when hovering a `TCWSStoreButton`, or corners covering a shadow or an image. Shared routine `CWSPaintParentBackground` in `CWSShape`.
+- **Fix** `TCWSProgressBar`: **the corners outside the rounded ends** show the parent's real background, so the antialiased ends no longer draw light spots over a card, an image or a shadow.
+- **Fix** `TCWSLabelColumn`: **the `EdgeFade` of a scrolling column blends the text into the real background** under the label instead of a flat `Color` — no more light or dark rectangles at the ends on a dark form, a card or a gradient.
+- **Fix** `TCWSSettingsPanel`, `TCWSOptionsPanel`, `TCWSEdit`, `TCWSEditMask`, `TCWSMemo`, `TCWSComboBox`, `TCWSListBox`, `TCWSDatePicker`, `TCWSStringGrid`, `TCWSDBGrid`: **no light rim or square notch at the rounded corners after a partial repaint** (resizing the window, another window moving over the control). The region excluding the body was in device units and landed off target in a partially repainted buffer; it is now a clip path in logical units, inset 2 px, so the whole antialiased edge blends against the real background.
+
+**Version 1.9.7:**
 
 - **Changed** `TCWSEdit`, `TCWSEditMask`: **text laid out like the WinUI 3 `TextBox`, default height 32 px.** At Segoe UI 10 pt the baseline lies 20 px below the top edge, the x-height fills rows 13..19 and the text starts 11 px from the left edge — the WinUI layout to the pixel. Without a `LabelText` the height is `Max(32, text height + 12)` (it was 29 px at Segoe UI 10 pt). The `LabelText` caption moves with the text. With `AutoSizeHeight = True`, existing controls without a label grow to 32 px when the form loads.
 - **Fix** `TCWSEdit`, `TCWSEditMask`: **the text is vertically centred on its optical centre, not on its line box.** That centre lies halfway between the middle of the capitals and the middle of the x-height; both heights are measured from the `H` and `x` glyphs, because `otmsCapEmHeight` / `otmsXHeight` can be wrong.

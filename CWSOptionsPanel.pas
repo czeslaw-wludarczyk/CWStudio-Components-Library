@@ -774,7 +774,6 @@ procedure TCWSOptionsPanel.DrawParentBackground(DC: HDC; ARadius: Single;
   ADX: Integer = 0; ADY: Integer = 0);
 var
   SaveIdx: Integer;
-  Rgn: HRGN;
   D: Integer;
 begin
   { The GetParentBgColor fill done by the caller is only a correct guess when the
@@ -783,23 +782,25 @@ begin
     of sync with what it actually paints all leave visible wrong-colored
     triangles outside the card's rounded corners — so let the parent render its
     real background here instead.
-    Skipped at design time: a form's PaintWindow draws the designer dot grid,
-    which would then bleed into the corners. }
-  if (Parent = nil) or (csDesigning in ComponentState) then
+    Done at design time too: the corners are transparent, so they show what the
+    parent really paints there — a TCWSShadow under the control, and the
+    designer dot grid of a form. }
+  if Parent = nil then
     Exit;
   SaveIdx := SaveDC(DC);
   try
-    { Clip to the sliver outside the card outline (inset by 1 px so the
-      antialiased edge blends against real parent pixels). Region coordinates
-      are device units, so this must happen before MoveWindowOrg — hence the
+    { Clip to the sliver outside the card outline (inset 2 px, concentric, so the whole
+      antialiased edge blends against real parent pixels). A clip path is in
+      logical units (a region would be in device units and miss the corners in
+      a double-buffered partial paint, whose memory DC is offset to the update
+      rectangle); it must still be set before MoveWindowOrg — hence the
       explicit (ADX, ADY) rather than relying on the origin shift. }
     D := Round(ARadius) * 2;
-    Rgn := CreateRoundRectRgn(ADX + 1, ADY + 1, ADX + Width, ADY + Height, D, D);
-    try
-      ExtSelectClipRgn(DC, Rgn, RGN_DIFF);
-    finally
-      DeleteObject(Rgn);
-    end;
+    if D < 4 then D := 4;
+    BeginPath(DC);
+    RoundRect(DC, ADX + 2, ADY + 2, ADX + Width - 1, ADY + Height - 1, D - 4, D - 4);
+    EndPath(DC);
+    SelectClipPath(DC, RGN_DIFF);
     { Shift the origin so our parent paints in its own coordinate system. }
     MoveWindowOrg(DC, ADX - Left, ADY - Top);
     Parent.Perform(WM_ERASEBKGND, WPARAM(DC), 0);
@@ -1376,7 +1377,13 @@ begin
   if FFillColor <> Value then
   begin
     FFillColor := Value;
-    Invalidate;
+    { WS_CLIPCHILDREN keeps a plain Invalidate from reaching hosted controls, but
+      children that blend into the card (TCWSProgressBar corners) take FillColor
+      as their background, so they must repaint too. }
+    if HandleAllocated then
+      RedrawWindow(Handle, nil, 0, RDW_INVALIDATE or RDW_ALLCHILDREN)
+    else
+      Invalidate;
   end;
 end;
 

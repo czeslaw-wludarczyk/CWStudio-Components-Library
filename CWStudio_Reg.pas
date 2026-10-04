@@ -77,7 +77,8 @@ uses
   CWSStringGrid,
   CWSDBGrid,
   CWSLabelColumn,
-  CWSLabelTrend;
+  CWSLabelTrend,
+  CWSShadow;
 
 { Resource with the 24×24 splash/About bitmap — compiled from CWStudio_Splash.rc }
 {$R CWStudio_Splash.res}
@@ -472,6 +473,8 @@ begin
     [TCWSStringGrid, TCWSDBGrid]);
   RegisterComponents('CWStudio_Labels',
     [TCWSLabelColumn, TCWSLabelTrend]);
+  RegisterComponents('CWStudio_Miscellaneous',
+    [TCWSShadow]);
 
   { The same columns editor as in the real TDBGrid — see TCWSDBGridColumnsProperty }
   RegisterPropertyEditor(TypeInfo(TDBGridColumns), TCWSDBGrid, 'Columns',

@@ -154,7 +154,67 @@ type
     property OnMouseUp;
   end;
 
+{ Paints the parent's real background into DC across AControl's client area.
+
+  Shared by the CWStudio composite controls (button / switch / check box) that
+  draw their visible body with child shapes and leave the rest of the window —
+  the rounded corners, the area around the indicator and the caption — to the
+  background erase. A flat fill with the (parent) Color is only right when the
+  parent paints itself as a flat fill of that very color; a card container, a
+  form with OnPaint, a VCL style or graphic controls lying under the control
+  (e.g. a drop shadow) all show up as wrong-colored rectangles and corners.
+
+  The parent is asked for WM_ERASEBKGND and WM_PRINTCLIENT, because the
+  CWStudio containers swallow the former and paint only in WM_PAINT. This is
+  done at design time too, so a TCWSShadow under the control shows through; the
+  designer dot grid of a form shows through the same way, like under a
+  transparent TLabel.
+  AFallback is the flat colour painted first, left wherever the parent paints
+  nothing (clNone = the control's own Color). }
+procedure CWSPaintParentBackground(AControl: TWinControl; DC: HDC;
+  AFallback: TColor = clNone);
+
 implementation
+
+uses
+  Winapi.Messages;
+
+procedure CWSPaintParentBackground(AControl: TWinControl; DC: HDC;
+  AFallback: TColor);
+var
+  SaveIdx: Integer;
+  Origin: TPoint;
+  Brush: HBRUSH;
+begin
+  { Fallback, also left in place wherever the parent paints nothing. }
+  if AFallback = clNone then
+    FillRect(DC, AControl.ClientRect, AControl.Brush.Handle)
+  else
+  begin
+    Brush := CreateSolidBrush(ColorToRGB(AFallback));
+    FillRect(DC, AControl.ClientRect, Brush);
+    DeleteObject(Brush);
+  end;
+  if AControl.Parent = nil then
+    Exit;
+  SaveIdx := SaveDC(DC);
+  try
+    { Let the parent paint in its own coordinate system. }
+    OffsetWindowOrgEx(DC, AControl.Left, AControl.Top, nil);
+    { Pattern brushes are aligned to device coordinates — align them to the
+      parent's origin so they continue seamlessly under the control. }
+    Origin.X := 0;
+    Origin.Y := 0;
+    LPtoDP(DC, Origin, 1);
+    SetBrushOrgEx(DC, Origin.X, Origin.Y, nil);
+    { LParam = DC: a double-buffered parent erases only when painting to memory
+      (wParam = lParam), which is exactly what this is. }
+    AControl.Parent.Perform(WM_ERASEBKGND, WPARAM(DC), LPARAM(DC));
+    AControl.Parent.Perform(WM_PRINTCLIENT, WPARAM(DC), PRF_CLIENT);
+  finally
+    RestoreDC(DC, SaveIdx);
+  end;
+end;
 
 { TCWSShapeBrush }
 

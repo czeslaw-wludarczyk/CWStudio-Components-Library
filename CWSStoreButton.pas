@@ -130,6 +130,7 @@ type
     procedure ChangeScale(M, D: Integer; isDpiChange: Boolean); override;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     procedure CMFontChanged(var Message: TMessage); message CM_FONTCHANGED;
+    procedure WMEraseBkgnd(var Message: TWMEraseBkgnd); message WM_ERASEBKGND;
 
   public
     constructor Create(AOwner: TComponent); override;
@@ -332,6 +333,17 @@ begin
   ApplyFontToLabel;
   Resize;
   Invalidate;
+end;
+
+procedure TCWSStoreButton.WMEraseBkgnd(var Message: TWMEraseBkgnd);
+begin
+  { The rounded body is drawn by FbckShape; the corners outside it must show
+    the parent's real background, not a flat fill with Color — otherwise they
+    stay light around the darker hover / pressed body. When double-buffered,
+    erase only the memory DC (wParam = lParam), as TWinControl does. }
+  if not DoubleBuffered or (TMessage(Message).WParam = WPARAM(TMessage(Message).LParam)) then
+    CWSPaintParentBackground(Self, Message.DC);
+  Message.Result := 1;
 end;
 
 procedure TCWSStoreButton.ChangeScale(M, D: Integer; isDpiChange: Boolean);
