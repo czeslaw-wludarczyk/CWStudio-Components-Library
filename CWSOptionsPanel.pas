@@ -1084,7 +1084,15 @@ begin
       begin
         HoverPath := TGPGraphicsPath.Create;
         try
-          AddRoundRectPathEx(HoverPath, 0.5, 0.5, W - 1, HH - 1, R, RTL, RTR, RBR, RBL);
+          { Collapsed, the band's bottom edge is the card outline (stroked
+            after). Expanded with sections below, it runs inside the card —
+            extend it to y = HH + 0.5 so row HH-1 (the band's last row) is fully
+            covered instead of half-blended; row HH belongs to the first
+            section's window, so its top divider stays untouched. }
+          if FExpanded and (SectionCount > 0) then
+            AddRoundRectPathEx(HoverPath, 0.5, 0.5, W - 1, HH, R, RTL, RTR, RBR, RBL)
+          else
+            AddRoundRectPathEx(HoverPath, 0.5, 0.5, W - 1, HH - 1, R, RTL, RTR, RBR, RBL);
           Brush := TGPSolidBrush.Create(MakeGPColor(FHoverColor));
           try
             G.FillPath(Brush, HoverPath);

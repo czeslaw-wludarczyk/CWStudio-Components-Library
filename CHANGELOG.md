@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.11] — 2026-10-04
+
+- **Fix** `TCWSOptionsPanel`: **the header hover highlight (`Hover`) now fills the whole header band down to the first section's divider.** With the panel expanded and hosting sections, the hover path used the same 0.5-offset geometry as the card outline and ended half a pixel short of the band's last row, so that row was only half-blended with `HoverColor` and showed as a strip between the highlight and the section's top divider. Collapsed (or with no sections) the band's bottom edge is the card outline, stroked afterwards, so the gap never showed there. When expanded with sections the hover path now extends to `y = HeaderHeight + 0.5`, covering the band's last row fully; the next row belongs to the first section's window, so its `ShowTopDivider` line is left as is.
+
 ## [1.9.10] — 2026-10-04
 
 - **Fix** `TCWSScrollBox` + `TCWSShadow`: **a control anchored to the bottom (`akBottom`) or right (`akRight`) no longer hides under the border** when the scrollbox shrinks quickly. The content extent (`RecalcBounding`) measured the shadow by its own anchors (`[akLeft, akTop]`), so the shadow, which sticks out past its control by the blur pad and the offset and was still at its old place, held the content at the old size: the control stayed anchored to that larger content, below the visible area, and a scroll bar appeared. The shadow moves with its control without `SetBounds`, so the box was not told to re-measure either. A `TCWSShadow` is now measured by its target's anchors: skipped on an axis the target is anchored to, still counted where the target has a fixed position (so the shadow of the last control stays reachable by scrolling).

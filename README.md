@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.10](https://img.shields.io/badge/version-1.9.10-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.11](https://img.shields.io/badge/version-1.9.11-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -257,7 +257,11 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Historia wersji
 
-**Najnowsza wersja — 1.9.10:**
+**Najnowsza wersja — 1.9.11:**
+
+- **Poprawka** `TCWSOptionsPanel`: **podświetlenie nagłówka (`Hover`) wypełnia teraz cały pas nagłówka aż do linii pierwszej sekcji.** Gdy panel był rozwinięty i miał sekcje, pod podświetleniem zostawał niepokryty pasek: ostatni wiersz nagłówka był tylko w połowie zabarwiony kolorem `HoverColor`. Linia oddzielająca sekcję (`ShowTopDivider`) pozostaje nietknięta.
+
+**Wersja 1.9.10:**
 
 - **Poprawka** `TCWSScrollBox` + `TCWSShadow`: **kontrolka zakotwiczona do dołu (`akBottom`) lub do prawej (`akRight`) nie chowa się już pod ramką** przy szybkim zmniejszaniu scrollboxa. Cień, który wystaje poza kontrolkę, był liczony do rozmiaru zawartości według własnych kotwic i trzymał zawartość przy starym rozmiarze; teraz jest liczony według kotwic swojej kontrolki.
 
@@ -753,7 +757,11 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ Version history
 
-**Latest release — 1.9.10:**
+**Latest release — 1.9.11:**
+
+- **Fix** `TCWSOptionsPanel`: **the header hover highlight (`Hover`) now fills the whole header band down to the first section's divider.** With the panel expanded and hosting sections, an uncovered strip was left under the highlight: the header's last row was only half-tinted with `HoverColor`. The section's top divider (`ShowTopDivider`) stays untouched.
+
+**Version 1.9.10:**
 
 - **Fix** `TCWSScrollBox` + `TCWSShadow`: **a control anchored to the bottom (`akBottom`) or right (`akRight`) no longer hides under the border** when the scrollbox shrinks quickly. The shadow, which sticks out past its control, was measured into the content size by its own anchors and held the content at the old size; it is now measured by its control's anchors.
 
