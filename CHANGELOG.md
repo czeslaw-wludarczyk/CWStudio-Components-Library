@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.12] — 2026-10-05
+
+- **Change** `TCWSDatePicker`: **the calendar title now reads as one left-aligned line, "<month> <year>", like the Windows 11 calendar.** Previously the month name filled the left half of the label area and the year sat at the start of the right half, so a short month left a wide gap before the year. The year now starts right after the month name and one space (`GetMonthYearSplitX`); the month and year stay separately clickable, and their hit zones follow the new positions. The prev/next buttons stay on the right.
+- **Change** `TCWSDatePicker`: **the dropdown is as wide as the longest title needs.** The minimum body width (`GetRequiredBodyWidth`) is computed from the locale's longest month name, the widest 4-digit year and the prev/next buttons, and is never less than `DROPDOWN_MIN_WIDTH`; a field wider than that still sets the dropdown width.
+- **Fix** `TCWSDatePicker`: **header labels no longer wrap**, and the month/year text is drawn with typographic string format, so the drawn positions match the GDI-measured label rects.
+
 ## [1.9.11] — 2026-10-04
 
 - **Fix** `TCWSOptionsPanel`: **the header hover highlight (`Hover`) now fills the whole header band down to the first section's divider.** With the panel expanded and hosting sections, the hover path used the same 0.5-offset geometry as the card outline and ended half a pixel short of the band's last row, so that row was only half-blended with `HoverColor` and showed as a strip between the highlight and the section's top divider. Collapsed (or with no sections) the band's bottom edge is the card outline, stroked afterwards, so the gap never showed there. When expanded with sections the hover path now extends to `y = HeaderHeight + 0.5`, covering the band's last row fully; the next row belongs to the first section's window, so its `ShowTopDivider` line is left as is.

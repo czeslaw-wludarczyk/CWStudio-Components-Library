@@ -127,6 +127,8 @@
       function GetMonthLabelHitRect: TRect;
       function GetYearLabelHitRect: TRect;
       function MeasureTitleText(const S: string): Integer;
+      function GetMonthYearSplitX: Integer;
+      function GetRequiredBodyWidth: Integer;
       function GetPrevBtnRect: TRect;
       function GetNextBtnRect: TRect;
       function GetDaysHeaderRect: TRect;
@@ -992,29 +994,59 @@
     Result := FYearRangeStart + Index;
   end;
 
+  { X where the year label starts (day view). Title like in the Windows 11
+    calendar: "październik 2026" as one left-aligned line, the year right
+    after the month name + one space, prev/next buttons on the right. }
+  function TCWSCalendarDropdown.GetMonthYearSplitX: Integer;
+  var
+    Fmt: TFormatSettings;
+  begin
+    Fmt    := TFormatSettings.Create;
+    Result := GetHeaderRect.Left +
+      MeasureTitleText(Fmt.LongMonthNames[FViewMonth] + ' ');
+  end;
+
+  { Minimum body width so the title "<longest month> <year>" fits before the
+    prev/next buttons. Never less than DROPDOWN_MIN_WIDTH (grid of 7 columns,
+    "Today" bar). Geometry must match GetHeaderRect / GetPrevBtnRect. }
+  function TCWSCalendarDropdown.GetRequiredBodyWidth: Integer;
+  var
+    Fmt: TFormatSettings;
+    i, MaxMonthW, YearW, Need: Integer;
+  begin
+    Fmt := TFormatSettings.Create;
+    MaxMonthW := 0;
+    for i := 1 to 12 do
+      MaxMonthW := Max(MaxMonthW, MeasureTitleText(Fmt.LongMonthNames[i] + ' '));
+    // Widest 4-digit year (digits are not tabular in every font)
+    YearW := Max(MeasureTitleText('0000'), MeasureTitleText('8888'));
+
+    { header margin (12) + "longest month " + year + gap (6)
+      + space before prev button (4) + buttons (64) + header margin (12) }
+    Need := ScalePx(12) + MaxMonthW + YearW + ScalePx(6) +
+      ScalePx(4) + ScalePx(64) + ScalePx(12);
+
+    Result := Max(ScalePx(DROPDOWN_MIN_WIDTH), Need);
+  end;
+
   // Returns the rect of the year displayed in the header (clickable)
   function TCWSCalendarDropdown.GetYearLabelRect: TRect;
   var
     HR, BtnPrev: TRect;
-    MidX: Integer;
   begin
     HR      := GetHeaderRect;
     BtnPrev := GetPrevBtnRect;
-    MidX    := HR.Left + (BtnPrev.Left - HR.Left - ScalePx(4)) div 2;
-    // Year = right half of the label area
-    Result := Rect(MidX, HR.Top, BtnPrev.Left - ScalePx(4), HR.Bottom);
+    // Year = right after "<month> "
+    Result := Rect(GetMonthYearSplitX, HR.Top, BtnPrev.Left - ScalePx(4), HR.Bottom);
   end;
 
   function TCWSCalendarDropdown.GetMonthLabelRect: TRect;
   var
-    HR, BtnPrev: TRect;
-    MidX: Integer;
+    HR: TRect;
   begin
-    HR      := GetHeaderRect;
-    BtnPrev := GetPrevBtnRect;
-    MidX    := HR.Left + (BtnPrev.Left - HR.Left - ScalePx(4)) div 2;
-    // Month = left half of the label area
-    Result := Rect(HR.Left, HR.Top, MidX, HR.Bottom);
+    HR := GetHeaderRect;
+    // Month = from the left edge up to the split point
+    Result := Rect(HR.Left, HR.Top, GetMonthYearSplitX, HR.Bottom);
   end;
 
   { Header text width (title font: bold, Font.Size + 1)
@@ -1043,8 +1075,8 @@
   end;
 
   { Hit zone of the year label — narrow, covers only the text. The left edge
-    depends on the view: in the day view the year is in the right half (MidX), in the
-    month view — at the left edge of the header. }
+    depends on the view: in the day view the year is right after the month name
+    (GetMonthYearSplitX), in the month view — at the left edge of the header. }
   function TCWSCalendarDropdown.GetYearLabelHitRect: TRect;
   var
     HR, BtnPrev: TRect;
@@ -1055,7 +1087,7 @@
     if FViewMode = 1 then
       L := HR.Left
     else
-      L := HR.Left + (BtnPrev.Left - HR.Left - ScalePx(4)) div 2;
+      L := GetMonthYearSplitX;
     W := MeasureTitleText(IntToStr(FViewYear)) + ScalePx(2);
     Result := Rect(L, HR.Top, Min(L + W, BtnPrev.Left - ScalePx(4)), HR.Bottom);
   end;
@@ -1342,6 +1374,11 @@
   begin
     FmtSettings := TFormatSettings.Create;
 
+    { Label rects use MeasureTitleText (GDI on FBuffer.Canvas) - compute them
+      before the GDI+ Graphics object takes over the DC. }
+    MonthR := GetMonthLabelRect;
+    YearR  := GetYearLabelRect;
+
     G := TGPGraphics.Create(FBuffer.Canvas.Handle);
     try
       G.SetSmoothingMode(SmoothingModeAntiAlias);
@@ -1355,17 +1392,19 @@
       FmtCenter.SetLineAlignment(StringAlignmentCenter);
       FmtCenter.SetAlignment(StringAlignmentCenter);
 
-      FmtLeft := TGPStringFormat.Create;
+      { Typographic format (copy - the shared GenericTypographic instance must
+        not be freed): no extra GDI+ side padding, so the drawn month/year
+        positions match MeasureTitleText (GDI). }
+      FmtLeft := TGPStringFormat.Create(TGPStringFormat.GenericTypographic);
       FmtLeft.SetLineAlignment(StringAlignmentCenter);
       FmtLeft.SetAlignment(StringAlignmentNear);
+      // Header labels are single-line - never wrap
+      FmtLeft.SetFormatFlags(FmtLeft.GetFormatFlags or StringFormatFlagsNoWrap);
 
       try
         HR      := GetHeaderRect;
         BtnPrev := GetPrevBtnRect;
         BtnNext := GetNextBtnRect;
-        MonthR  := GetMonthLabelRect;
-        YearR   := GetYearLabelRect;
-
         MonthStr := FmtSettings.LongMonthNames[FViewMonth];
         YearStr  := IntToStr(FViewYear);
 
@@ -1579,6 +1618,8 @@
       FmtLeft := TGPStringFormat.Create;
       FmtLeft.SetLineAlignment(StringAlignmentCenter);
       FmtLeft.SetAlignment(StringAlignmentNear);
+      // Header labels are single-line - never wrap
+      FmtLeft.SetFormatFlags(StringFormatFlagsNoWrap);
 
       try
         HR      := GetHeaderRect;
@@ -1797,6 +1838,8 @@
       FmtLeft := TGPStringFormat.Create;
       FmtLeft.SetLineAlignment(StringAlignmentCenter);
       FmtLeft.SetAlignment(StringAlignmentNear);
+      // Header labels are single-line - never wrap
+      FmtLeft.SetFormatFlags(StringFormatFlagsNoWrap);
 
       try
         // --- HEADER: year range ---
@@ -2237,11 +2280,14 @@
     ComputeScale;
 
     { The list adapts to the component width, but does not go below
-      DROPDOWN_MIN_WIDTH, so the calendar layout stays readable. With a list
+      GetRequiredBodyWidth (longest month name + centered year + buttons,
+      min. DROPDOWN_MIN_WIDTH), so the calendar layout stays readable. With a list
       wider than the field, the side edges do not form a single line, so we remove
       the "step" at the junction by sliding the list 1 px onto the field (see below)
       and painting the accent over the contact segment. }
-    FBodyW := Max(FDatePicker.Width, ScalePx(DROPDOWN_MIN_WIDTH));
+    { Field wider than the required width -> dropdown = field width.
+      Otherwise the width is computed from the month names of the locale. }
+    FBodyW := Max(FDatePicker.Width, GetRequiredBodyWidth);
     FBodyH := ScalePx(340);
 
     { shadow margin (like in CWSPopupMenu / CWSComboBox) }
@@ -2293,7 +2339,7 @@
 
     { Actual contact range with the component on the junction edge (the intersection
       of the horizontal projection of the control and the list body) — in pixels relative to the left
-      edge of the body. The list is sometimes wider than the field (FBodyW = max(field width, 300)),
+      edge of the body. The list is sometimes wider than the field (FBodyW = max(field width, GetRequiredBodyWidth)),
       so the contact covers only part of the edge; the rest is "free". }
     GetWindowRect(FDatePicker.Handle, WR);
     FContactL := WR.Left  - BodyLeftScreen;
