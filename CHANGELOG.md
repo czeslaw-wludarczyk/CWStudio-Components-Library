@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.14] — 2026-10-09
+
+- **Fix** `TCWSDatePicker`: **the accent bar no longer sticks out past the rounded bottom corners when the calendar opens upwards.** While dropped down the bar was filled across the full width without a clip. It is now always clipped to the field shape (`CreateBodyPath` with the current `RoundTop`/`RoundBottom`), as in `TCWSComboBox` 1.9.13.
+- **Fix** `TCWSDatePicker`: **the open calendar and the field cast one shared shadow.** The shadow used to wrap only the calendar and was erased over the whole field rect, so it stopped abruptly at the field. `TCWSCalendarDropdown.BuildShadow` now rasterizes the calendar and the field silhouette (straight corners on the calendar side, `CornerRadius` on the free side) together, and erases the shadow only under that silhouette. The dropdown window (`ShowPopup`) now spans the field plus its shadow margin; the field area stays transparent and click-through. The 1 px overlap and the contact line at the junction are unchanged.
+
+## [1.9.13] — 2026-10-09
+
+- **Fix** `TCWSComboBox`: **the accent bar no longer sticks out past the rounded bottom corners when the list opens upwards.** While dropped down the bar was filled across the full width without a clip; that only looked right when the list opened downwards (straight bottom edge). The bar is now always clipped to the control shape (`CreateBodyPath` with the current `RoundTop`/`RoundBottom`), so with a large `CornerRadius` and the list above the field it follows the rounded corners. The unused `CreateRoundRectPath` helper was removed.
+- **Fix** `TCWSComboBox`: **the open list and the field cast one shared shadow.** The shadow used to wrap only the list and was erased over the whole ComboBox rect, so it stopped abruptly at the field and the open control looked half-shadowed. `BuildShadow` now rasterizes the list and the ComboBox silhouette (straight corners on the list side, `CornerRadius` on the free side) together, and erases the shadow only under that silhouette, so it also shows around the field's rounded corners. The dropdown window (`ShowPopup`) now spans the field plus its shadow margin; the field area stays transparent and click-through.
+
 ## [1.9.12] — 2026-10-05
 
 - **Change** `TCWSDatePicker`: **the calendar title now reads as one left-aligned line, "<month> <year>", like the Windows 11 calendar.** Previously the month name filled the left half of the label area and the year sat at the start of the right half, so a short month left a wide gap before the year. The year now starts right after the month name and one space (`GetMonthYearSplitX`); the month and year stay separately clickable, and their hit zones follow the new positions. The prev/next buttons stay on the right.

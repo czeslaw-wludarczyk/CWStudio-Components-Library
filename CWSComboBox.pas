@@ -284,7 +284,6 @@ type
     function GetParentBgColor: TColor;
     procedure DrawParentBackground(DC: HDC; ARadius: Single);
     function MakeGPColor(AColor: TColor; Alpha: Byte = 255): Cardinal;
-    function CreateRoundRectPath(X, Y, W, H, R: Single): TGPGraphicsPath;
     function Scale(Value: Integer): Integer;
     function ScaleF(Value: Single): Single;
     function GetTextMarginL: Integer;
@@ -1188,10 +1187,10 @@ end;
 
 procedure TCWSDropdownWindow.BuildShadow;
 var
-  Cov: TBytes;
-  N, i, YOff, ShTop, R: Integer;
+  Cov, Mask: TBytes;
+  N, i, YOff, ShTop, R, CR, CW, CH: Integer;
   rTL, rTR, rBL, rBR: Integer;
-  cx0, cy0, cx1, cy1, X, Y: Integer;
+  cTL, cTR, cBL, cBR: Integer;
 begin
   FHasShadow := FCombo.FDropdownShadowEnabled and (FShadow > 0) and (FBlur > 0);
   SetLength(FShadowBits, 0);
@@ -1201,7 +1200,7 @@ begin
 
   R := Round(CornerRadiusPx);
   { Corners on the ComboBox contact side are straight (they sit flat), the
-    opposite ones are rounded — the shadow softly wraps the list on three sides. }
+    opposite ones are rounded. }
   if FOpenedUp then
   begin
     rTL := R; rTR := R; rBL := 0; rBR := 0;
@@ -1211,22 +1210,38 @@ begin
     rTL := 0; rTR := 0; rBL := R; rBR := R;
   end;
 
-  { Full, soft shadow around the whole body (the margin is now on all sides).
-    The shadow falls slightly downward (consistent light direction). }
+  { ComboBox silhouette: straight corners on the list side, its own radius on
+    the free side (matches TCWSComboBox.PaintToBuffer while dropped down). }
+  CR := Round(FCombo.ScaleF(FCombo.FCornerRadius));
+  if FOpenedUp then
+  begin
+    cTL := 0; cTR := 0; cBL := CR; cBR := CR;
+  end
+  else
+  begin
+    cTL := CR; cTR := CR; cBL := 0; cBR := 0;
+  end;
+  CW := FCtrlLocal.Right - FCtrlLocal.Left;
+  CH := FCtrlLocal.Bottom - FCtrlLocal.Top;
+
+  { One soft shadow around list + ComboBox together, so the open control reads
+    as a single floating shape. The shadow falls slightly downward
+    (consistent light direction). }
   YOff  := FShadowOffset;
   ShTop := BodyTop + YOff;
   RasterRoundRectAlpha4(@Cov[0], FWinW, FWinH,
     BodyLeft, ShTop, FBodyW, FBodyH, rTL, rTR, rBL, rBR);
+  RasterRoundRectAlpha4(@Cov[0], FWinW, FWinH,
+    FCtrlLocal.Left, FCtrlLocal.Top + YOff, CW, CH, cTL, cTR, cBL, cBR);
   BoxBlurAlpha(@Cov[0], FWinW, FWinH, Max(1, FBlur div 3), 3);
 
-  { Erase the shadow over the ComboBox rect, so it does not darken it. }
-  cx0 := Max(0, FCtrlLocal.Left);
-  cy0 := Max(0, FCtrlLocal.Top);
-  cx1 := Min(FWinW, FCtrlLocal.Right);
-  cy1 := Min(FWinH, FCtrlLocal.Bottom);
-  for Y := cy0 to cy1 - 1 do
-    for X := cx0 to cx1 - 1 do
-      Cov[Y * FWinW + X] := 0;
+  { Erase the shadow under the ComboBox silhouette (not its whole rect), so it
+    does not darken the control but still shows around its rounded corners. }
+  SetLength(Mask, N);
+  RasterRoundRectAlpha4(@Mask[0], FWinW, FWinH,
+    FCtrlLocal.Left, FCtrlLocal.Top, CW, CH, cTL, cTR, cBL, cBR);
+  for i := 0 to N - 1 do
+    if Mask[i] <> 0 then Cov[i] := 0;
 
   SetLength(FShadowBits, N * 4);
   for i := 0 to N - 1 do
@@ -1690,24 +1705,28 @@ begin
   GetMonitorInfo(Mon, @MonInfo);
   MonR := MonInfo.rcWork;
 
-  { Opening direction + full, symmetric shadow margin on all sides.
-    The list sits against the ComboBox edge (without overlapping it). }
+  GetWindowRect(FCombo.Handle, ComboRect);
+
+  { Opening direction. The list sits against the ComboBox edge (without
+    overlapping it). }
   if Y + FBodyH > MonR.Bottom then
   begin
     FOpenedUp     := True;
     ComboTop      := FCombo.ClientToScreen(Point(0, 0)).Y;
     BodyTopScreen := ComboTop - FBodyH;
     if BodyTopScreen < MonR.Top then BodyTopScreen := MonR.Top;
-    FMarginTop    := FShadow;
-    FMarginBottom := FShadow;
   end
   else
   begin
     FOpenedUp     := False;
     BodyTopScreen := Y;
-    FMarginTop    := FShadow;
-    FMarginBottom := FShadow;
   end;
+
+  { The window covers the list AND the ComboBox, each with the full shadow
+    margin — list + ComboBox cast one shared shadow (see BuildShadow). The
+    ComboBox area stays transparent and click-through. }
+  FMarginTop    := FShadow + Max(0, BodyTopScreen - ComboRect.Top);
+  FMarginBottom := FShadow + Max(0, ComboRect.Bottom - (BodyTopScreen + FBodyH));
 
   BodyLeftScreen := X;
   if BodyLeftScreen + FBodyW > MonR.Right then BodyLeftScreen := MonR.Right - FBodyW;
@@ -1722,7 +1741,6 @@ begin
 
   { ComboBox rect relative to the window — there the shadow is erased and clicks
     are passed "underneath". }
-  GetWindowRect(FCombo.Handle, ComboRect);
   FCtrlLocal := Rect(ComboRect.Left - FWinLeft, ComboRect.Top - FWinTop,
     ComboRect.Right - FWinLeft, ComboRect.Bottom - FWinTop);
   FCtrlScreen := ComboRect;
@@ -2075,21 +2093,6 @@ var C: TColor;
 begin
   C      := ColorToRGB(AColor);
   Result := Winapi.GDIPAPI.MakeColor(Alpha, GetRValue(C), GetGValue(C), GetBValue(C));
-end;
-
-function TCWSComboBox.CreateRoundRectPath(X, Y, W, H, R: Single): TGPGraphicsPath;
-var D: Single;
-begin
-  Result := TGPGraphicsPath.Create;
-  if R <= 0 then begin Result.AddRectangle(MakeRect(X, Y, W, H)); Exit; end;
-  D := R * 2;
-  if D > H then D := H;
-  if D > W then D := W;
-  Result.AddArc(X,         Y,         D, D, 180, 90);
-  Result.AddArc(X + W - D, Y,         D, D, 270, 90);
-  Result.AddArc(X + W - D, Y + H - D, D, D,   0, 90);
-  Result.AddArc(X,         Y + H - D, D, D,  90, 90);
-  Result.CloseFigure;
 end;
 
 function TCWSComboBox.Scale(Value: Integer): Integer;
@@ -2641,26 +2644,19 @@ begin
       try G.DrawPath(Pen, Path); finally Pen.Free; end;
     finally Path.Free; end;
 
-    { Accent bar }
+    { Accent bar — always clipped to the control shape, so it never sticks out
+      past rounded bottom corners (e.g. list opened upwards). }
     if (FFocused or FDroppedDown) and Enabled then
     begin
       AccentH := Scale(2);
       G.SetSmoothingMode(SmoothingModeNone);
       G.SetPixelOffsetMode(PixelOffsetModeNone);
-      if FDroppedDown then
-      begin
-        Brush := TGPSolidBrush.Create(MakeGPColor(FAccentColor));
-        try G.FillRectangle(Brush, 0.0, H - AccentH, W, AccentH + 0.0);
-        finally Brush.Free; end;
-      end else
-      begin
-        Path := CreateRoundRectPath(0.0, 0.0, W, H, R);
-        try G.SetClip(Path); finally Path.Free; end;
-        Brush := TGPSolidBrush.Create(MakeGPColor(FAccentColor));
-        try G.FillRectangle(Brush, 0.0, H - AccentH, W, AccentH + 0.0);
-        finally Brush.Free; end;
-        G.ResetClip;
-      end;
+      Path := CreateBodyPath(0.0, 0.0, W, H, R, RoundTop, RoundBottom);
+      try G.SetClip(Path); finally Path.Free; end;
+      Brush := TGPSolidBrush.Create(MakeGPColor(FAccentColor));
+      try G.FillRectangle(Brush, 0.0, H - AccentH, W, AccentH + 0.0);
+      finally Brush.Free; end;
+      G.ResetClip;
       G.SetSmoothingMode(SmoothingModeAntiAlias);
       G.SetPixelOffsetMode(PixelOffsetModeHalf);
     end;

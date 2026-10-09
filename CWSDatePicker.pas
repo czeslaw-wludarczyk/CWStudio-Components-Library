@@ -1164,11 +1164,11 @@
 
   procedure TCWSCalendarDropdown.BuildShadow;
   var
-    Cov: TBytes;
-    N, i, YOff, ShTop, R: Integer;
+    Cov, Mask: TBytes;
+    N, i, YOff, ShTop, R, CR, CW, CH: Integer;
     rTL, rTR, rBL, rBR: Integer;
+    cTL, cTR, cBL, cBR: Integer;
     aTL, aTR, aBR, aBL: Boolean;
-    cx0, cy0, cx1, cy1, X, Y: Integer;
   begin
     FHasShadow := FDatePicker.FDropdownShadowEnabled and (FShadow > 0) and (FBlur > 0);
     SetLength(FShadowBits, 0);
@@ -1184,23 +1184,38 @@
     if aBL then rBL := R else rBL := 0;
     if aBR then rBR := R else rBR := 0;
 
-    { Full, soft shadow around the whole body (the margin is now on all
-      sides). The shadow falls slightly downward (consistent light direction). }
+    { Field silhouette: straight corners on the list side, its own radius on
+      the free side (matches TCWSDatePicker.PaintToBuffer while dropped down). }
+    CR := Round(FDatePicker.ScaleF(FDatePicker.FCornerRadius));
+    if FOpenedUp then
+    begin
+      cTL := 0; cTR := 0; cBL := CR; cBR := CR;
+    end
+    else
+    begin
+      cTL := CR; cTR := CR; cBL := 0; cBR := 0;
+    end;
+    CW := FCtrlLocal.Right - FCtrlLocal.Left;
+    CH := FCtrlLocal.Bottom - FCtrlLocal.Top;
+
+    { One soft shadow around list + field together, so the open control reads
+      as a single floating shape. The shadow falls slightly downward
+      (consistent light direction). }
     YOff  := FShadowOffset;
     ShTop := BodyTop + YOff;
     RasterRoundRectAlpha4(@Cov[0], FWinW, FWinH,
       BodyLeft, ShTop, FBodyW, FBodyH, rTL, rTR, rBL, rBR);
+    RasterRoundRectAlpha4(@Cov[0], FWinW, FWinH,
+      FCtrlLocal.Left, FCtrlLocal.Top + YOff, CW, CH, cTL, cTR, cBL, cBR);
     BoxBlurAlpha(@Cov[0], FWinW, FWinH, Max(1, FBlur div 3), 3);
 
-    { Erase the shadow exactly over the control rect, so it does not darken it.
-      This way the shadow softly surrounds the list and its free corners, but does not fall on the field. }
-    cx0 := Max(0, FCtrlLocal.Left);
-    cy0 := Max(0, FCtrlLocal.Top);
-    cx1 := Min(FWinW, FCtrlLocal.Right);
-    cy1 := Min(FWinH, FCtrlLocal.Bottom);
-    for Y := cy0 to cy1 - 1 do
-      for X := cx0 to cx1 - 1 do
-        Cov[Y * FWinW + X] := 0;
+    { Erase the shadow under the field silhouette (not its whole rect), so it
+      does not darken the field but still shows around its rounded corners. }
+    SetLength(Mask, N);
+    RasterRoundRectAlpha4(@Mask[0], FWinW, FWinH,
+      FCtrlLocal.Left, FCtrlLocal.Top, CW, CH, cTL, cTR, cBL, cBR);
+    for i := 0 to N - 1 do
+      if Mask[i] <> 0 then Cov[i] := 0;
 
     SetLength(FShadowBits, N * 4);
     for i := 0 to N - 1 do
@@ -2305,8 +2320,8 @@
     GetMonitorInfo(Mon, @MonInfo);
     MonR := MonInfo.rcWork;
 
-    { Direction + symmetric shadow margin on all sides. The list sits against
-      the field edge (without overlapping it). }
+    { Opening direction. The list sits against the field edge, overlapping it
+      by 1 px. }
     if Y + FBodyH > MonR.Bottom then
     begin
       FOpenedUp     := True;
@@ -2315,8 +2330,6 @@
         top edge of the field — the "step" at the junction disappears. }
       BodyTopScreen := WR.Top - FBodyH + ScalePx(1);
       if BodyTopScreen < MonR.Top then BodyTopScreen := MonR.Top;
-      FMarginTop    := FShadow;
-      FMarginBottom := FShadow;
     end
     else
     begin
@@ -2324,8 +2337,6 @@
       { Opening down: slide the list 1 px up, so its top edge overlaps the
         bottom edge of the field — the "step" at the junction disappears. }
       BodyTopScreen := Y - ScalePx(1);
-      FMarginTop    := FShadow;
-      FMarginBottom := FShadow;
     end;
 
     { When the list is wider than the component (component narrower than DROPDOWN_MIN_WIDTH),
@@ -2347,6 +2358,12 @@
     if FContactL < 0 then FContactL := 0;
     if FContactR > FBodyW then FContactR := FBodyW;
     if FContactR < FContactL then FContactR := FContactL;
+
+    { The window covers the list AND the field, each with the full shadow
+      margin — list + field cast one shared shadow (see BuildShadow). The field
+      area stays transparent and click-through. }
+    FMarginTop    := FShadow + Max(0, BodyTopScreen - WR.Top);
+    FMarginBottom := FShadow + Max(0, WR.Bottom - (BodyTopScreen + FBodyH));
 
     FWinW    := FBodyW + FMarginSide * 2;
     FWinH    := FBodyH + FMarginTop + FMarginBottom;
@@ -3025,24 +3042,16 @@
       begin
         AccentH := Scale(2);
         G.SetSmoothingMode(SmoothingModeNone);
-        if FDroppedDown then
-        begin
-          { The accent line is always at the bottom of the DatePicker (as in CWSComboBox) — even when
-            the list opens upwards. }
-          Brush := TGPSolidBrush.Create(MakeGPColor(FAccentColor));
-          G.FillRectangle(Brush, MakeRect(0.0, H - AccentH, W, Single(AccentH)));
-          Brush.Free;
-        end
-        else
-        begin
-          Path := CreateRoundRectPath(0.0, 0.0, W, H, R);
-          G.SetClip(Path);
-          Path.Free;
-          Brush := TGPSolidBrush.Create(MakeGPColor(FAccentColor));
-          G.FillRectangle(Brush, MakeRect(0.0, H - AccentH, W, Single(AccentH)));
-          Brush.Free;
-          G.ResetClip;
-        end;
+        { The accent line is always at the bottom of the DatePicker (as in CWSComboBox) — even when
+          the list opens upwards — and always clipped to the field shape, so it never sticks out
+          past rounded bottom corners. }
+        Path := CreateBodyPath(0.0, 0.0, W, H, R, RoundTop, RoundBottom);
+        G.SetClip(Path);
+        Path.Free;
+        Brush := TGPSolidBrush.Create(MakeGPColor(FAccentColor));
+        G.FillRectangle(Brush, MakeRect(0.0, H - AccentH, W, Single(AccentH)));
+        Brush.Free;
+        G.ResetClip;
         G.SetSmoothingMode(SmoothingModeAntiAlias);
       end;
 

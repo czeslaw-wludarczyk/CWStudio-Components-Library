@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.12](https://img.shields.io/badge/version-1.9.12-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.14](https://img.shields.io/badge/version-1.9.14-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -257,7 +257,17 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Historia wersji
 
-**Najnowsza wersja — 1.9.12:**
+**Najnowsza wersja — 1.9.14:**
+
+- **Poprawka** `TCWSDatePicker`: **pasek akcentu nie wystaje już poza zaokrąglone dolne rogi, gdy kalendarz otwiera się w górę.** Pasek jest zawsze przycinany do kształtu pola, tak jak w `TCWSComboBox`.
+- **Poprawka** `TCWSDatePicker`: **otwarty kalendarz i pole rzucają jeden wspólny cień.** Wcześniej cień otaczał tylko kalendarz i urywał się na polu; teraz obejmuje całość, także wokół zaokrąglonych rogów pola.
+
+**Wersja 1.9.13:**
+
+- **Poprawka** `TCWSComboBox`: **pasek akcentu nie wystaje już poza zaokrąglone dolne rogi, gdy lista otwiera się w górę.** Pasek jest zawsze przycinany do kształtu kontrolki, więc przy dużym `CornerRadius` podąża za zaokrągleniem.
+- **Poprawka** `TCWSComboBox`: **otwarta lista i pole rzucają jeden wspólny cień.** Wcześniej cień otaczał tylko listę i urywał się na polu; teraz obejmuje całość, także wokół zaokrąglonych rogów pola.
+
+**Wersja 1.9.12:**
 
 - **Zmiana** `TCWSDatePicker`: **tytuł kalendarza to jedna linia wyrównana do lewej, „<miesiąc> <rok>”, jak w kalendarzu Windows 11.** Rok zaczyna się zaraz po nazwie miesiąca i spacji, a nie w połowie obszaru tytułu; miesiąc i rok nadal są osobno klikalne. Przyciski poprzedni/następny pozostają po prawej.
 - **Zmiana** `TCWSDatePicker`: **lista rozwijana jest tak szeroka, jak wymaga najdłuższy tytuł** — minimalna szerokość wynika z najdłuższej nazwy miesiąca w bieżących ustawieniach regionalnych (nie mniej niż `DROPDOWN_MIN_WIDTH`). Napisy w nagłówku nie są już zawijane.
@@ -762,7 +772,17 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ Version history
 
-**Latest release — 1.9.12:**
+**Latest release — 1.9.14:**
+
+- **Fix** `TCWSDatePicker`: **the accent bar no longer sticks out past the rounded bottom corners when the calendar opens upwards.** The bar is always clipped to the field shape, as in `TCWSComboBox`.
+- **Fix** `TCWSDatePicker`: **the open calendar and the field cast one shared shadow.** Previously the shadow wrapped only the calendar and stopped abruptly at the field; it now surrounds the whole shape, including the field's rounded corners.
+
+**Version 1.9.13:**
+
+- **Fix** `TCWSComboBox`: **the accent bar no longer sticks out past the rounded bottom corners when the list opens upwards.** The bar is always clipped to the control shape, so with a large `CornerRadius` it follows the rounding.
+- **Fix** `TCWSComboBox`: **the open list and the field cast one shared shadow.** Previously the shadow wrapped only the list and stopped abruptly at the field; it now surrounds the whole shape, including the field's rounded corners.
+
+**Version 1.9.12:**
 
 - **Change** `TCWSDatePicker`: **the calendar title is one left-aligned line, "<month> <year>", like the Windows 11 calendar.** The year starts right after the month name and a space instead of halfway across the title area; month and year are still separately clickable. The prev/next buttons stay on the right.
 - **Change** `TCWSDatePicker`: **the dropdown is as wide as the longest title needs** — the minimum width comes from the longest month name in the current locale (never less than `DROPDOWN_MIN_WIDTH`). Header labels no longer wrap.
