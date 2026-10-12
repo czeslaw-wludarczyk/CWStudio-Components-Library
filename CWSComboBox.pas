@@ -1808,7 +1808,7 @@ begin
   inherited Create(AOwner);
   ControlStyle := ControlStyle + [csOpaque];
   Width    := 120;
-  Height   := 35;
+  Height   := 32;
   TabStop  := True;
   Cursor   := crDefault;
 
@@ -2054,7 +2054,7 @@ end;
 
 procedure TCWSComboBox.AdjustHeight;
 var
-  TextH, Padding, NewH: Integer;
+  TextH, NewH: Integer;
   DC: HDC;
   TM: TTextMetric;
 begin
@@ -2067,9 +2067,8 @@ begin
   finally
     ReleaseDC(0, DC);
   end;
-  Padding := Scale(6);
-  NewH    := TextH + Padding * 2;
-  if NewH < Scale(28) then NewH := Scale(28);
+  // WinUI 3 ComboBox: 32 px (MinHeight), taller only for a large font.
+  NewH := Max(Scale(32), TextH + Scale(12));
   if Height <> NewH then
   begin
     Height := NewH;

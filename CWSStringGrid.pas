@@ -38,6 +38,12 @@ type
   TGridRect         = Vcl.Grids.TGridRect;
   TGridOption       = Vcl.Grids.TGridOption;
   TGridOptions      = Vcl.Grids.TGridOptions;
+  TGridCoord        = Vcl.Grids.TGridCoord;
+  TSelectCellEvent  = Vcl.Grids.TSelectCellEvent;
+  TMovedEvent       = Vcl.Grids.TMovedEvent;
+  TFixedCellClickEvent = Vcl.Grids.TFixedCellClickEvent;
+  TGetEditEvent     = Vcl.Grids.TGetEditEvent;
+  TSetEditEvent     = Vcl.Grids.TSetEditEvent;
 
 const
   gdSelected = Vcl.Grids.gdSelected;
@@ -62,14 +68,22 @@ type
     procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
     procedure Click; override;
     procedure DblClick; override;
+    procedure DoEnter; override;
+    procedure DoExit; override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
+    function DoMouseWheelDown(Shift: TShiftState; MousePos: TPoint): Boolean; override;
+    function DoMouseWheelUp(Shift: TShiftState; MousePos: TPoint): Boolean; override;
+    procedure DragOver(Source: TObject; X, Y: Integer; State: TDragState;
+      var Accept: Boolean); override;
+    procedure WndProc(var Message: TMessage); override;
     procedure CMMouseEnter(var Message: TMessage); message CM_MOUSEENTER;
     procedure CMMouseLeave(var Message: TMessage); message CM_MOUSELEAVE;
   public
     constructor Create(AOwner: TComponent); override;
+    procedure DragDrop(Source: TObject; X, Y: Integer); override;
     { Pushes the current theme colors onto the live in-cell editor (if any),
       so a cell being edited repaints immediately on a theme change. }
     procedure RefreshEditorColors;
@@ -153,6 +167,22 @@ type
     FOnKeyPress: TKeyPressEvent;
     FOnTopLeftChanged: TNotifyEvent;
     FOnMouseWheel: TMouseWheelEvent;
+    FOnMouseWheelDown: TMouseWheelUpDownEvent;
+    FOnMouseWheelUp: TMouseWheelUpDownEvent;
+    FOnMouseDown: TMouseEvent;
+    FOnMouseUp: TMouseEvent;
+    FOnMouseMove: TMouseMoveEvent;
+    FOnMouseEnter: TNotifyEvent;
+    FOnMouseLeave: TNotifyEvent;
+    FOnEnter: TNotifyEvent;
+    FOnExit: TNotifyEvent;
+    FOnColumnMoved: TMovedEvent;
+    FOnRowMoved: TMovedEvent;
+    FOnFixedCellClick: TFixedCellClickEvent;
+    FOnGetEditMask: TGetEditEvent;
+    FOnGetEditText: TGetEditEvent;
+    FOnSetEditText: TSetEditEvent;
+    FMouseInside: Boolean;
 
     { Forwarded property access }
     function GetColCount: Integer;
@@ -253,9 +283,18 @@ type
     procedure GridKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure GridKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure GridKeyPress(Sender: TObject; var Key: Char);
+    procedure GridColumnMoved(Sender: TObject; FromIndex, ToIndex: Longint);
+    procedure GridRowMoved(Sender: TObject; FromIndex, ToIndex: Longint);
+    procedure GridFixedCellClick(Sender: TObject; ACol, ARow: Longint);
+    procedure GridGetEditMask(Sender: TObject; ACol, ARow: Longint; var Value: string);
+    procedure GridGetEditText(Sender: TObject; ACol, ARow: Longint; var Value: string);
+    procedure GridSetEditText(Sender: TObject; ACol, ARow: Longint; const Value: string);
+    procedure GridGesture(Sender: TObject; const EventInfo: TGestureEventInfo;
+      var Handled: Boolean);
 
     procedure CMFontChanged(var Msg: TMessage); message CM_FONTCHANGED;
     procedure CMEnabledChanged(var Msg: TMessage); message CM_ENABLEDCHANGED;
+    procedure CMMouseEnter(var Msg: TMessage); message CM_MOUSEENTER;
     procedure CMMouseLeave(var Msg: TMessage); message CM_MOUSELEAVE;
     procedure CMPPIChanged(var Msg: TMessage); message CM_PPICHANGED_GRID;
     procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
@@ -271,6 +310,7 @@ type
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
     procedure ChangeScale(M, D: Integer; isDpiChange: Boolean); override;
 
     { Hooks called from the internal grid }
@@ -279,11 +319,30 @@ type
     procedure DrawGridLine(C: TCanvas; const R: TRect);
     procedure GridClicked;
     procedure GridDblClicked;
+    procedure GridEnter;
+    procedure GridExit;
+    procedure GridMouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+    procedure GridMouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+    procedure GridMouseMove(Shift: TShiftState; X, Y: Integer);
+    procedure GridMouseWheelDown(Shift: TShiftState; MousePos: TPoint; var Handled: Boolean);
+    procedure GridMouseWheelUp(Shift: TShiftState; MousePos: TPoint; var Handled: Boolean);
+    procedure GridDragOver(Source: TObject; X, Y: Integer; State: TDragState;
+      var Accept: Boolean);
+    procedure GridDragDrop(Source: TObject; X, Y: Integer);
+    procedure GridBeginAutoDrag;
+    procedure CompositeMouseEnter;
+    procedure CompositeMouseCheckLeave;
     procedure UpdateFocusState;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure SetFocus; override;
+
+    { Cell hit-testing in this control's own client coordinates — the same space
+      the OnMouseDown / OnMouseUp / OnMouseMove / OnDragOver / OnDragDrop handlers
+      receive X, Y in (the inner grid is inset, so Grid.MouseToCell would be off). }
+    procedure MouseToCell(X, Y: Integer; var ACol, ARow: Longint);
+    function MouseCoord(X, Y: Integer): TGridCoord;
 
     property Grid: TCWSInternalGrid read FGrid;
     { Drawing surface used by the OnDrawCell event — maps to the inner grid's
@@ -363,23 +422,54 @@ type
     property Align;
     property Anchors;
     property Constraints;
+    property DragCursor;
+    property DragKind;
+    property DragMode;
     property Enabled;
     property Font;
     property ParentFont;
+    property ParentShowHint;
     property PopupMenu;
+    property ShowHint;
     property TabOrder;
     property TabStop default True;
+    { Copied onto the inner grid in Loaded — that is the window gestures land on. }
+    property Touch;
     property Visible;
 
     property OnClick: TNotifyEvent read FOnClick write FOnClick;
+    property OnColumnMoved: TMovedEvent read FOnColumnMoved write FOnColumnMoved;
+    property OnContextPopup;
     property OnDblClick: TNotifyEvent read FOnDblClick write FOnDblClick;
-    property OnSelectCell: TSelectCellEvent read FOnSelectCell write FOnSelectCell;
+    property OnDragDrop;
+    property OnDragOver;
     property OnDrawCell: TCWSGridDrawCellEvent read FOnDrawCell write FOnDrawCell;
+    property OnEndDock;
+    property OnEndDrag;
+    property OnEnter: TNotifyEvent read FOnEnter write FOnEnter;
+    property OnExit: TNotifyEvent read FOnExit write FOnExit;
+    property OnFixedCellClick: TFixedCellClickEvent read FOnFixedCellClick write FOnFixedCellClick;
+    property OnGesture;
+    property OnGetEditMask: TGetEditEvent read FOnGetEditMask write FOnGetEditMask;
+    property OnGetEditText: TGetEditEvent read FOnGetEditText write FOnGetEditText;
     property OnKeyDown: TKeyEvent read FOnKeyDown write FOnKeyDown;
-    property OnKeyUp: TKeyEvent read FOnKeyUp write FOnKeyUp;
     property OnKeyPress: TKeyPressEvent read FOnKeyPress write FOnKeyPress;
-    property OnTopLeftChanged: TNotifyEvent read FOnTopLeftChanged write FOnTopLeftChanged;
+    property OnKeyUp: TKeyEvent read FOnKeyUp write FOnKeyUp;
+    property OnMouseActivate;
+    property OnMouseDown: TMouseEvent read FOnMouseDown write FOnMouseDown;
+    property OnMouseEnter: TNotifyEvent read FOnMouseEnter write FOnMouseEnter;
+    property OnMouseLeave: TNotifyEvent read FOnMouseLeave write FOnMouseLeave;
+    property OnMouseMove: TMouseMoveEvent read FOnMouseMove write FOnMouseMove;
+    property OnMouseUp: TMouseEvent read FOnMouseUp write FOnMouseUp;
     property OnMouseWheel: TMouseWheelEvent read FOnMouseWheel write FOnMouseWheel;
+    property OnMouseWheelDown: TMouseWheelUpDownEvent read FOnMouseWheelDown write FOnMouseWheelDown;
+    property OnMouseWheelUp: TMouseWheelUpDownEvent read FOnMouseWheelUp write FOnMouseWheelUp;
+    property OnRowMoved: TMovedEvent read FOnRowMoved write FOnRowMoved;
+    property OnSelectCell: TSelectCellEvent read FOnSelectCell write FOnSelectCell;
+    property OnSetEditText: TSetEditEvent read FOnSetEditText write FOnSetEditText;
+    property OnStartDock;
+    property OnStartDrag;
+    property OnTopLeftChanged: TNotifyEvent read FOnTopLeftChanged write FOnTopLeftChanged;
   end;
 
 implementation
@@ -562,12 +652,29 @@ begin
     FOwner.GridDblClicked;
 end;
 
+procedure TCWSInternalGrid.DoEnter;
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.GridEnter;
+end;
+
+procedure TCWSInternalGrid.DoExit;
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.GridExit;
+end;
+
 procedure TCWSInternalGrid.MouseDown(Button: TMouseButton; Shift: TShiftState;
   X, Y: Integer);
 begin
   inherited;
   if FOwner <> nil then
+  begin
     FOwner.UpdateFocusState;
+    FOwner.GridMouseDown(Button, Shift, X, Y);
+  end;
 end;
 
 procedure TCWSInternalGrid.MouseUp(Button: TMouseButton; Shift: TShiftState;
@@ -575,12 +682,17 @@ procedure TCWSInternalGrid.MouseUp(Button: TMouseButton; Shift: TShiftState;
 begin
   inherited;
   if FOwner <> nil then
+  begin
     FOwner.UpdateScrollbarMetrics;
+    FOwner.GridMouseUp(Button, Shift, X, Y);
+  end;
 end;
 
 procedure TCWSInternalGrid.MouseMove(Shift: TShiftState; X, Y: Integer);
 begin
   inherited;
+  if FOwner <> nil then
+    FOwner.GridMouseMove(Shift, X, Y);
 end;
 
 function TCWSInternalGrid.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
@@ -599,14 +711,73 @@ begin
   end;
 end;
 
+function TCWSInternalGrid.DoMouseWheelDown(Shift: TShiftState;
+  MousePos: TPoint): Boolean;
+begin
+  { Same contract as TControl: a handler that sets Handled stops the grid's own
+    scrolling for this notch. }
+  Result := False;
+  if FOwner <> nil then
+    FOwner.GridMouseWheelDown(Shift, MousePos, Result);
+  if not Result then
+    Result := inherited DoMouseWheelDown(Shift, MousePos);
+end;
+
+function TCWSInternalGrid.DoMouseWheelUp(Shift: TShiftState;
+  MousePos: TPoint): Boolean;
+begin
+  Result := False;
+  if FOwner <> nil then
+    FOwner.GridMouseWheelUp(Shift, MousePos, Result);
+  if not Result then
+    Result := inherited DoMouseWheelUp(Shift, MousePos);
+end;
+
+procedure TCWSInternalGrid.DragOver(Source: TObject; X, Y: Integer;
+  State: TDragState; var Accept: Boolean);
+begin
+  { The drag manager targets the window under the cursor, which over the cells
+    is this inner grid — not the owner the application put OnDragOver on. }
+  inherited;
+  if FOwner <> nil then
+    FOwner.GridDragOver(Source, X, Y, State, Accept);
+end;
+
+procedure TCWSInternalGrid.DragDrop(Source: TObject; X, Y: Integer);
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.GridDragDrop(Source, X, Y);
+end;
+
+procedure TCWSInternalGrid.WndProc(var Message: TMessage);
+begin
+  { DragMode lives on the owner, but the left button goes down on this window,
+    so TControl.WndProc would test our own (dmManual) DragMode and never start
+    an automatic drag. Do here what it does for the owner: start the drag and
+    swallow the click, exactly like a stock TStringGrid with dmAutomatic. }
+  if ((Message.Msg = WM_LBUTTONDOWN) or (Message.Msg = WM_LBUTTONDBLCLK)) and
+     (FOwner <> nil) and (FOwner.DragMode = dmAutomatic) and
+     not (csDesigning in ComponentState) and not FOwner.Dragging then
+  begin
+    FOwner.GridBeginAutoDrag;
+    Exit;
+  end;
+  inherited;
+end;
+
 procedure TCWSInternalGrid.CMMouseEnter(var Message: TMessage);
 begin
   inherited;
+  if FOwner <> nil then
+    FOwner.CompositeMouseEnter;
 end;
 
 procedure TCWSInternalGrid.CMMouseLeave(var Message: TMessage);
 begin
   inherited;
+  if FOwner <> nil then
+    FOwner.CompositeMouseCheckLeave;
 end;
 
 { TCWSStringGrid }
@@ -658,6 +829,13 @@ begin
   FGrid.OnKeyDown := GridKeyDown;
   FGrid.OnKeyUp := GridKeyUp;
   FGrid.OnKeyPress := GridKeyPress;
+  FGrid.OnColumnMoved := GridColumnMoved;
+  FGrid.OnRowMoved := GridRowMoved;
+  FGrid.OnFixedCellClick := GridFixedCellClick;
+  FGrid.OnGetEditMask := GridGetEditMask;
+  FGrid.OnGetEditText := GridGetEditText;
+  FGrid.OnSetEditText := GridSetEditText;
+  FGrid.OnGesture := GridGesture;
 
   FRepeatTimer := TTimer.Create(Self);
   FRepeatTimer.Enabled := False;
@@ -1432,6 +1610,10 @@ var
   Total, Visible, First: Integer;
 begin
   inherited;
+  { Mouse events over the cells reach the inner grid; those over our own chrome
+    (border / custom scrollbars) reach here. Surface both as OnMouseDown. }
+  if Assigned(FOnMouseDown) then
+    FOnMouseDown(Self, Button, Shift, X, Y);
   P := Point(X, Y);
   if (Button = mbLeft) and Enabled then
   begin
@@ -1493,6 +1675,11 @@ var
   WasV, WasH: Boolean;
 begin
   inherited;
+  { A move over our own chrome also primes composite-enter (e.g. the cursor
+    appears directly over the border without crossing the grid first). }
+  CompositeMouseEnter;
+  if Assigned(FOnMouseMove) then
+    FOnMouseMove(Self, Shift, X, Y);
   P := Point(X, Y);
 
   if FVScrollVisible then
@@ -1567,6 +1754,8 @@ procedure TCWSStringGrid.MouseUp(Button: TMouseButton; Shift: TShiftState;
   X, Y: Integer);
 begin
   inherited;
+  if Assigned(FOnMouseUp) then
+    FOnMouseUp(Self, Button, Shift, X, Y);
   { End any track-click auto-repeat the moment the button is released. }
   StopTrackRepeat;
   if FVDragging then
@@ -1590,6 +1779,29 @@ begin
   Invalidate;
 end;
 
+function TCWSStringGrid.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
+  MousePos: TPoint): Boolean;
+begin
+  { The scrollbar strip is part of this outer window (the inner grid is inset),
+    so the wheel is dispatched here when the cursor is over it. Delegate to the
+    inner grid, which scrolls and fires the wheel events exactly as it does when
+    hovered directly. }
+  if (FGrid <> nil) and FGrid.HandleAllocated then
+    Result := FGrid.DoMouseWheel(Shift, WheelDelta, MousePos)
+  else
+    Result := inherited DoMouseWheel(Shift, WheelDelta, MousePos);
+end;
+
+procedure TCWSStringGrid.MouseToCell(X, Y: Integer; var ACol, ARow: Longint);
+begin
+  FGrid.MouseToCell(X - FGrid.Left, Y - FGrid.Top, ACol, ARow);
+end;
+
+function TCWSStringGrid.MouseCoord(X, Y: Integer): TGridCoord;
+begin
+  Result := FGrid.MouseCoord(X - FGrid.Left, Y - FGrid.Top);
+end;
+
 { *** Lifecycle *** }
 
 procedure TCWSStringGrid.CreateParams(var Params: TCreateParams);
@@ -1608,6 +1820,9 @@ end;
 procedure TCWSStringGrid.Loaded;
 begin
   inherited;
+  { Gestures are delivered to the window under the finger — the inner grid —
+    so it needs the gesture setup the designer stored on us. }
+  FGrid.Touch := Touch;
   ApplyColors;
   UpdateGridPosition;
   SyncGridFont;
@@ -1687,7 +1902,159 @@ begin
     FOnDblClick(Self);
 end;
 
+procedure TCWSStringGrid.GridEnter;
+begin
+  { The internal grid is the control that actually receives focus (SetFocus
+    redirects to it), so surface its focus transitions as the owner's. }
+  if Assigned(FOnEnter) then
+    FOnEnter(Self);
+end;
+
+procedure TCWSStringGrid.GridExit;
+begin
+  if Assigned(FOnExit) then
+    FOnExit(Self);
+end;
+
+procedure TCWSStringGrid.GridMouseDown(Button: TMouseButton; Shift: TShiftState;
+  X, Y: Integer);
+begin
+  { Coordinates arrive relative to the inner grid; translate to the owner so the
+    handler sees positions in the composite control's own client space. }
+  if Assigned(FOnMouseDown) then
+    FOnMouseDown(Self, Button, Shift, X + FGrid.Left, Y + FGrid.Top);
+end;
+
+procedure TCWSStringGrid.GridMouseUp(Button: TMouseButton; Shift: TShiftState;
+  X, Y: Integer);
+begin
+  if Assigned(FOnMouseUp) then
+    FOnMouseUp(Self, Button, Shift, X + FGrid.Left, Y + FGrid.Top);
+end;
+
+procedure TCWSStringGrid.GridMouseMove(Shift: TShiftState; X, Y: Integer);
+begin
+  if Assigned(FOnMouseMove) then
+    FOnMouseMove(Self, Shift, X + FGrid.Left, Y + FGrid.Top);
+end;
+
+procedure TCWSStringGrid.GridMouseWheelDown(Shift: TShiftState; MousePos: TPoint;
+  var Handled: Boolean);
+begin
+  if Assigned(FOnMouseWheelDown) then
+    FOnMouseWheelDown(Self, Shift, MousePos, Handled);
+end;
+
+procedure TCWSStringGrid.GridMouseWheelUp(Shift: TShiftState; MousePos: TPoint;
+  var Handled: Boolean);
+begin
+  if Assigned(FOnMouseWheelUp) then
+    FOnMouseWheelUp(Self, Shift, MousePos, Handled);
+end;
+
+procedure TCWSStringGrid.GridDragOver(Source: TObject; X, Y: Integer;
+  State: TDragState; var Accept: Boolean);
+begin
+  { TControl.DragOver raises our OnDragOver (Accept stays False without one). }
+  DragOver(Source, X + FGrid.Left, Y + FGrid.Top, State, Accept);
+end;
+
+procedure TCWSStringGrid.GridDragDrop(Source: TObject; X, Y: Integer);
+begin
+  DragDrop(Source, X + FGrid.Left, Y + FGrid.Top);
+end;
+
+procedure TCWSStringGrid.GridBeginAutoDrag;
+begin
+  { Honours DragKind too — dkDock starts docking the whole control. }
+  BeginAutoDrag;
+end;
+
+procedure TCWSStringGrid.CompositeMouseEnter;
+begin
+  { The owner and the inner grid are distinct windows, so VCL fires its own
+    enter/leave for each as the cursor crosses between them. Collapse both into
+    a single MouseEnter/MouseLeave for the whole composite via FMouseInside. }
+  if not FMouseInside then
+  begin
+    FMouseInside := True;
+    if Assigned(FOnMouseEnter) then
+      FOnMouseEnter(Self);
+  end;
+end;
+
+procedure TCWSStringGrid.CompositeMouseCheckLeave;
+var
+  P: TPoint;
+begin
+  if not FMouseInside then
+    Exit;
+  { Only a real exit from the whole control counts — moving from the chrome onto
+    the grid (or vice-versa) keeps the cursor inside our client rect. }
+  P := ScreenToClient(Mouse.CursorPos);
+  if not ClientRect.Contains(P) then
+  begin
+    FMouseInside := False;
+    if Assigned(FOnMouseLeave) then
+      FOnMouseLeave(Self);
+  end;
+end;
+
 { *** Grid event handlers *** }
+
+procedure TCWSStringGrid.GridColumnMoved(Sender: TObject; FromIndex, ToIndex: Longint);
+begin
+  { Column widths travel with the column, so the horizontal extent may change. }
+  UpdateScrollbarMetrics;
+  Invalidate;
+  if Assigned(FOnColumnMoved) then
+    FOnColumnMoved(Self, FromIndex, ToIndex);
+end;
+
+procedure TCWSStringGrid.GridRowMoved(Sender: TObject; FromIndex, ToIndex: Longint);
+begin
+  UpdateScrollbarMetrics;
+  Invalidate;
+  if Assigned(FOnRowMoved) then
+    FOnRowMoved(Self, FromIndex, ToIndex);
+end;
+
+procedure TCWSStringGrid.GridFixedCellClick(Sender: TObject; ACol, ARow: Longint);
+begin
+  { Raised by Vcl.Grids only with goFixedColClick / goFixedRowClick in Options. }
+  if Assigned(FOnFixedCellClick) then
+    FOnFixedCellClick(Self, ACol, ARow);
+end;
+
+procedure TCWSStringGrid.GridGetEditMask(Sender: TObject; ACol, ARow: Longint;
+  var Value: string);
+begin
+  if Assigned(FOnGetEditMask) then
+    FOnGetEditMask(Self, ACol, ARow, Value);
+end;
+
+procedure TCWSStringGrid.GridGetEditText(Sender: TObject; ACol, ARow: Longint;
+  var Value: string);
+begin
+  { Value already holds Cells[ACol, ARow] (TStringGrid.GetEditText). }
+  if Assigned(FOnGetEditText) then
+    FOnGetEditText(Self, ACol, ARow, Value);
+end;
+
+procedure TCWSStringGrid.GridSetEditText(Sender: TObject; ACol, ARow: Longint;
+  const Value: string);
+begin
+  if Assigned(FOnSetEditText) then
+    FOnSetEditText(Self, ACol, ARow, Value);
+end;
+
+procedure TCWSStringGrid.GridGesture(Sender: TObject;
+  const EventInfo: TGestureEventInfo; var Handled: Boolean);
+begin
+  { Left unhandled, the inner grid's own DoGesture still pans the cells. }
+  if Assigned(OnGesture) then
+    OnGesture(Self, EventInfo, Handled);
+end;
 
 procedure TCWSStringGrid.GridSelectCell(Sender: TObject; ACol, ARow: Longint;
   var CanSelect: Boolean);
@@ -1734,9 +2101,16 @@ begin
   Invalidate;
 end;
 
+procedure TCWSStringGrid.CMMouseEnter(var Msg: TMessage);
+begin
+  inherited;
+  CompositeMouseEnter;
+end;
+
 procedure TCWSStringGrid.CMMouseLeave(var Msg: TMessage);
 begin
   inherited;
+  CompositeMouseCheckLeave;
   { The cursor left the control (or moved onto the child grid window) — drop
     the scrollbar hover state so the thumb returns to its resting size. }
   if not (FVDragging or FHDragging) and (FVAreaHovered or FHAreaHovered) then
