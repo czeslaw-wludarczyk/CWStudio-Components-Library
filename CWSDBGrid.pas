@@ -161,8 +161,12 @@ type
     FOwner: TCWSDBGrid;
     FDrawRow: Integer;        { grid row currently being painted (see DrawCell) }
     FSortShift: TShiftState;  { modifiers of the click that leads to TitleClick }
+    FSelAnchor: TBookmark;    { dgMultiSelect: anchor row of a Shift+click range }
     function DataRowNumber: Integer;
+    function MultiSelectActive: Boolean;
+    procedure SelectRangeToCurrent;
   protected
+    procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure TitleClick(Column: TColumn); override;
     procedure DrawCell(ACol, ARow: Longint; ARect: TRect;
       AState: TGridDrawState); override;
@@ -1023,9 +1027,24 @@ procedure TCWSInternalDBGrid.DrawColumnCell(const Rect: TRect; DataCol: Integer;
   Column: TColumn; State: TGridDrawState);
 var
   Bg, Tx: TColor;
+  CursorShown, Highlight: Boolean;
 begin
   if FOwner <> nil then
   begin
+    { Vcl.Grids flags the cursor cell gdSelected whether or not the grid has
+      focus; dgAlwaysShowSelection decides whether it is shown without focus.
+      With dgMultiSelect the selection lives in SelectedRows instead — tell the
+      painters (and OnDrawColumnCell) about it through gdSelected as well. }
+    CursorShown := (gdSelected in State) and
+      ((dgAlwaysShowSelection in Options) or Focused);
+    if MultiSelectActive and (SelectedRows.Count > 0) then
+      Highlight := SelectedRows.CurrentRowSelected
+    else
+      Highlight := CursorShown;
+    if Highlight then
+      Include(State, gdSelected)
+    else
+      Exclude(State, gdSelected);
     if gdSelected in State then
     begin
       Bg := FOwner.FCellHighlightColor;
@@ -1048,6 +1067,92 @@ begin
   end;
   { Fires the owner's OnDrawColumnCell (or DefaultDrawColumnCell) — see Create }
   inherited DrawColumnCell(Rect, DataCol, Column, State);
+end;
+
+function TCWSInternalDBGrid.MultiSelectActive: Boolean;
+begin
+  Result := (dgMultiSelect in Options) and (DataLink <> nil) and DataLink.Active;
+end;
+
+procedure TCWSInternalDBGrid.SelectRangeToCurrent;
+var
+  DS: TDataSet;
+  Target: TBookmark;
+  Dir: Integer;
+begin
+  { Selects every record between FSelAnchor and the current record (inclusive),
+    replacing the previous selection — Explorer-style Shift+click. }
+  DS := DataSource.DataSet;
+  if (Length(FSelAnchor) = 0) or not DS.BookmarkValid(FSelAnchor) then
+  begin
+    FSelAnchor := DS.Bookmark;
+    Exit;
+  end;
+  Target := DS.Bookmark;
+  Dir := DS.CompareBookmarks(FSelAnchor, Target);
+  DS.DisableControls;
+  try
+    SelectedRows.Clear;
+    DS.Bookmark := FSelAnchor;
+    while True do
+    begin
+      SelectedRows.CurrentRowSelected := True;
+      if DS.CompareBookmarks(DS.Bookmark, Target) = 0 then
+        Break;
+      if Dir < 0 then
+        DS.Next
+      else
+        DS.Prior;
+      if DS.Eof or DS.Bof then
+      begin
+        SelectedRows.CurrentRowSelected := True;
+        Break;
+      end;
+    end;
+    DS.Bookmark := Target;
+  finally
+    DS.EnableControls;
+  end;
+  Invalidate;
+end;
+
+procedure TCWSInternalDBGrid.KeyDown(var Key: Word; Shift: TShiftState);
+var
+  DS: TDataSet;
+begin
+  { Ctrl+A selects every record when multi-select is on (not while editing,
+    where it belongs to the in-place editor). }
+  if (Key = Ord('A')) and (Shift = [ssCtrl]) and MultiSelectActive and
+    not EditorMode then
+  begin
+    DS := DataSource.DataSet;
+    FSelAnchor := DS.Bookmark;
+    DS.DisableControls;
+    try
+      SelectedRows.Clear;
+      DS.First;
+      while not DS.Eof do
+      begin
+        SelectedRows.CurrentRowSelected := True;
+        DS.Next;
+      end;
+      DS.Bookmark := FSelAnchor;
+    finally
+      DS.EnableControls;
+    end;
+    Invalidate;
+    if FOwner <> nil then
+      FOwner.Invalidate;
+    Key := 0;
+    Exit;
+  end;
+
+  inherited;
+
+  { Plain navigation moves the Shift+click anchor along with the cursor }
+  if MultiSelectActive and not (ssShift in Shift) and
+    (Key in [VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT, VK_HOME, VK_END]) then
+    FSelAnchor := DataSource.DataSet.Bookmark;
 end;
 
 procedure TCWSInternalDBGrid.UpdateScrollBar;
@@ -1146,11 +1251,30 @@ end;
 
 procedure TCWSInternalDBGrid.MouseDown(Button: TMouseButton; Shift: TShiftState;
   X, Y: Integer);
+var
+  Cell: TGridCoord;
+  OnDataRow: Boolean;
 begin
   { TitleClick carries no modifier state, and it is raised from MouseUp — so
     remember the modifiers of the click that started it. }
   FSortShift := Shift;
+  { Only a left click on a data row touches the multi-select state (the base
+    grid handles plain and Ctrl+click; Shift+click range is ours). }
+  OnDataRow := (Button = mbLeft) and not (ssDouble in Shift) and
+    MultiSelectActive and not Sizing(X, Y);
+  if OnDataRow then
+  begin
+    Cell := MouseCoord(X, Y);
+    OnDataRow := (Cell.X >= 0) and (Cell.Y >= Ord(dgTitles in Options));
+  end;
   inherited;
+  if OnDataRow and MultiSelectActive then
+  begin
+    if (ssShift in Shift) and not (ssCtrl in Shift) then
+      SelectRangeToCurrent
+    else
+      FSelAnchor := DataSource.DataSet.Bookmark;
+  end;
   if FOwner <> nil then
   begin
     FOwner.UpdateFocusState;

@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.16](https://img.shields.io/badge/version-1.9.16-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.18](https://img.shields.io/badge/version-1.9.18-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -71,7 +71,7 @@ CWStudio to zestaw nowoczesnych, wysokiej jakości komponentów VCL dla środowi
 |-----------|------|
 | **`TCWSListBox`** | Lista (ListBox) w stylu Fluent z dyskretnym, zanikającym paskiem przewijania (tak jak w `TCWSMemo`). |
 | **`TCWSStringGrid`** | Płaska siatka tekstowa (StringGrid) z fluentowymi paskami przewijania (pionowy + poziomy). Konfigurowalne kolory (tło komórek, tło poza komórkami, linie siatki, komórki *fixed*, podświetlenie komórki, ramka), naprzemienne kolorowanie wierszy (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), zaokrąglone narożniki z możliwością wyłączenia każdego z osobna oraz komórki bez efektu 3D. |
-| **`TCWSDBGrid`** | Siatka **danych** (DBGrid) w stylu Fluent — opakowuje wewnętrzny `TDBGrid`, więc zachowuje jego pełny interfejs (`DataSource`, `Columns`, `Options`, zdarzenia `OnDrawColumnCell` / `OnCellClick` / `OnTitleClick` itd.). Fluentowe paski przewijania (pionowy + poziomy), konfigurowalne kolory (tło, komórki, tekst, linie siatki, komórki *fixed*, podświetlenie), **sortowanie kliknięciem w nagłówek** z obsługą wielu kolumn i wskaźnikami w tytule (`SortEnabled`, `MultiSortMode`, `MaxSortColumns`, `SortBy` / `ClearSort`, `OnSortApply`), naprzemienne kolorowanie wierszy liczone po rekordach (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), zaokrąglone narożniki z możliwością wyłączenia każdego z osobna, automatyczne dopasowanie szerokości kolumn (`AutoFitColumns`), regulowana wysokość wiersza i nagłówka oraz pionowe wyśrodkowanie tekstu. |
+| **`TCWSDBGrid`** | Siatka **danych** (DBGrid) w stylu Fluent — opakowuje wewnętrzny `TDBGrid`, więc zachowuje jego pełny interfejs (`DataSource`, `Columns`, `Options`, zdarzenia `OnDrawColumnCell` / `OnCellClick` / `OnTitleClick` itd.). Fluentowe paski przewijania (pionowy + poziomy), konfigurowalne kolory (tło, komórki, tekst, linie siatki, komórki *fixed*, podświetlenie), **sortowanie kliknięciem w nagłówek** z obsługą wielu kolumn i wskaźnikami w tytule (`SortEnabled`, `MultiSortMode`, `MaxSortColumns`, `SortBy` / `ClearSort`, `OnSortApply`), naprzemienne kolorowanie wierszy liczone po rekordach (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), zaokrąglone narożniki z możliwością wyłączenia każdego z osobna, automatyczne dopasowanie szerokości kolumn (`AutoFitColumns`), regulowana wysokość wiersza i nagłówka, pionowe wyśrodkowanie tekstu oraz zaznaczanie wielu rekordów (`dgMultiSelect`, Ctrl+klik, Shift+klik, Ctrl+A). |
 
 ### Wskaźniki postępu
 
@@ -257,9 +257,10 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.16:**
+**Najnowsza wersja — 1.9.18:**
 
-- **Zmiana** `TCWSComboBox`, `TCWSDatePicker`: **domyślna wysokość 32 px, taka sama jak w `TCWSEdit` / `TCWSEditMask`.** Wcześniej wysokość liczona była jako `Max(28, wysokość tekstu + 12)`, co przy Segoe UI 10 pt dawało 29 px — ComboBox i DatePicker obok edita były o 3 px niższe. Teraz wszystkie pola używają wzoru `Max(32, wysokość tekstu + 12)` (`MinHeight` z WinUI 3) i rosną tylko przy dużej czcionce. Przy `AutoSizeHeight = True` istniejące kontrolki urosną do 32 px przy ładowaniu formularza.
+- **Poprawka** `TCWSButton`: **`BorderWidth = 0` nie ginie po wczytaniu formularza.** Style `bsNeutral` / `bsPrimary` przy nakładaniu kolorów ustawiały też `BorderWidth := 1`, a `Loaded` zawsze nakłada styl ponownie — ramka (np. szara `$D1D1D1`) wracała w każdym stanie przycisku. Styl ustawia teraz tylko kolory. Grubość ramki skaluje się z DPI także dla aktywnego przycisku.
+- **Poprawka** `TCWSButton`: **przycisk `bsPrimary` po wczytaniu z DFM zostaje `bsPrimary`.** Settery kolorów przełączały styl na `bsCustom` także podczas wczytywania DFM. Teraz robią to tylko przy zmianie koloru przez użytkownika.
 
 Pełna historia zmian znajduje się w pliku [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -346,7 +347,7 @@ CWStudio is a library of modern, high-quality VCL components for Delphi, designe
 |-----------|-------------|
 | **`TCWSListBox`** | Fluent-style list box with a subtle auto-hiding scrollbar (same as `TCWSMemo`). |
 | **`TCWSStringGrid`** | Flat text grid (StringGrid) with Fluent scrollbars (vertical + horizontal). Configurable colors (cell background, area-beyond-cells background, grid lines, fixed cells, cell highlight, border), alternating row colors (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), rounded corners with each corner independently switchable, and flat (no 3D) cells. |
-| **`TCWSDBGrid`** | Fluent-style **data-aware** grid (DBGrid) — wraps an internal `TDBGrid`, so it keeps the full DBGrid surface (`DataSource`, `Columns`, `Options`, events `OnDrawColumnCell` / `OnCellClick` / `OnTitleClick`, etc.). Fluent scrollbars (vertical + horizontal), configurable colors (background, cells, text, grid lines, fixed cells, highlight), **sorting by clicking a title** with multi-column support and in-title indicators (`SortEnabled`, `MultiSortMode`, `MaxSortColumns`, `SortBy` / `ClearSort`, `OnSortApply`), alternating row colors banded by record (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), rounded corners with each corner independently switchable, automatic column-width fitting (`AutoFitColumns`), adjustable row and title height, and vertical text centering. |
+| **`TCWSDBGrid`** | Fluent-style **data-aware** grid (DBGrid) — wraps an internal `TDBGrid`, so it keeps the full DBGrid surface (`DataSource`, `Columns`, `Options`, events `OnDrawColumnCell` / `OnCellClick` / `OnTitleClick`, etc.). Fluent scrollbars (vertical + horizontal), configurable colors (background, cells, text, grid lines, fixed cells, highlight), **sorting by clicking a title** with multi-column support and in-title indicators (`SortEnabled`, `MultiSortMode`, `MaxSortColumns`, `SortBy` / `ClearSort`, `OnSortApply`), alternating row colors banded by record (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), rounded corners with each corner independently switchable, automatic column-width fitting (`AutoFitColumns`), adjustable row and title height, vertical text centering, and multi-record selection (`dgMultiSelect`, Ctrl+click, Shift+click, Ctrl+A). |
 
 ### Progress indicators
 
@@ -533,9 +534,10 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.16:**
+**Latest release — 1.9.18:**
 
-- **Changed** `TCWSComboBox`, `TCWSDatePicker`: **default height 32 px, the same as `TCWSEdit` / `TCWSEditMask`.** The height used to be `Max(28, text height + 12)`, which gave 29 px at Segoe UI 10 pt, so a combo box or date picker next to an edit sat 3 px shorter. All fields now use `Max(32, text height + 12)` (the WinUI 3 `MinHeight`) and grow only for a large font. With `AutoSizeHeight = True`, existing controls grow to 32 px when the form loads.
+- **Fixed** `TCWSButton`: **`BorderWidth = 0` survives loading the form.** The `bsNeutral` / `bsPrimary` styles also set `BorderWidth := 1` when applying their colors, and `Loaded` always re-applies the style, so the border (e.g. grey `$D1D1D1`) came back in every button state. A style now sets colors only. The border width is also DPI-scaled for an enabled button.
+- **Fixed** `TCWSButton`: **a `bsPrimary` button stays `bsPrimary` after loading from the DFM.** The color setters switched the style to `bsCustom` while the DFM was being read, too. They now do so only when the user changes a color.
 
 The full change history is kept in [`CHANGELOG.md`](CHANGELOG.md).
 

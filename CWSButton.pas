@@ -138,6 +138,7 @@ type
     procedure SetButtonStyle(const Value: TCWSButtonStyle);
 
     procedure ApplyStyleColors;
+    procedure SwitchToCustomStyle;
     procedure ApplyNeutralColors;
     procedure ApplyPrimaryColors;
 
@@ -422,7 +423,8 @@ begin
   FBorderColorNormal  := $00D1D1D1;
   FBorderColorHover   := $00C7C7C7;
   FBorderColorPressed := $00B3B3B3;
-  FBorderWidth        := 1;
+  { BorderWidth is not part of the style — it is left as the user set it, so
+    BorderWidth = 0 from the DFM survives Loaded (which re-applies the style). }
 
   FCaptionColorNormal  := $00242424;
   FCaptionColorHover   := $00242424;
@@ -442,7 +444,7 @@ begin
   FBorderColorNormal  := $00BD6C0F;
   FBorderColorHover   := $00A35E11;
   FBorderColorPressed := $005E3B0C;
-  FBorderWidth        := 1;
+  { BorderWidth left untouched — see ApplyNeutralColors }
 
   FCaptionColorNormal  := $00FFFFFF;
   FCaptionColorHover   := $00FFFFFF;
@@ -993,7 +995,7 @@ begin
     else if FHovering then FbckShape.Brush.Color := FbckHoverColor
     else FbckShape.Brush.Color := FNormalColor;
 
-    FbckShape.Pen.Width := FBorderWidth;
+    FbckShape.Pen.Width := MulDiv(FBorderWidth, CurrentPPI, 96);
     if FBorderWidth > 0 then
     begin
       FbckShape.Pen.Style := TShapePenStyle.Solid;
@@ -1120,12 +1122,21 @@ end;
 
 { --- Color setters: switch to bsCustom --- }
 
+procedure TCWSButton.SwitchToCustomStyle;
+begin
+  { Only an edit made by the user turns the style into bsCustom. While the DFM
+    is being read the colors are always streamed (stored True), so a bsPrimary
+    button would otherwise come back as bsCustom on every load. }
+  if (FButtonStyle <> bsCustom) and not (csLoading in ComponentState) then
+    FButtonStyle := bsCustom;
+end;
+
 procedure TCWSButton.SetBckColor(const Value: TColor);
 begin
   if FbckHoverColor <> Value then
   begin
     FbckHoverColor := Value;
-    if FButtonStyle <> bsCustom then FButtonStyle := bsCustom;
+    SwitchToCustomStyle;
     UpdateColor;
   end;
 end;
@@ -1135,7 +1146,7 @@ begin
   if FbckPressedColor <> Value then
   begin
     FbckPressedColor := Value;
-    if FButtonStyle <> bsCustom then FButtonStyle := bsCustom;
+    SwitchToCustomStyle;
     UpdateColor;
   end;
 end;
@@ -1145,7 +1156,7 @@ begin
   if FNormalColor <> Value then
   begin
     FNormalColor := Value;
-    if FButtonStyle <> bsCustom then FButtonStyle := bsCustom;
+    SwitchToCustomStyle;
     UpdateColor;
   end;
 end;
@@ -1155,7 +1166,7 @@ begin
   if FBorderColorNormal <> Value then
   begin
     FBorderColorNormal := Value;
-    if FButtonStyle <> bsCustom then FButtonStyle := bsCustom;
+    SwitchToCustomStyle;
     UpdateColor;
   end;
 end;
@@ -1165,7 +1176,7 @@ begin
   if FBorderColorHover <> Value then
   begin
     FBorderColorHover := Value;
-    if FButtonStyle <> bsCustom then FButtonStyle := bsCustom;
+    SwitchToCustomStyle;
     UpdateColor;
   end;
 end;
@@ -1175,7 +1186,7 @@ begin
   if FBorderColorPressed <> Value then
   begin
     FBorderColorPressed := Value;
-    if FButtonStyle <> bsCustom then FButtonStyle := bsCustom;
+    SwitchToCustomStyle;
     UpdateColor;
   end;
 end;
@@ -1190,7 +1201,7 @@ begin
   if FCaptionColorNormal <> Value then
   begin
     FCaptionColorNormal := Value;
-    if FButtonStyle <> bsCustom then FButtonStyle := bsCustom;
+    SwitchToCustomStyle;
     UpdateColor;
   end;
 end;
@@ -1200,7 +1211,7 @@ begin
   if FCaptionColorHover <> Value then
   begin
     FCaptionColorHover := Value;
-    if FButtonStyle <> bsCustom then FButtonStyle := bsCustom;
+    SwitchToCustomStyle;
     UpdateColor;
   end;
 end;
@@ -1210,7 +1221,7 @@ begin
   if FCaptionColorPressed <> Value then
   begin
     FCaptionColorPressed := Value;
-    if FButtonStyle <> bsCustom then FButtonStyle := bsCustom;
+    SwitchToCustomStyle;
     UpdateColor;
   end;
 end;
@@ -1230,7 +1241,7 @@ begin
   if FIconColorHover <> Value then
   begin
     FIconColorHover := Value;
-    if FButtonStyle <> bsCustom then FButtonStyle := bsCustom;
+    SwitchToCustomStyle;
     UpdateColor;
   end;
 end;
@@ -1240,7 +1251,7 @@ begin
   if FIconColorNormal <> Value then
   begin
     FIconColorNormal := Value;
-    if FButtonStyle <> bsCustom then FButtonStyle := bsCustom;
+    SwitchToCustomStyle;
     UpdateColor;
   end;
 end;
@@ -1250,7 +1261,7 @@ begin
   if FIconColorPressed <> Value then
   begin
     FIconColorPressed := Value;
-    if FButtonStyle <> bsCustom then FButtonStyle := bsCustom;
+    SwitchToCustomStyle;
     UpdateColor;
   end;
 end;

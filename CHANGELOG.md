@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.18] — 2026-10-15
+
+- **Fix** `TCWSButton`: **`BorderWidth = 0` (or any non-default width) survives loading the form.** `ApplyNeutralColors` and `ApplyPrimaryColors` also set `FBorderWidth := 1`, and `Loaded` always calls `ApplyStyleColors`, so with `ButtonStyle = bsNeutral` or `bsPrimary` the width stored in the DFM was reset to 1 and the border (e.g. grey `$D1D1D1` with `bsNeutral`) came back in the normal, hover, pressed, focused and disabled states. The style presets now set colors only; the default width of 1 is still set in the constructor. The enabled-state border width is now DPI-scaled (`MulDiv(BorderWidth, CurrentPPI, 96)`), like the disabled one already was.
+- **Fix** `TCWSButton`: **a `bsPrimary` button keeps its style after loading from the DFM.** The color properties are always streamed (`stored True`), and their setters switched the style to `bsCustom` whenever the value differed from the constructor default, including while the DFM was being read, so every `bsPrimary` button came back as `bsCustom`. The switch is now done by `SwitchToCustomStyle`, which skips it while `csLoading`. Changing a color in the designer or at runtime still switches the style to `bsCustom`. Buttons saved earlier with `bsCustom` because of this need `ButtonStyle` set back to `bsPrimary` once.
+
+## [1.9.17] — 2026-10-15
+
+- **Fix** `TCWSDBGrid`: **rows selected with `dgMultiSelect` are now highlighted.** The internal grid picked the cell colors from `gdSelected` alone, but the base `TCustomDBGrid` never sets that flag for the rows in `SelectedRows` (it checks them separately in `HighlightCell`). The selection was kept but not visible, and a row removed with Ctrl+click still looked selected. A record in `SelectedRows` is now painted in `CellHighlightColor` across the whole row, like a stock `TDBGrid`. While something is selected, the cursor row alone no longer counts, so a row removed with Ctrl+click is drawn as unselected. `OnDrawColumnCell` receives `gdSelected` in `State` for these rows too.
+- **Fix** `TCWSDBGrid`: **`dgAlwaysShowSelection` is respected.** The current cell (or row with `dgRowSelect`) was highlighted even when the grid did not have the focus, because `Vcl.Grids` flags it `gdSelected` regardless of focus. It is now shown only while the grid has the focus or with `dgAlwaysShowSelection`, as in `TCustomDBGrid.HighlightCell`. Rows in `SelectedRows` stay highlighted without the focus, as in the VCL.
+- **New** `TCWSDBGrid`: **Shift+click selects a range of records** with `dgMultiSelect`, from the last clicked row (or the row reached with the arrow keys, PgUp/PgDn, Home/End) to the clicked one, replacing the previous selection. The stock `TDBGrid` supports only Ctrl+click and Shift+arrows.
+- **New** `TCWSDBGrid`: **Ctrl+A selects all records** with `dgMultiSelect` (not while a cell is being edited). The key is consumed, so `OnKeyDown` is not raised for it.
+
 ## [1.9.16] — 2026-10-12
 
 - **Change** `TCWSComboBox`, `TCWSDatePicker`: **default height 32 px, the same as `TCWSEdit` / `TCWSEditMask`.** `AdjustHeight` used `Max(28, text height + 2 × 6)`, which gave 29 px at Segoe UI 10 pt while the edits were 32 px, so a combo box or date picker next to an edit sat 3 px shorter. Both now use the edit formula `Max(32, text height + 12)` — the WinUI 3 `ComboBox` / `DatePicker` `MinHeight` — and grow only for a large font. The constructor default `Height` changed from 35 to 32. With `AutoSizeHeight = True`, existing controls grow to 32 px when the form loads.
