@@ -139,6 +139,7 @@ type
 
     procedure ApplyStyleColors;
     procedure SwitchToCustomStyle;
+    procedure SkipExplicitFont(Reader: TReader);
     procedure ApplyNeutralColors;
     procedure ApplyPrimaryColors;
 
@@ -174,6 +175,7 @@ type
     procedure ActionChange(Sender: TObject; CheckDefaults: Boolean); override;
     procedure Resize; override;
     procedure Loaded; override;
+    procedure DefineProperties(Filer: TFiler); override;
     procedure ChangeScale(M, D: Integer; isDpiChange: Boolean); override;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     procedure CMEnabledChanged(var Message: TMessage); message CM_ENABLEDCHANGED;
@@ -302,8 +304,8 @@ begin
   ParentColor := True;
   DoubleBuffered := True;
 
-  // Do NOT touch Self.Font — leave ParentFont = True (the TCustomControl default).
-  // The default font (Segoe UI / 10) is set in Loaded, but ONLY when ParentFont = False.
+  // Do NOT touch Self.Font — leave ParentFont = True (the TCustomControl default),
+  // exactly like Vcl.StdCtrls.TButton.
 
   FIconGlyphNormal  := '';
   FIconGlyphPressed := '';
@@ -622,17 +624,6 @@ begin
     FMouseLayer.BringToFront;
   end;
 
-  // Default font — ONLY when ParentFont = False and the font wasn't set from DFM
-  if not ParentFont then
-  begin
-    // Check whether the font is the VCL default (not set from DFM)
-    if (Self.Font.Name = 'Tahoma') and (Self.Font.Size = 8) then
-    begin
-      Self.Font.Name := 'Segoe UI';
-      Self.Font.Size := 10;
-    end;
-  end;
-
   ApplyStyleColors;
   FActive := FIsDefault;
 
@@ -661,6 +652,19 @@ begin
   UpdateColor;
   Resize;
   Invalidate;
+end;
+
+procedure TCWSButton.SkipExplicitFont(Reader: TReader);
+begin
+  Reader.ReadBoolean;
+end;
+
+procedure TCWSButton.DefineProperties(Filer: TFiler);
+begin
+  inherited;
+  { 1.9.19 could write a hidden ExplicitFont flag; it is no longer used, but
+    DFMs saved by that version must still load — read and drop it, never write. }
+  Filer.DefineProperty('ExplicitFont', SkipExplicitFont, nil, False);
 end;
 
 procedure TCWSButton.CMFontChanged(var Message: TMessage);

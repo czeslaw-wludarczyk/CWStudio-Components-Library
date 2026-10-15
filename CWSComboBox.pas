@@ -157,6 +157,7 @@ type
 
     { Mode }
     FStyle: TCWSComboStyle;
+    FPendingText: string;  { csDropDown text kept until the edit exists (no parent yet) }
     FInternalEdit: TCWSBufferedEdit;
     FEditWndProc: TWndMethod; { saved WindowProc of FInternalEdit (ESC hook) }
     FEditInternalMarginL: Integer; { internal left margin of TEdit (EM_GETMARGINS) }
@@ -298,6 +299,7 @@ type
     procedure CreateEdit;
     procedure DestroyEdit;
     procedure UpdateEditPosition;
+    procedure ResetEditScroll;
     procedure SyncEditAppearance;
     procedure SyncEditProperties;
     procedure SetEditTextSilent(const S: string; ASelectAll: Boolean = False);
@@ -341,6 +343,8 @@ type
     procedure Paint; override;
     procedure Resize; override;
     procedure Loaded; override;
+    procedure SetName(const Value: TComponentName); override;
+    procedure SetParent(AParent: TWinControl); override;
     procedure SetEnabled(Value: Boolean); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState;
       X, Y: Integer); override;
@@ -372,7 +376,7 @@ type
     property SelText: string read GetSelText write SetSelText;
 
   published
-    property Style: TCWSComboStyle read FStyle write SetStyle default csDropDownList;
+    property Style: TCWSComboStyle read FStyle write SetStyle stored True;
     property AutoSizeHeight: Boolean read FAutoSizeHeight write SetAutoSizeHeight default True;
 
     { Main field appearance }
@@ -466,7 +470,7 @@ type
     property OnMouseLeave;
     property OnStartDock;
     property OnStartDrag;
-    property ItemIndex: Integer read FItemIndex write SetItemIndex;
+    property ItemIndex: Integer read FItemIndex write SetItemIndex default -1;
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
     property OnDropDown: TNotifyEvent read FOnDropDown write FOnDropDown;
     property OnCloseUp: TNotifyEvent read FOnCloseUp write FOnCloseUp;
@@ -1867,6 +1871,28 @@ begin
 
   FDropdown := TCWSDropdownWindow.Create(Self);
   FDropdown.Canvas.Font.Assign(Font);
+
+  { A new combo box is csDropDown, like TComboBox, so a dropped control shows
+    its name (see SetName). One being read from a DFM keeps csDropDownList:
+    up to 1.9.22 that was the default and, as the default, never written, so a
+    DFM without Style means csDropDownList. Style is now always stored, so newer
+    DFMs set it explicitly either way. }
+  if not ((AOwner <> nil) and (csLoading in AOwner.ComponentState)) then
+    FStyle := csDropDown;   { the edit is created once there is a parent - SetParent }
+end;
+
+procedure TCWSComboBox.SetParent(AParent: TWinControl);
+begin
+  inherited;
+  { The csDropDown edit needs a window chain to live in, so it is created only
+    when the combo box gets a parent; text set before that is kept meanwhile. }
+  if (Parent <> nil) and (FStyle = csDropDown) and (FInternalEdit = nil) and
+    not (csDestroying in ComponentState) then
+  begin
+    CreateEdit;
+    SetEditTextSilent(FPendingText);
+    FPendingText := '';
+  end;
 end;
 
 destructor TCWSComboBox.Destroy;
@@ -1936,6 +1962,21 @@ begin
   T := (Height - EditH) div 2;
   if T < 0 then T := 0;
   FInternalEdit.SetBounds(L, T, Width - BtnW - TextMarginL - Scale(4), EditH);
+  ResetEditScroll;
+end;
+
+{ An edit keeps its horizontal scroll offset when it is widened. If the caret
+  was placed at the end of the text while the edit was still narrow (e.g. the
+  name set before the combo box got its final size), the start of the text
+  stays cut off on the left. Without focus, show the text from its start, as a
+  Win32 combo box does. }
+procedure TCWSComboBox.ResetEditScroll;
+begin
+  if (FInternalEdit = nil) or not FInternalEdit.HandleAllocated or
+    FInternalEdit.Focused then
+    Exit;
+  SendMessage(FInternalEdit.Handle, EM_SETSEL, 0, 0);
+  SendMessage(FInternalEdit.Handle, EM_SCROLLCARET, 0, 0);
 end;
 
 procedure TCWSComboBox.SyncEditAppearance;
@@ -1967,7 +2008,11 @@ end;
   caller reports the change (or deliberately does not, for a preview). }
 procedure TCWSComboBox.SetEditTextSilent(const S: string; ASelectAll: Boolean);
 begin
-  if FInternalEdit = nil then Exit;
+  if FInternalEdit = nil then
+  begin
+    FPendingText := S;   { no parent yet - SetParent puts it into the edit }
+    Exit;
+  end;
   FInternalTextChange := True;
   try
     FInternalEdit.Text := S;
@@ -1976,8 +2021,10 @@ begin
       FInternalEdit.SelStart  := 0;
       FInternalEdit.SelLength := Length(S);
     end
+    else if FInternalEdit.Focused then
+      FInternalEdit.SelStart := Length(S)
     else
-      FInternalEdit.SelStart := Length(S);
+      ResetEditScroll;   { not being edited - show the text from its start }
   finally
     FInternalTextChange := False;
   end;
@@ -1992,14 +2039,20 @@ begin
   FStyle := Value;
   if FStyle = csDropDown then
   begin
-    CreateEdit;
     if (FItemIndex >= 0) and (FItemIndex < FItems.Count) then
-      SetEditTextSilent(FItems[FItemIndex])
+      FPendingText := FItems[FItemIndex]
     else
-      SetEditTextSilent('');
+      FPendingText := '';
+    if Parent <> nil then   { otherwise SetParent creates the edit }
+    begin
+      CreateEdit;
+      SetEditTextSilent(FPendingText);
+      FPendingText := '';
+    end;
     Cursor := crDefault;
   end else
   begin
+    FPendingText := '';
     DestroyEdit;
     Cursor := crDefault;
   end;
@@ -2203,7 +2256,7 @@ begin
   if FStyle = csDropDown then
   begin
     if FInternalEdit <> nil then Result := FInternalEdit.Text
-    else Result := '';
+    else Result := FPendingText;
   end else
   begin
     if (FItemIndex >= 0) and (FItemIndex < FItems.Count) then
@@ -2242,12 +2295,31 @@ begin
   Invalidate;
 end;
 
+procedure TCWSComboBox.SetName(const Value: TComponentName);
+var
+  ChangeText: Boolean;
+begin
+  { Same rule as TControl.SetName for a TComboBox (csSetCaption): while the
+    text still equals the name - e.g. a freshly dropped control - renaming it
+    renames the text too. TControl.SetName only updates the window text of this
+    wrapper, not the Text property published here, so do it ourselves. As in
+    the VCL, with csDropDownList SetText only selects a matching item, so the
+    name shows up in csDropDown style only. }
+  ChangeText := not (csLoading in ComponentState) and (Name = Text) and
+    ((Owner = nil) or not (Owner is TControl) or
+     not (csLoading in TControl(Owner).ComponentState));
+  inherited SetName(Value);
+  if ChangeText then
+    Text := Value;
+end;
+
 procedure TCWSComboBox.SetText(const Value: string);
 var Idx: Integer;
 begin
   if FStyle = csDropDown then
   begin
-    if FInternalEdit <> nil then FInternalEdit.Text := Value;
+    if FInternalEdit <> nil then FInternalEdit.Text := Value
+    else FPendingText := Value;
     Idx := FItems.IndexOf(Value);
     FItemIndex := Idx;
     Invalidate;
@@ -3061,7 +3133,17 @@ end;
 
 { ─── Settery ─────────────────────────────────────────────────────────────── }
 
-procedure TCWSComboBox.SetItemIndex(Value: Integer);  begin SelectItem(Value); end;
+procedure TCWSComboBox.SetItemIndex(Value: Integer);
+begin
+  { DFMs written before ItemIndex had "default -1" store ItemIndex = -1 after
+    Text; for csDropDown that must not wipe the free text just read. }
+  if (Value < 0) and (FStyle = csDropDown) and (csLoading in ComponentState) then
+  begin
+    FItemIndex := -1;
+    Exit;
+  end;
+  SelectItem(Value);
+end;
 procedure TCWSComboBox.SetItems(Value: TStrings);     begin FItems.Assign(Value); end;
 procedure TCWSComboBox.SetDroppedDown(Value: Boolean);
 begin

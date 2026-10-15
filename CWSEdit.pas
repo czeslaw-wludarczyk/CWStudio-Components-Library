@@ -126,6 +126,7 @@ type
     FOnContextPopup: TContextPopupEvent;
 
     procedure SetLabel(const Value: string);
+    procedure SetLabelColor(const Value: TColor);
     procedure SetText(const Value: string);
     procedure SetCornerRadius(const Value: Single);
     procedure SetAccentColor(const Value: TColor);
@@ -176,7 +177,7 @@ type
     procedure WMLButtonDown(var Msg: TWMLButtonDown); message WM_LBUTTONDOWN;
     procedure WMCancelMode(var Msg: TMessage); message WM_CANCELMODE;
     procedure SyncEditFont;
-    procedure ApplyDefaultFont;
+    procedure SkipExplicitFont(Reader: TReader);
     procedure UpdateEditPosition;
     function GetCurrentBgColor: TColor;
     function GetCurrentBorderColor: TColor;
@@ -219,6 +220,8 @@ type
     procedure Resize; override;
     procedure CreateWnd; override;
     procedure Loaded; override;
+    procedure DefineProperties(Filer: TFiler); override;
+    procedure SetName(const Value: TComponentName); override;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     procedure SetEnabled(Value: Boolean); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
@@ -261,7 +264,7 @@ type
     property DisabledColor: TColor read FDisabledColor write SetDisabledColor default $F7F7F7;
     property DisabledBorderColor: TColor read FDisabledBorderColor write SetDisabledBorderColor default $E0E0E0;
     property BorderColor: TColor read FBorderColor write SetBorderColor default $D6D6D6;
-    property LabelColor: TColor read FLabelColor write FLabelColor default $606060;
+    property LabelColor: TColor read FLabelColor write SetLabelColor default $606060;
     property ReadOnly: Boolean read FReadOnly write SetReadOnly default False;
     property PasswordChar: Char read FPasswordChar write SetPasswordChar default #0;
     property MaxLength: Integer read FMaxLength write SetMaxLength default 0;
@@ -1398,12 +1401,41 @@ begin
   Invalidate;
 end;
 
-procedure TCWSEdit.ApplyDefaultFont;
+procedure TCWSEdit.SkipExplicitFont(Reader: TReader);
 begin
-  if (Self.Font.Name = 'Tahoma') and (Self.Font.Size = 8) then
+  Reader.ReadBoolean;
+end;
+
+procedure TCWSEdit.DefineProperties(Filer: TFiler);
+begin
+  inherited;
+  { 1.9.19 could write a hidden ExplicitFont flag; it is no longer used, but
+    DFMs saved by that version must still load — read and drop it, never write. }
+  Filer.DefineProperty('ExplicitFont', SkipExplicitFont, nil, False);
+end;
+
+procedure TCWSEdit.SetName(const Value: TComponentName);
+var
+  ChangeText: Boolean;
+begin
+  { Same rule as TControl.SetName for a TEdit (csSetCaption): while the text
+    still equals the name - e.g. a freshly dropped control - renaming it renames
+    the text too. TControl.SetName only updates the window text of this wrapper,
+    not the Text property published here, so do it ourselves. }
+  ChangeText := not (csLoading in ComponentState) and (Name = Text) and
+    ((Owner = nil) or not (Owner is TControl) or
+     not (csLoading in TControl(Owner).ComponentState));
+  inherited SetName(Value);
+  if ChangeText then
+    Text := Value;
+end;
+
+procedure TCWSEdit.SetLabelColor(const Value: TColor);
+begin
+  if FLabelColor <> Value then
   begin
-    Self.Font.Name := 'Segoe UI';
-    Self.Font.Size := 10;
+    FLabelColor := Value;
+    Invalidate;
   end;
 end;
 
@@ -1420,8 +1452,6 @@ end;
 procedure TCWSEdit.Loaded;
 begin
   inherited;
-  if not ParentFont then
-    ApplyDefaultFont;
   SyncEditFont;
 end;
 

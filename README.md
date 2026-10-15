@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.18](https://img.shields.io/badge/version-1.9.18-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.24](https://img.shields.io/badge/version-1.9.24-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -257,10 +257,9 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.18:**
+**Najnowsza wersja — 1.9.24:**
 
-- **Poprawka** `TCWSButton`: **`BorderWidth = 0` nie ginie po wczytaniu formularza.** Style `bsNeutral` / `bsPrimary` przy nakładaniu kolorów ustawiały też `BorderWidth := 1`, a `Loaded` zawsze nakłada styl ponownie — ramka (np. szara `$D1D1D1`) wracała w każdym stanie przycisku. Styl ustawia teraz tylko kolory. Grubość ramki skaluje się z DPI także dla aktywnego przycisku.
-- **Poprawka** `TCWSButton`: **przycisk `bsPrimary` po wczytaniu z DFM zostaje `bsPrimary`.** Settery kolorów przełączały styl na `bsCustom` także podczas wczytywania DFM. Teraz robią to tylko przy zmianie koloru przez użytkownika.
+- **Poprawka** `TCWSComboBox`: **tekst nie jest ucięty z lewej strony po położeniu kontrolki na formularzu.** Gdy nazwa była ustawiana przed nadaniem rodzica, pole edycji powstawało wąskie, kursor trafiał na koniec tekstu i pole przewijało się w prawo — po poszerzeniu kontrolki początek tekstu zostawał ucięty (błąd z 1.9.23). Pole bez fokusu pokazuje teraz zawsze tekst od początku, jak ComboBox w Windows.
 
 Pełna historia zmian znajduje się w pliku [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -534,10 +533,9 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.18:**
+**Latest release — 1.9.24:**
 
-- **Fixed** `TCWSButton`: **`BorderWidth = 0` survives loading the form.** The `bsNeutral` / `bsPrimary` styles also set `BorderWidth := 1` when applying their colors, and `Loaded` always re-applies the style, so the border (e.g. grey `$D1D1D1`) came back in every button state. A style now sets colors only. The border width is also DPI-scaled for an enabled button.
-- **Fixed** `TCWSButton`: **a `bsPrimary` button stays `bsPrimary` after loading from the DFM.** The color setters switched the style to `bsCustom` while the DFM was being read, too. They now do so only when the user changes a color.
+- **Fixed** `TCWSComboBox`: **the text is no longer cut off on the left after dropping the control on a form.** When the name was set before the control got its parent, the edit was created narrow, the caret went to the end of the text and the edit scrolled right; once the control was widened the start of the text stayed hidden (a 1.9.23 regression). Without focus the field now always shows the text from its start, like a Windows combo box.
 
 The full change history is kept in [`CHANGELOG.md`](CHANGELOG.md).
 

@@ -240,6 +240,7 @@ type
     procedure Resize; override;
     procedure CreateWnd; override;
     procedure Loaded; override;
+    procedure SetName(const Value: TComponentName); override;
     procedure CreateParams(var Params: TCreateParams); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
@@ -1957,6 +1958,22 @@ end;
 function TCWSMemo.GetText: string;
 begin
   Result := FMemo.Text;
+end;
+
+procedure TCWSMemo.SetName(const Value: TComponentName);
+var
+  ChangeText: Boolean;
+begin
+  { Same rule as TControl.SetName for a TMemo (csSetCaption): while the text
+    still equals the name - e.g. a freshly dropped control - renaming it renames
+    the text too, so a new memo shows its name in Lines. TControl.SetName only
+    updates the window text of this wrapper, not the inner memo, so do it here. }
+  ChangeText := not (csLoading in ComponentState) and (Name = Text) and
+    ((Owner = nil) or not (Owner is TControl) or
+     not (csLoading in TControl(Owner).ComponentState));
+  inherited SetName(Value);
+  if ChangeText then
+    Text := Value;
 end;
 
 procedure TCWSMemo.SetText(const Value: string);

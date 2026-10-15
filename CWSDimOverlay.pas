@@ -82,9 +82,22 @@ type
   // Visual style of the activity indicator
   TCWSIndicatorStyle = (cisLines, cisRing, cisSegmented, cisArrows);
 
+  // Reference-counted "is the overlay still alive" flag. The fade animation
+  // pumps messages, so the overlay may be freed from inside its own loop; the
+  // loop holds its own reference to this flag and checks it instead of Self.
+  ICWSDimAlive = interface
+    ['{6F0B2C1E-4D7A-4B8E-9A3C-2E5F7D1B8C40}']
+    function IsDead: Boolean;
+    procedure Kill;
+  end;
+
   TCWSDimOverlay = class(TComponent)
   private
     FVisible: Boolean;
+    FAlive: ICWSDimAlive;
+    // Bumped by every Show / Hide, so a fade loop interrupted by a nested
+    // Show / Hide (fired from the messages it pumps) knows to stop.
+    FAnimGen: Cardinal;
     FOpacity: Byte;
     FColor: TColor;
     FOverlayWnd: HWND;
@@ -168,8 +181,8 @@ type
     procedure ParentWndProc(var Message: TMessage);
     procedure HookParentForm;
     procedure UnhookParentForm;
-    procedure DoAnimateShow;
-    procedure DoAnimateHide;
+    function DoAnimateShow: Boolean;
+    function DoAnimateHide: Boolean;
     function GetParentForm: TCustomForm;
     function GetFormVisualRect(AForm: TCustomForm): TRect;
     function FormPositionPending(AForm: TCustomForm): Boolean;
@@ -227,6 +240,25 @@ const
 
   FRAME_INTERVAL_MS = 16;  // ~60 fps spinner animation (smooth)
   TEXT_MARGIN       = 16;  // horizontal padding for text wrapping
+
+type
+  TCWSDimAlive = class(TInterfacedObject, ICWSDimAlive)
+  private
+    FDead: Boolean;
+  public
+    function IsDead: Boolean;
+    procedure Kill;
+  end;
+
+function TCWSDimAlive.IsDead: Boolean;
+begin
+  Result := FDead;
+end;
+
+procedure TCWSDimAlive.Kill;
+begin
+  FDead := True;
+end;
 
 type
   // exposes TCustomForm.Position (protected) so the overlay can tell whether a
@@ -446,10 +478,15 @@ begin
 
   FRenderLock := TCriticalSection.Create;
   FAnimThread := nil;
+  FAlive := TCWSDimAlive.Create;
 end;
 
 destructor TCWSDimOverlay.Destroy;
 begin
+  // A fade loop further up the stack (if we are freed from a message it
+  // pumped) sees this and returns without touching the freed instance.
+  FAlive.Kill;
+  FAlive := nil;
   DestroyOverlayWindow;   // stops and waits for the spinner thread
   UnhookParentForm;
   FTextFont.Free;
@@ -719,7 +756,9 @@ begin
   begin
     ApplyLayeredBitmap(0);
     ShowWindow(FOverlayWnd, SW_SHOWNOACTIVATE);
-    DoAnimateShow;
+    // Interrupted (freed, hidden or re-shown meanwhile) - nothing left to do
+    if not DoAnimateShow then
+      Exit;
   end
   else
   begin
@@ -732,6 +771,10 @@ end;
 
 procedure TCWSDimOverlay.DestroyOverlayWindow;
 begin
+  // A present deferred by CreateOverlayWindow must not run after the window
+  // (or the whole component) is gone.
+  TThread.RemoveQueuedEvents(nil, PresentOverlay);
+
   StopSpinner;   // thread no longer touches the buffer after this
 
   FPresented := False;
@@ -1473,11 +1516,22 @@ end;
 
 { --- Animation --- }
 
-procedure TCWSDimOverlay.DoAnimateShow;
+{ Both fades pump messages between frames, so anything can happen meanwhile:
+  the overlay may be freed, hidden or shown again. After every pump the loop
+  checks its own reference to the alive flag (never Self first) and the
+  Show / Hide generation, and returns False when interrupted - the caller must
+  then return at once, without touching the instance. }
+
+function TCWSDimOverlay.DoAnimateShow: Boolean;
 var
   I, Steps: Integer;
   Alpha: Byte;
+  Alive: ICWSDimAlive;
+  Gen: Cardinal;
 begin
+  Result := False;
+  Alive := FAlive;
+  Gen := FAnimGen;
   Steps := FAnimationSteps;
   if Steps <= 0 then
     Steps := 1;
@@ -1491,17 +1545,27 @@ begin
     ApplyLayeredBitmap(Alpha);
     Sleep(12);
     Application.ProcessMessages;
+    if Alive.IsDead then
+      Exit;
+    if (Gen <> FAnimGen) or (FOverlayWnd = 0) then
+      Exit;
   end;
 
   RepositionToForm;
   ApplyLayeredBitmap(255);
+  Result := True;
 end;
 
-procedure TCWSDimOverlay.DoAnimateHide;
+function TCWSDimOverlay.DoAnimateHide: Boolean;
 var
   I, Steps: Integer;
   Alpha: Byte;
+  Alive: ICWSDimAlive;
+  Gen: Cardinal;
 begin
+  Result := False;
+  Alive := FAlive;
+  Gen := FAnimGen;
   Steps := FAnimationSteps;
   if Steps <= 0 then
     Steps := 1;
@@ -1512,7 +1576,12 @@ begin
     ApplyLayeredBitmap(Alpha);
     Sleep(12);
     Application.ProcessMessages;
+    if Alive.IsDead then
+      Exit;
+    if (Gen <> FAnimGen) or (FOverlayWnd = 0) then
+      Exit;
   end;
+  Result := True;
 end;
 
 { --- Activity indicator timer --- }
@@ -1551,13 +1620,34 @@ end;
 { --- Public interface --- }
 
 procedure TCWSDimOverlay.Show;
+var
+  Alive: ICWSDimAlive;
+  Gen: Cardinal;
 begin
   FVisible := True;
   if csDesigning in ComponentState then
     Exit;
 
+  Inc(FAnimGen);
+  Gen := FAnimGen;
+  Alive := FAlive;
+
   HookParentForm;
-  CreateOverlayWindow;
+  if FOverlayWnd <> 0 then
+  begin
+    // The window still exists: Show called while a Hide was fading it out
+    // (the Hide loop sees the new generation and stops) - bring it back.
+    if FPresented then
+    begin
+      ApplyLayeredBitmap(255);
+      UpdateTimerState;
+    end;
+  end
+  else
+    CreateOverlayWindow;   // may run the fade-in, which pumps messages
+
+  if Alive.IsDead or (Gen <> FAnimGen) then
+    Exit;   // freed, or hidden / re-shown meanwhile - that call raised its event
 
   if Assigned(FOnShow) then
     FOnShow(Self);
@@ -1571,10 +1661,16 @@ begin
     Exit;
   end;
 
+  Inc(FAnimGen);
+
   StopSpinner;
 
-  if FAnimated and (FOverlayWnd <> 0) then
-    DoAnimateHide;
+  // Fade only a window that is actually on screen (not one whose present is
+  // still queued). Interrupted - freed, or shown / hidden again - means the
+  // newer call owns the overlay now, so leave it alone.
+  if FAnimated and (FOverlayWnd <> 0) and FPresented then
+    if not DoAnimateHide then
+      Exit;
 
   DestroyOverlayWindow;
   FVisible := False;

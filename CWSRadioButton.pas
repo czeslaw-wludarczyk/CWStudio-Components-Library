@@ -689,7 +689,13 @@ end;
 procedure TCWSRadioButton.SetGroupIndex(const Value: Integer);
 begin
   if FGroupIndex <> Value then
+  begin
     FGroupIndex := Value;
+    { A checked button moved into another group takes over the check there,
+      as if it had just been clicked — a group never ends up with two. }
+    if FChecked and not (csLoading in ComponentState) then
+      UncheckSiblings;
+  end;
 end;
 
 procedure TCWSRadioButton.SetRadioSize(const Value: Integer);
