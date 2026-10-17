@@ -3,10 +3,32 @@ unit buttons;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, System.Types, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Menus, CWSSettingsPanel, CWSScrollBox, CWSStoreButton,
-  CWSFluentColorsMulti, CWSMenuButton, CWSButton, CWSCheckBox, CWSRadioButton, CWSSwitch, CWSPopupMenu, System.ImageList,
-  Vcl.ImgList, SVGIconImageListBase, SVGIconImageList;
+  Winapi.Windows,
+  Winapi.Messages,
+  System.SysUtils,
+  System.Variants,
+  System.Classes,
+  System.Types,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  Vcl.StdCtrls,
+  Vcl.Menus,
+  CWSSettingsPanel,
+  CWSScrollBox,
+  CWSStoreButton,
+  CWSFluentColorsMulti,
+  CWSMenuButton,
+  CWSButton,
+  CWSCheckBox,
+  CWSRadioButton,
+  CWSSwitch,
+  CWSPopupMenu,
+  System.ImageList,
+  Vcl.ImgList,
+  SVGIconImageListBase,
+  SVGIconImageList;
 
 type
   TfrmButtons = class(TForm)
@@ -90,7 +112,7 @@ implementation
 
 procedure TfrmButtons.ApplyTheme;
 var
-  I: integer;
+  I: Integer;
   Comp: TComponent;
 begin
   self.Color := flNeutralBackground2;
@@ -114,7 +136,7 @@ begin
   lblTitle3.Font.Color := flNeutralForeground1;
   lblTitle4.Font.Color := flNeutralForeground1;
 
-  SVGIconImageList1.SVGIconItems.Items[1].FixedColor:= flNeutralForeground1;
+  SVGIconImageList1.SVGIconItems.Items[1].FixedColor := flNeutralForeground1;
 
   CWSPopupMenu1.BackgroundColor := flNeutralBackground1;
   CWSPopupMenu1.BorderColor := flNeutralStroke1;
@@ -133,6 +155,7 @@ begin
       TCWSStoreButton(Comp).Color := flNeutralBackground3;
       TCWSStoreButton(Comp).BckNormalColor := flNeutralBackground3;
       TCWSStoreButton(Comp).BckHoverColor := flNeutralBackground3Hover;
+      TCWSStoreButton(Comp).BckHoverPressedColor := flNeutralBackground2Hover;
       TCWSStoreButton(Comp).BckPressedColor := flNeutralBackground1Pressed;
 
       TCWSStoreButton(Comp).DescriptionColorHover := flNeutralForeground1Hover;
@@ -151,6 +174,7 @@ begin
       TCWSMenuButton(Comp).Color := flNeutralBackground3;
       TCWSMenuButton(Comp).BckNormalColor := flNeutralBackground3;
       TCWSMenuButton(Comp).BckHoverColor := flNeutralBackground3Hover;
+      TCWSMenuButton(Comp).BckHoverPressedColor := flNeutralBackground2Hover;
       TCWSMenuButton(Comp).BckPressedColor := flNeutralBackground1Pressed;
 
       TCWSMenuButton(Comp).MenuColorTextHover := flNeutralForeground1Hover;
@@ -249,8 +273,7 @@ begin
     CWSStoreButton4.Pressed := False;
     FPressed1 := False;
     Exit;
-  end
-  else
+  end else
   begin
     CWSStoreButton4.Pressed := True;
     FPressed1 := True;
@@ -264,8 +287,7 @@ begin
     CWSStoreButton5.Pressed := False;
     FPressed2 := False;
     Exit;
-  end
-  else
+  end else
   begin
     CWSStoreButton5.Pressed := True;
     FPressed2 := True;
@@ -279,8 +301,7 @@ begin
     CWSStoreButton6.Pressed := False;
     FPressed3 := False;
     Exit;
-  end
-  else
+  end else
   begin
     CWSStoreButton6.Pressed := True;
     FPressed3 := True;
@@ -294,8 +315,7 @@ begin
     CWSStoreButton7.Pressed := False;
     FPressed4 := False;
     Exit;
-  end
-  else
+  end else
   begin
     CWSStoreButton7.Pressed := True;
     FPressed4 := True;

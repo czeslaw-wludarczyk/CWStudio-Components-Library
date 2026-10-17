@@ -79,6 +79,7 @@ object frmButtons: TfrmButtons
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59407
         IconGlyphPressed = #60042
@@ -108,6 +109,7 @@ object frmButtons: TfrmButtons
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59259
         IconGlyphPressed = #59259
@@ -137,6 +139,7 @@ object frmButtons: TfrmButtons
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59897
         IconGlyphPressed = #59897
@@ -166,6 +169,7 @@ object frmButtons: TfrmButtons
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59407
         IconGlyphPressed = #60042
@@ -195,6 +199,7 @@ object frmButtons: TfrmButtons
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59259
         IconGlyphPressed = #59259
@@ -224,6 +229,7 @@ object frmButtons: TfrmButtons
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         CursorHeight = 45
         IconGlyph = #59407
@@ -254,6 +260,7 @@ object frmButtons: TfrmButtons
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         CursorHeight = 45
         IconGlyph = #59259
@@ -312,6 +319,7 @@ object frmButtons: TfrmButtons
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59407
         IconGlyphPressed = #60042
@@ -341,6 +349,7 @@ object frmButtons: TfrmButtons
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59259
         IconGlyphPressed = #59259
@@ -370,6 +379,7 @@ object frmButtons: TfrmButtons
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59897
         IconGlyphPressed = #59897

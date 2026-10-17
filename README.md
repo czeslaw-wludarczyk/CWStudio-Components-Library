@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.24](https://img.shields.io/badge/version-1.9.24-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.25](https://img.shields.io/badge/version-1.9.25-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -247,6 +247,21 @@ Aby Twoje aplikacje kompilowały się z komponentami, w **Tools → Options → 
 
 ---
 
+## 🖥️ Aplikacja demo
+
+W folderze [`CWStudio_demo`](CWStudio_demo) znajduje się przykładowa aplikacja VCL (`demo.dproj`) pokazująca komponenty w działaniu — przyciski, pola edycji, panele, siatki i listy, wskaźniki postępu, scrollboxy, menu systemowe, warstwę przyciemniającą z dialogiem oraz przełączanie motywu jasny / ciemny przez `CWSFluentColorsMulti`. Menu boczne zbudowane jest z `TCWSStoreButton`, a każda strona to osobna forma osadzana w obszarze treści.
+
+**Wymagania demo:**
+
+- zainstalowane pakiety CWStudio (patrz [🚀 Instalacja](#-instalacja)),
+- [**SVGIconImageList**](https://github.com/EtheaDev/SVGIconImageList) — ikony w formularzach demo (`TSVGIconImageList`). Same komponenty CWStudio tej biblioteki **nie** wymagają.
+
+Od wersji 1.9.25 demo **nie zależy od komponentów ErrorSoft** (EsVclComponents) — `TEsShape` w oknie głównym zastąpił `TCWSSettingsPanel`, a nieużywane moduły `ES.*` zostały usunięte z `uses`.
+
+Otwórz `CWStudio_demo\demo.dproj`, wybierz platformę Win32 lub Win64 i uruchom (**F9**).
+
+---
+
 ## ⚖️ Wymagane przypisanie autorstwa
 
 Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w swojej aplikacji (np. w oknie „O programie"):
@@ -257,9 +272,9 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.24:**
+**Najnowsza wersja — 1.9.25:**
 
-- **Poprawka** `TCWSComboBox`: **tekst nie jest ucięty z lewej strony po położeniu kontrolki na formularzu.** Gdy nazwa była ustawiana przed nadaniem rodzica, pole edycji powstawało wąskie, kursor trafiał na koniec tekstu i pole przewijało się w prawo — po poszerzeniu kontrolki początek tekstu zostawał ucięty (błąd z 1.9.23). Pole bez fokusu pokazuje teraz zawsze tekst od początku, jak ComboBox w Windows.
+- **Zmiana** `CWStudio_demo`: **aplikacja demo nie zależy już od komponentów ErrorSoft (EsVclComponents).** `TEsShape` w oknie głównym zastąpił `TCWSSettingsPanel`, a nieużywane moduły `ES.*` usunięto z `uses`. Demo wymaga teraz tylko RTL/VCL, pakietów CWStudio i `SVGIconImageList`. Opis demo — sekcja [🖥️ Aplikacja demo](#️-aplikacja-demo).
 
 Pełna historia zmian znajduje się w pliku [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -523,6 +538,21 @@ So your applications compile against the components, in **Tools → Options → 
 
 ---
 
+## 🖥️ Demo application
+
+The [`CWStudio_demo`](CWStudio_demo) folder contains a sample VCL application (`demo.dproj`) that shows the components in action — buttons, edits, panels, grids and lists, progress indicators, scroll boxes, the system menu, the dim overlay with a dialog, and light / dark theme switching through `CWSFluentColorsMulti`. The sidebar is built from `TCWSStoreButton`s, and each page is a separate form embedded in the content area.
+
+**Demo requirements:**
+
+- the CWStudio packages installed (see [🚀 Installation](#-installation)),
+- [**SVGIconImageList**](https://github.com/EtheaDev/SVGIconImageList) — the icons on the demo forms (`TSVGIconImageList`). The CWStudio components themselves do **not** need this library.
+
+Since version 1.9.25 the demo **no longer depends on ErrorSoft components** (EsVclComponents) — `TEsShape` on the main form was replaced by a `TCWSSettingsPanel`, and the unused `ES.*` units were removed from the uses clauses.
+
+Open `CWStudio_demo\demo.dproj`, pick the Win32 or Win64 platform and run it (**F9**).
+
+---
+
 ## ⚖️ Attribution
 
 When using these components, please include appropriate attribution in your application (e.g., in the About box):
@@ -533,9 +563,9 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.24:**
+**Latest release — 1.9.25:**
 
-- **Fixed** `TCWSComboBox`: **the text is no longer cut off on the left after dropping the control on a form.** When the name was set before the control got its parent, the edit was created narrow, the caret went to the end of the text and the edit scrolled right; once the control was widened the start of the text stayed hidden (a 1.9.23 regression). Without focus the field now always shows the text from its start, like a Windows combo box.
+- **Changed** `CWStudio_demo`: **the demo application no longer depends on ErrorSoft components (EsVclComponents).** `TEsShape` on the main form was replaced by a `TCWSSettingsPanel`, and the unused `ES.*` units were removed from the uses clauses. The demo now needs only the RTL/VCL, the CWStudio packages and `SVGIconImageList`. See [🖥️ Demo application](#️-demo-application).
 
 The full change history is kept in [`CHANGELOG.md`](CHANGELOG.md).
 

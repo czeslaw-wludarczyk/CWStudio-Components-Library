@@ -3,8 +3,20 @@ unit dlg_info;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls, CWSButton, Vcl.TitleBarCtrls, CWSFluentColorsMulti;
+  Winapi.Windows,
+  Winapi.Messages,
+  System.SysUtils,
+  System.Variants,
+  System.Classes,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  Vcl.StdCtrls,
+  Vcl.ExtCtrls,
+  CWSButton,
+  Vcl.TitleBarCtrls,
+  CWSFluentColorsMulti;
 
 type
   TdlgInfo = class(TForm)
@@ -23,7 +35,7 @@ type
     procedure ApplyTheme;
   public
     { Public declarations }
-    PDescription: String;
+    PDescription: string;
   end;
 
 var
@@ -33,7 +45,8 @@ implementation
 
 {$R *.dfm}
 
-uses main;
+uses
+  main;
 
 procedure TdlgInfo.ApplyTheme;
 begin
@@ -55,13 +68,13 @@ begin
 
   //Set colors for labels
   lblTitle.Font.Color := flNeutralForeground1;
-  lblDescription.Font.Color:= flNeutralForeground2;
+  lblDescription.Font.Color := flNeutralForeground2;
 
   //Set colors for panels
   pnlBottom.Color := flNeutralBackground2;
   shpLineBottom.Pen.Color := flNeutralStroke2;
 
-  btnOK.Color:= flNeutralBackground2;
+  btnOK.Color := flNeutralBackground2;
   btnOK.BckNormalColor := flBrandBackground;
   btnOK.BckHoverColor := flBrandBackgroundHover;
   btnOK.BckPressedColor := flBrandBackgroundPressed;
@@ -81,7 +94,7 @@ end;
 
 procedure TdlgInfo.btnOKClick(Sender: TObject);
 begin
-ModalResult:= mrOK;
+  ModalResult := mrOK;
 end;
 
 procedure TdlgInfo.FormCreate(Sender: TObject);
@@ -103,9 +116,9 @@ begin
   if TargetPPI <> CurrentPPI then
     ScaleForPPI(TargetPPI);
 
-self.Left:= frmMain.Left + (frmMain.ClientWidth div 2 - self.ClientWidth div 2);
-self.Top:= frmMain.Top + (frmMain.ClientHeight div 2 - self.ClientHeight div 2);
-lblDescription.Caption:= PDescription;
+  self.Left := frmMain.Left + (frmMain.ClientWidth div 2 - self.ClientWidth div 2);
+  self.Top := frmMain.Top + (frmMain.ClientHeight div 2 - self.ClientHeight div 2);
+  lblDescription.Caption := PDescription;
 end;
 
 end.

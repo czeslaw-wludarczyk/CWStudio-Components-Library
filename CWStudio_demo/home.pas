@@ -3,9 +3,23 @@ unit home;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, CWSFluentColorsMulti, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Imaging.pngimage, SVGIconImage,
-  CWSLabelColumn, CWSLabelTrend;
+  Winapi.Windows,
+  Winapi.Messages,
+  System.SysUtils,
+  System.Variants,
+  System.Classes,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  CWSFluentColorsMulti,
+  Vcl.StdCtrls,
+  Vcl.ExtCtrls,
+  Vcl.Imaging.pngimage,
+  SVGIconImage,
+  CWSLabelColumn,
+  CWSLabelTrend,
+  CWSShadow;
 
 type
   TfrmHome = class(TForm)
@@ -15,6 +29,7 @@ type
     lblTrendTitle: TLabel;
     CWSLabelTrend1: TCWSLabelTrend;
     CWSLabelTrend2: TCWSLabelTrend;
+    shadow1: TCWSShadow;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure FormShow(Sender: TObject);
@@ -34,10 +49,10 @@ implementation
 
 procedure TfrmHome.ApplyTheme;
 begin
-  self.Color:= flNeutralBackground2;
-  lblDescription.Font.Color:= flNeutralForeground1;
-  CWSLabelColumn1.LeftFont.Color:= flNeutralForeground1;
-  CWSLabelColumn1.RightFont.Color:= flNeutralForeground1;
+  self.Color := flNeutralBackground2;
+  lblDescription.Font.Color := flNeutralForeground1;
+  CWSLabelColumn1.LeftFont.Color := flNeutralForeground1;
+  CWSLabelColumn1.RightFont.Color := flNeutralForeground1;
 
   lblTrendTitle.Font.Color := flNeutralForeground1;
 
@@ -50,6 +65,8 @@ begin
   CWSLabelTrend2.BorderColor := flNeutralStroke1;
   CWSLabelTrend2.Font.Color := flNeutralForeground1;
   CWSLabelTrend2.IconColor := clRed;
+
+  shadow1.Color := flPaletteBlueBorderActive;
 end;
 
 procedure TfrmHome.FormCreate(Sender: TObject);
@@ -65,7 +82,7 @@ end;
 
 procedure TfrmHome.FormShow(Sender: TObject);
 begin
- ScaleForPPI(CurrentPPI);
+  ScaleForPPI(CurrentPPI);
 end;
 
 end.

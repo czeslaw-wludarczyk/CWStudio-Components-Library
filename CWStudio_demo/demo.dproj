@@ -1,7 +1,7 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{CB73A781-0CD8-4CB3-A3A6-EFB7E42A974E}</ProjectGuid>
-        <ProjectVersion>20.4</ProjectVersion>
+        <ProjectVersion>20.5</ProjectVersion>
         <FrameworkType>VCL</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Debug</Config>

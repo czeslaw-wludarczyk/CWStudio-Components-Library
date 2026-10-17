@@ -106,6 +106,7 @@ object frmMain: TfrmMain
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59407
         IconGlyphPressed = #60042
@@ -138,6 +139,7 @@ object frmMain: TfrmMain
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59698
         IconGlyphPressed = #59698
@@ -170,6 +172,7 @@ object frmMain: TfrmMain
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59387
         IconGlyphPressed = #59387
@@ -202,6 +205,7 @@ object frmMain: TfrmMain
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59226
         IconGlyphPressed = #59226
@@ -234,6 +238,7 @@ object frmMain: TfrmMain
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59231
         IconGlyphPressed = #59231
@@ -266,6 +271,7 @@ object frmMain: TfrmMain
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #61802
         IconGlyphPressed = #61802
@@ -298,6 +304,7 @@ object frmMain: TfrmMain
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #59576
         IconGlyphPressed = #59576
@@ -330,6 +337,7 @@ object frmMain: TfrmMain
         BckNormalColor = clBtnFace
         BckHoverColor = clSilver
         BckPressedColor = clWhite
+        BckHoverPressedColor = clGray
         CursorColor = clGray
         IconGlyph = #61666
         IconGlyphPressed = #61666
@@ -364,6 +372,7 @@ object frmMain: TfrmMain
       BckNormalColor = clBtnFace
       BckHoverColor = clSilver
       BckPressedColor = clWhite
+      BckHoverPressedColor = clGray
       CursorColor = clGray
       IconGlyph = #59718
       IconGlyphPressed = #61799
@@ -389,21 +398,6 @@ object frmMain: TfrmMain
     Caption = 'Panel1'
     ParentBackground = False
     TabOrder = 2
-    object shpContent: TEsShape
-      Left = 0
-      Top = 48
-      Width = 1018
-      Height = 592
-      Align = alClient
-      Brush.Color = 15329769
-      Corners = [TopLeft]
-      Shape = RoundRectangle
-      Sides = [Top, Left]
-      ExplicitLeft = 112
-      ExplicitTop = 224
-      ExplicitWidth = 64
-      ExplicitHeight = 64
-    end
     object pnlTitle: TPanel
       Left = 0
       Top = 0
@@ -471,21 +465,39 @@ object frmMain: TfrmMain
         OnClick = btnThemeClick
       end
     end
-    object pnlContentForm: TPanel
-      AlignWithMargins = True
-      Left = 1
-      Top = 57
-      Width = 1017
-      Height = 583
-      Margins.Left = 1
-      Margins.Top = 9
-      Margins.Right = 0
-      Margins.Bottom = 0
+    object CWSSettingsPanel1: TCWSSettingsPanel
+      Left = 0
+      Top = 48
+      Width = 1018
+      Height = 592
       Align = alClient
-      BevelOuter = bvNone
-      Color = 15329769
-      ParentBackground = False
-      TabOrder = 1
+      DoubleBuffered = True
+      RoundedCorners = [coTopLeft]
+      BorderEdges = [beTop, beLeft]
+      ExplicitLeft = 78
+      ExplicitTop = 30
+      ExplicitHeight = 640
+      object pnlContentForm: TPanel
+        AlignWithMargins = True
+        Left = 0
+        Top = 0
+        Width = 1018
+        Height = 592
+        Margins.Left = 0
+        Margins.Top = 0
+        Margins.Right = 0
+        Margins.Bottom = 0
+        Align = alClient
+        BevelEdges = [beLeft, beTop]
+        BevelOuter = bvNone
+        Color = 15329769
+        ParentBackground = False
+        TabOrder = 0
+        ExplicitLeft = 1
+        ExplicitTop = 57
+        ExplicitWidth = 1017
+        ExplicitHeight = 583
+      end
     end
   end
   object CWSDimOverlay1: TCWSDimOverlay
@@ -518,7 +530,7 @@ object frmMain: TfrmMain
     Font.Name = 'Segoe UI'
     Font.Style = []
     ItemHeight = 32
-    Left = 272
+    Left = 280
     Top = 104
   end
 end

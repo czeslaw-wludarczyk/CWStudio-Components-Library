@@ -3,9 +3,28 @@ unit edits;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics, Vcl.Controls,
-  Vcl.Forms, Vcl.Dialogs, CWSFluentColorsMulti, CWSSettingsPanel, CWSScrollBox, Vcl.StdCtrls, System.ImageList,
-  Vcl.ImgList, SVGIconImageListBase, SVGIconImageList, CWSEdit, CWSMemo, CWSDatePicker, CWSComboBox, CWSEditMask;
+  Winapi.Windows,
+  Winapi.Messages,
+  System.SysUtils,
+  System.Variants,
+  System.Classes,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  CWSFluentColorsMulti,
+  CWSSettingsPanel,
+  CWSScrollBox,
+  Vcl.StdCtrls,
+  System.ImageList,
+  Vcl.ImgList,
+  SVGIconImageListBase,
+  SVGIconImageList,
+  CWSEdit,
+  CWSMemo,
+  CWSDatePicker,
+  CWSComboBox,
+  CWSEditMask;
 
 type
   TfrmEdits = class(TForm)
@@ -65,11 +84,12 @@ implementation
 {$R *.dfm}
 
 uses
-  dlg_info, main;
+  dlg_info,
+  main;
 
 procedure TfrmEdits.ApplyTheme;
 var
-  I: integer;
+  I: Integer;
   Comp: TComponent;
 begin
   self.Color := flNeutralBackground2;

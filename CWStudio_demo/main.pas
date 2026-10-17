@@ -3,9 +3,27 @@
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, CWSFluentColorsMulti, Vcl.TitleBarCtrls, Vcl.ExtCtrls, CWSScrollBox, ES.BaseControls,
-  ES.Shapes, CWSStoreButton, home, Vcl.StdCtrls, CWSButton, CWSDimOverlay, CWSSystemMenu, Vcl.Menus, CWSPopupMenu;
+  Winapi.Windows,
+  Winapi.Messages,
+  System.SysUtils,
+  System.Variants,
+  System.Classes,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  CWSFluentColorsMulti,
+  Vcl.TitleBarCtrls,
+  Vcl.ExtCtrls,
+  CWSScrollBox,
+  CWSStoreButton,
+  home,
+  Vcl.StdCtrls,
+  CWSButton,
+  CWSDimOverlay,
+  CWSSystemMenu,
+  Vcl.Menus,
+  CWSPopupMenu, CWSSettingsPanel;
 
 type
   TfrmMain = class(TForm)
@@ -14,7 +32,6 @@ type
     pnlMenu: TPanel;
     pnlContent: TPanel;
     pnlMenuTitle: TPanel;
-    shpContent: TEsShape;
     pnlTitle: TPanel;
     CWSStoreButton1: TCWSStoreButton;
     CWSStoreButton2: TCWSStoreButton;
@@ -31,6 +48,7 @@ type
     shpLineMenu: TShape;
     CWSStoreButton9: TCWSStoreButton;
     CWSSystemMenu1: TCWSSystemMenu;
+    CWSSettingsPanel1: TCWSSettingsPanel;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure FormShow(Sender: TObject);
@@ -61,11 +79,19 @@ implementation
 
 {$R *.dfm}
 
-uses edits, panels, forms, buttons, progress_bars, scrollboxes, info, grids;
+uses
+  edits,
+  panels,
+  forms,
+  buttons,
+  progress_bars,
+  scrollboxes,
+  info,
+  grids;
 
 procedure TfrmMain.ApplyTheme;
 var
-  I: integer;
+  I: Integer;
   Comp: TComponent;
 begin
 
@@ -87,28 +113,28 @@ begin
   //Set colors for labels
   lblTitle.Font.Color := flNeutralForeground1;
 
-  CWSDimOverlay1.IndicatorColor:= flBrandBackground;
-  CWSDimOverlay1.IndicatorTrackColor:= flNeutralBackground1;
+  CWSDimOverlay1.IndicatorColor := flBrandBackground;
+  CWSDimOverlay1.IndicatorTrackColor := flNeutralBackground1;
 
   //Set colors for panels
   pnlMenu.Color := flNeutralBackground1;
   pnlTitle.Color := flNeutralBackground1;
   pnlContent.Color := flNeutralBackground1;
   pnlContentForm.Color := flNeutralBackground2;
-  shpContent.Brush.Color := flNeutralBackground2;
-  shpContent.Pen.Color := flNeutralStroke1;
-  shpLineMenu.Pen.Color:= flNeutralStroke1;
+  CWSSettingsPanel1.FillColor := flNeutralBackground2;
+  CWSSettingsPanel1.BorderColor := flNeutralStroke1;
+  shpLineMenu.Pen.Color := flNeutralStroke1;
   pnlMenuTitle.Color := flNeutralBackground1;
   pnlMenuTitle.Font.Color := flNeutralForeground1;
   scrbMenu.BackgroundColor := flNeutralBackground1;
 
-  CWSSystemMenu1.BackgroundColor:= flNeutralBackground1;
-  CWSSystemMenu1.TextColor:= flNeutralForeground1;
-  CWSSystemMenu1.HighlightColor:= flNeutralBackground1Selected;
-  CWSSystemMenu1.BorderColor:= flNeutralStroke1;
-  CWSSystemMenu1.DisabledTextColor:= flNeutralForegroundDisabled;
-  CWSSystemMenu1.HighlightTextColor:= flNeutralForeground1;
-  CWSSystemMenu1.SeparatorColor:= flNeutralStroke1;
+  CWSSystemMenu1.BackgroundColor := flNeutralBackground1;
+  CWSSystemMenu1.TextColor := flNeutralForeground1;
+  CWSSystemMenu1.HighlightColor := flNeutralBackground1Selected;
+  CWSSystemMenu1.BorderColor := flNeutralStroke1;
+  CWSSystemMenu1.DisabledTextColor := flNeutralForegroundDisabled;
+  CWSSystemMenu1.HighlightTextColor := flNeutralForeground1;
+  CWSSystemMenu1.SeparatorColor := flNeutralStroke1;
 
   //Set colors for buttons
 
@@ -133,6 +159,7 @@ begin
       TCWSStoreButton(Comp).Color := flNeutralBackground1;
       TCWSStoreButton(Comp).BckNormalColor := flNeutralBackground1;
       TCWSStoreButton(Comp).BckHoverColor := flNeutralBackground1Hover;
+      TCWSStoreButton(Comp).BckHoverPressedColor := flNeutralBackground2Hover;
       TCWSStoreButton(Comp).BckPressedColor := flNeutralBackground1Pressed;
 
       TCWSStoreButton(Comp).DescriptionColorHover := flNeutralForeground1Hover;
@@ -163,8 +190,7 @@ begin
     btnTheme.IconGlyphPressed := '';
     btnTheme.IconOffsetX := 3;
     btnTheme.IconOffsetY := 0;
-  end
-  else
+  end else
   begin
     isDark := True;
     FluentApplyTheme(ftmDark);
@@ -179,27 +205,27 @@ end;
 
 procedure TfrmMain.CWSStoreButton1Click(Sender: TObject);
 begin
-ShowChildForm(frmHome);
+  ShowChildForm(frmHome);
 end;
 
 procedure TfrmMain.CWSStoreButton2Click(Sender: TObject);
 begin
-ShowChildForm(frmPanels);
+  ShowChildForm(frmPanels);
 end;
 
 procedure TfrmMain.CWSStoreButton3Click(Sender: TObject);
 begin
-ShowChildForm(frmButtons);
+  ShowChildForm(frmButtons);
 end;
 
 procedure TfrmMain.CWSStoreButton4Click(Sender: TObject);
 begin
-ShowChildForm(frmProgressBars);
+  ShowChildForm(frmProgressBars);
 end;
 
 procedure TfrmMain.CWSStoreButton5Click(Sender: TObject);
 begin
-ShowChildForm(frmForms);
+  ShowChildForm(frmForms);
 end;
 
 procedure TfrmMain.CWSStoreButton6Click(Sender: TObject);
@@ -209,17 +235,17 @@ end;
 
 procedure TfrmMain.CWSStoreButton7Click(Sender: TObject);
 begin
-ShowChildForm(frmScrollBoxes);
+  ShowChildForm(frmScrollBoxes);
 end;
 
 procedure TfrmMain.CWSStoreButton8Click(Sender: TObject);
 begin
-ShowChildForm(frmInfo);
+  ShowChildForm(frmInfo);
 end;
 
 procedure TfrmMain.CWSStoreButton9Click(Sender: TObject);
 begin
-ShowChildForm(frmGrids);
+  ShowChildForm(frmGrids);
 end;
 
 procedure TfrmMain.FormCreate(Sender: TObject);
@@ -233,8 +259,7 @@ begin
     btnTheme.IconGlyphPressed := '';
     btnTheme.IconOffsetX := 3;
     btnTheme.IconOffsetY := 1;
-  end
-  else
+  end else
   begin
     btnTheme.IconGlyph := '';
     btnTheme.IconGlyphPressed := '';
@@ -247,7 +272,7 @@ end;
 
 procedure TfrmMAin.ShowChildForm(AForm: TForm);
 begin
-if FActiveForm = AForm then
+  if FActiveForm = AForm then
     Exit;
 
   if Assigned(FActiveForm) then

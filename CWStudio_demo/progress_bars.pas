@@ -3,9 +3,22 @@ unit progress_bars;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, CWSFluentColorsMulti, CWSScrollBox, CWSProgressCircle, Vcl.ExtCtrls, Vcl.StdCtrls,
-  CWSProgressBar, CWSIndicatorLoading;
+  Winapi.Windows,
+  Winapi.Messages,
+  System.SysUtils,
+  System.Variants,
+  System.Classes,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  CWSFluentColorsMulti,
+  CWSScrollBox,
+  CWSProgressCircle,
+  Vcl.ExtCtrls,
+  Vcl.StdCtrls,
+  CWSProgressBar,
+  CWSIndicatorLoading;
 
 type
   TfrmProgressBars = class(TForm)
@@ -55,7 +68,7 @@ implementation
 
 procedure TfrmProgressBars.ApplyTheme;
 var
-  I: integer;
+  I: Integer;
   Comp: TComponent;
 begin
   self.Color := flNeutralBackground2;
@@ -83,7 +96,7 @@ end;
 
 procedure TfrmProgressBars.FormShow(Sender: TObject);
 begin
-ScaleForPPI(CurrentPPI);
+  ScaleForPPI(CurrentPPI);
 end;
 
 procedure TfrmProgressBars.Timer1Timer(Sender: TObject);
@@ -98,12 +111,12 @@ begin
   begin
     V := 100;
     FProgressDir := -1;
-  end
-  else if V <= 0 then
-  begin
-    V := 0;
-    FProgressDir := 1;
-  end;
+  end else
+    if V <= 0 then
+    begin
+      V := 0;
+      FProgressDir := 1;
+    end;
   CWSProgressCircle1.Value := V;
   CWSProgressBar2.Value := V;
 end;

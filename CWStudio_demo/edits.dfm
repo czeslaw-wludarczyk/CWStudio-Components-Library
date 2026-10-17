@@ -164,7 +164,7 @@ object frmEdits: TfrmEdits
         Left = 16
         Top = 64
         Width = 280
-        Height = 29
+        Height = 32
         Cursor = crIBeam
         Text = ''
         CornerRadius = 4.000000000000000000
@@ -175,7 +175,7 @@ object frmEdits: TfrmEdits
         Left = 312
         Top = 64
         Width = 280
-        Height = 29
+        Height = 32
         Cursor = crIBeam
         ButtonStyle = ebsClear
         ButtonIconSize = 10
@@ -188,7 +188,7 @@ object frmEdits: TfrmEdits
         Left = 608
         Top = 64
         Width = 280
-        Height = 29
+        Height = 32
         Cursor = crIBeam
         ButtonStyle = ebsSearch
         ButtonIconSize = 10
@@ -202,7 +202,7 @@ object frmEdits: TfrmEdits
         Left = 16
         Top = 112
         Width = 280
-        Height = 29
+        Height = 32
         Cursor = crIBeam
         ButtonStyle = ebsPassword
         ButtonIconSize = 10
@@ -216,7 +216,7 @@ object frmEdits: TfrmEdits
         Left = 312
         Top = 112
         Width = 280
-        Height = 29
+        Height = 32
         Cursor = crIBeam
         ButtonStyle = ebsCustom
         ButtonIconSize = 14
@@ -231,7 +231,7 @@ object frmEdits: TfrmEdits
         Left = 608
         Top = 112
         Width = 280
-        Height = 29
+        Height = 32
         Cursor = crIBeam
         Text = ''
         CornerRadius = 4.000000000000000000
@@ -397,7 +397,7 @@ object frmEdits: TfrmEdits
         Left = 16
         Top = 64
         Width = 280
-        Height = 29
+        Height = 32
         Style = csDropDown
         CornerRadius = 4.000000000000000000
         DropDownMaxItem = 5
@@ -420,7 +420,8 @@ object frmEdits: TfrmEdits
         Left = 312
         Top = 64
         Width = 280
-        Height = 29
+        Height = 32
+        Style = csDropDownList
         CornerRadius = 4.000000000000000000
         DropdownCornerRadius = 8.000000000000000000
         ItemHighlightCornerRadius = 4.000000000000000000
@@ -435,13 +436,13 @@ object frmEdits: TfrmEdits
         Text = ''
         TabOrder = 1
         TabStop = True
-        ItemIndex = -1
       end
       object CWSComboBox3: TCWSComboBox
         Left = 608
         Top = 64
         Width = 280
-        Height = 29
+        Height = 32
+        Style = csDropDownList
         CornerRadius = 4.000000000000000000
         DropdownCornerRadius = 8.000000000000000000
         ItemHighlightCornerRadius = 4.000000000000000000
@@ -449,13 +450,12 @@ object frmEdits: TfrmEdits
         Enabled = False
         TabOrder = 2
         TabStop = True
-        ItemIndex = -1
       end
       object CWSDatePicker2: TCWSDatePicker
         Left = 608
         Top = 125
         Width = 280
-        Height = 29
+        Height = 32
         DateFormat = 'yyyy-MM-dd'
         CornerRadius = 4.000000000000000000
         DropdownCornerRadius = 8.000000000000000000
@@ -467,7 +467,7 @@ object frmEdits: TfrmEdits
         Left = 344
         Top = 125
         Width = 200
-        Height = 29
+        Height = 32
         DateFormat = 'yyyy-MM-dd'
         CornerRadius = 4.000000000000000000
         DropdownCornerRadius = 8.000000000000000000
@@ -478,7 +478,7 @@ object frmEdits: TfrmEdits
         Left = 16
         Top = 128
         Width = 280
-        Height = 29
+        Height = 32
         DateFormat = 'yyyy-MM-dd'
         CornerRadius = 4.000000000000000000
         DropdownCornerRadius = 8.000000000000000000

@@ -3,9 +3,22 @@ unit panels;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, CWSFluentColorsMulti, CWSSettingsPanel, Vcl.ExtCtrls, CWSCornerPanel, Vcl.StdCtrls,
-  CWSScrollBox, CWSOptionsPanel;
+  Winapi.Windows,
+  Winapi.Messages,
+  System.SysUtils,
+  System.Variants,
+  System.Classes,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  CWSFluentColorsMulti,
+  CWSSettingsPanel,
+  Vcl.ExtCtrls,
+  CWSCornerPanel,
+  Vcl.StdCtrls,
+  CWSScrollBox,
+  CWSOptionsPanel;
 
 type
   TfrmPanels = class(TForm)
@@ -49,11 +62,11 @@ implementation
 
 procedure TfrmPanels.ApplyTheme;
 var
-  I: integer;
+  I: Integer;
   Comp: TComponent;
 begin
   self.Color := flNeutralBackground2;
-  scrbPanels.BackgroundColor:= flNeutralBackground2;
+  scrbPanels.BackgroundColor := flNeutralBackground2;
 
   pnl1.Color := flNeutralBackground1;
   pnl1.CornerColor := flBrandBackground3Static;
@@ -109,7 +122,7 @@ end;
 
 procedure TfrmPanels.FormShow(Sender: TObject);
 begin
-ScaleForPPI(CurrentPPI);
+  ScaleForPPI(CurrentPPI);
 end;
 
 procedure TfrmPanels.pnlCard1MouseEnter(Sender: TObject);

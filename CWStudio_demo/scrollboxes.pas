@@ -3,8 +3,20 @@ unit scrollboxes;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, CWSScrollBox, CWSFluentColorsMulti, Vcl.Imaging.jpeg, Vcl.ExtCtrls, Vcl.StdCtrls;
+  Winapi.Windows,
+  Winapi.Messages,
+  System.SysUtils,
+  System.Variants,
+  System.Classes,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  CWSScrollBox,
+  CWSFluentColorsMulti,
+  Vcl.Imaging.jpeg,
+  Vcl.ExtCtrls,
+  Vcl.StdCtrls;
 
 type
   TfrmScrollBoxes = class(TForm)
@@ -37,13 +49,13 @@ procedure TfrmScrollBoxes.ApplyTheme;
 begin
   self.Color := flNeutralBackground2;
   scrb1.BackgroundColor := flNeutralBackground2;
-  CWSScrollBox1.BackgroundColor:= flNeutralBackground2;
-  CWSScrollBox1.ScrollThumbColor:= flPaletteLightGreenForeground1;
-  CWSScrollBox1.ScrollThumbHoverColor:= flPaletteLightGreenForeground2;
+  CWSScrollBox1.BackgroundColor := flNeutralBackground2;
+  CWSScrollBox1.ScrollThumbColor := flPaletteLightGreenForeground1;
+  CWSScrollBox1.ScrollThumbHoverColor := flPaletteLightGreenForeground2;
 
-  CWSScrollBox2.BackgroundColor:= flNeutralBackground2;
-  Label1.Font.Color:= flNeutralForeground1;
-  Label2.Font.Color:= flNeutralForeground1;
+  CWSScrollBox2.BackgroundColor := flNeutralBackground2;
+  Label1.Font.Color := flNeutralForeground1;
+  Label2.Font.Color := flNeutralForeground1;
 end;
 
 procedure TfrmScrollBoxes.FormCreate(Sender: TObject);
@@ -74,7 +86,7 @@ begin
     P.Parent := CWSScrollBox2;
 
     P.Width := 150 + Random(100);
-    P.Height:= 150 + Random(100);
+    P.Height := 150 + Random(100);
 
     P.Left := Random(VirtualWidth - P.Width);
     P.Top := Random(VirtualHeight - P.Height);
@@ -85,7 +97,7 @@ begin
       Random(256),
       Random(256),
       Random(256)
-      );
+    );
 
     P.ParentBackground := False;
   end;

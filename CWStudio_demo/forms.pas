@@ -3,8 +3,19 @@ unit forms;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, CWSFluentColorsMulti, CWSButton, Vcl.StdCtrls, CWSScrollBox;
+  Winapi.Windows,
+  Winapi.Messages,
+  System.SysUtils,
+  System.Variants,
+  System.Classes,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  CWSFluentColorsMulti,
+  CWSButton,
+  Vcl.StdCtrls,
+  CWSScrollBox;
 
 type
   TfrmForms = class(TForm)
@@ -32,11 +43,13 @@ implementation
 
 {$R *.dfm}
 
-uses main, dlg_info;
+uses
+  main,
+  dlg_info;
 
 procedure TfrmForms.ApplyTheme;
 var
-  I: integer;
+  I: Integer;
   Comp: TComponent;
 begin
   self.Color := flNeutralBackground2;
@@ -72,7 +85,7 @@ procedure TfrmForms.btnShowClick(Sender: TObject);
 begin
   frmMain.CWSDimOverlay1.Visible := True;
   Sleep(2000);
-  dlgInfo.PDescription:='';
+  dlgInfo.PDescription := '';
   dlgInfo.PDescription :=
     'The main window behind this dialog is dimmed by a TCWSDimOverlay component.Close this dialog to fade the overlay back out.';
   dlgInfo.ShowModal;
@@ -92,7 +105,7 @@ end;
 
 procedure TfrmForms.FormShow(Sender: TObject);
 begin
-ScaleForPPI(CurrentPPI);
+  ScaleForPPI(CurrentPPI);
 end;
 
 end.

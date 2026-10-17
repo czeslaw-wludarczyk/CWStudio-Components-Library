@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.25] — 2026-10-17
+
+- **Change** `CWStudio_demo`: **the demo application no longer depends on ErrorSoft components (EsVclComponents).** `main` used `TEsShape` (`ES.BaseControls`, `ES.Shapes`) as the rounded frame around the content area; it is replaced by a `TCWSSettingsPanel` (`FillColor` / `BorderColor` follow the theme in `ApplyTheme`). `grids` no longer lists the unused `ES.BaseControls` and `ES.Switch` units. The demo now builds with only the RTL/VCL, the CWStudio packages and `SVGIconImageList` (used for the icons in the demo forms). The `EsCore` / `EsVclCore` / `EsVclComponents` names that are still in `DCC_UsePackage` of `demo.dproj` are the IDE's list of installed packages; they are not used, because the demo does not link with runtime packages.
 ## [1.9.24] — 2026-10-15
 
 - **Fix** `TCWSComboBox`: **the text of a freshly dropped control was cut off on the left** (regression in 1.9.23). When `Name` — and so `Text` — was set before the control had a parent, `SetParent` created the inner edit at the default, narrow width and `SetEditTextSilent` put the caret at the end of the text, so the edit scrolled right; a Win32 edit keeps that scroll offset when it is widened, so the start of the text stayed hidden after the control got its final size. A new `ResetEditScroll` (`EM_SETSEL` 0 + `EM_SCROLLCARET`) runs after every `UpdateEditPosition` and in `SetEditTextSilent` whenever the edit does not have the focus, so an unfocused field always shows its text from the start, as a Windows combo box does. While the user is editing, the caret still goes to the end.

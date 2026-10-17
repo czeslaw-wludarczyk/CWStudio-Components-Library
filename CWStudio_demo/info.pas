@@ -3,9 +3,25 @@ unit info;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, CWSScrollBox, CWSFluentColorsMulti, Vcl.StdCtrls, Winapi.ShellAPI, CWSButton,
-  Vcl.Imaging.pngimage, Vcl.ExtCtrls, CWSStringGrid, CWSListBox, SVGIconImage;
+  Winapi.Windows,
+  Winapi.Messages,
+  System.SysUtils,
+  System.Variants,
+  System.Classes,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  CWSScrollBox,
+  CWSFluentColorsMulti,
+  Vcl.StdCtrls,
+  Winapi.ShellAPI,
+  CWSButton,
+  Vcl.Imaging.pngimage,
+  Vcl.ExtCtrls,
+  CWSStringGrid,
+  CWSListBox,
+  SVGIconImage;
 
 type
   TfrmInfo = class(TForm)
@@ -39,7 +55,7 @@ procedure TfrmInfo.ApplyTheme;
 begin
   self.Color := flNeutralBackground2;
   CWSScrollBox1.BackgroundColor := flNeutralBackground2;
-  CWSButton1.Color:= flNeutralBackground2;
+  CWSButton1.Color := flNeutralBackground2;
 
   Label1.Font.Color := flNeutralForeground1;
   Label3.Font.Color := flNeutralForeground1;
@@ -65,7 +81,7 @@ end;
 
 procedure TfrmInfo.FormShow(Sender: TObject);
 begin
-ScaleForPPI(CurrentPPI);
+  ScaleForPPI(CurrentPPI);
 end;
 
 end.

@@ -3,9 +3,24 @@ unit grids;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, CWSFluentColorsMulti, Vcl.StdCtrls, CWSScrollBox, CWSStringGrid, CWSRadioButton,
-  VCL.Grids, CWSEdit, Vcl.WinXCtrls, ES.BaseControls, ES.Switch, CWSListBox;
+  Winapi.Windows,
+  Winapi.Messages,
+  System.SysUtils,
+  System.Variants,
+  System.Classes,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  CWSFluentColorsMulti,
+  Vcl.StdCtrls,
+  CWSScrollBox,
+  CWSStringGrid,
+  CWSRadioButton,
+  VCL.Grids,
+  CWSEdit,
+  Vcl.WinXCtrls,
+  CWSListBox;
 
 type
   TfrmGrids = class(TForm)
@@ -40,7 +55,6 @@ begin
 
   lblTitle1.Font.Color := flNeutralForeground1;
 
-
   CWSStringGrid1.BackgroundColor := flNeutralBackground2;
   CWSStringGrid1.BorderColor := flNeutralStroke1;
   CWSStringGrid1.CellTextColor := flNeutralForeground1;
@@ -49,9 +63,9 @@ begin
   CWSStringGrid1.CellHighlightColor := flBrandBackgroundSelected;
   CWSStringGrid1.GridLineColor := flNeutralStroke1;
   CWSStringGrid1.CellTextColor := flNeutralForeground1;
-  CWSStringGrid1.Font.Color:= flNeutralForeground1;
+  CWSStringGrid1.Font.Color := flNeutralForeground1;
   CWSStringGrid1.AlternatingRowColors := True;
-  CWSStringGrid1.EvenRowColor:= flNeutralBackground3;
+  CWSStringGrid1.EvenRowColor := flNeutralBackground3;
 
   CWSEdit1.BackgroundColor := flNeutralBackground2;
   CWSEdit1.BackgroundHoverColor := flNeutralBackground4;
@@ -84,7 +98,7 @@ end;
 procedure TfrmGrids.CWSEdit1KeyPress(Sender: TObject; var Key: Char);
 begin
 
-  if not (Key in ['0'..'9', #8, #13]) then
+  if not(Key in ['0'..'9', #8, #13]) then
   begin
     Key := #0; // #0 oznacza "pusty znak", co blokuje wpisanie znaku
   end;
@@ -112,10 +126,10 @@ end;
 
 procedure TfrmGrids.FormShow(Sender: TObject);
 var
-  i, j: integer;
+  i, j: Integer;
 begin
 
-ScaleForPPI(CurrentPPI);
+  ScaleForPPI(CurrentPPI);
 
   CWSStringGrid1.ColCount := 100;
   CWSStringGrid1.RowCount := 10000;

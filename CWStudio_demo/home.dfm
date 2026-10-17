@@ -17,6 +17,15 @@ object frmHome: TfrmHome
   OnDestroy = FormDestroy
   OnShow = FormShow
   TextHeight = 15
+  object shadow1: TCWSShadow
+    Left = 1
+    Top = 331
+    Width = 604
+    Height = 114
+    Control = lblDescription
+    Distance = 0
+    Color = clOrange
+  end
   object lblDescription: TLabel
     Left = 16
     Top = 346
@@ -477,7 +486,7 @@ object frmHome: TfrmHome
   object lblTrendTitle: TLabel
     Left = 340
     Top = 24
-    Width = 118
+    Width = 96
     Height = 17
     Caption = 'CWSLabelTrend'
     Font.Charset = DEFAULT_CHARSET
@@ -490,35 +499,37 @@ object frmHome: TfrmHome
   object CWSLabelTrend1: TCWSLabelTrend
     Left = 340
     Top = 52
-    Width = 96
-    Height = 33
+    Width = 95
+    Height = 27
     Caption = '+12.5%'
     Color = clWhite
+    IconFontName = 'Segoe MDL2 Assets'
+    IconColor = clGreen
+    LeftIcon = tiGlyph
+    LeftGlyph = #59150
     Font.Charset = DEFAULT_CHARSET
     Font.Color = clWindowText
     Font.Height = -13
     Font.Name = 'Segoe UI'
     Font.Style = [fsBold]
     ParentFont = False
-    LeftIcon = tiGlyph
-    LeftGlyph = #59150
-    IconColor = clGreen
   end
   object CWSLabelTrend2: TCWSLabelTrend
     Left = 448
     Top = 52
-    Width = 96
-    Height = 33
+    Width = 84
+    Height = 27
     Caption = '-3.2%'
     Color = clWhite
+    IconFontName = 'Segoe MDL2 Assets'
+    IconColor = clRed
+    LeftIcon = tiGlyph
+    LeftGlyph = #59149
     Font.Charset = DEFAULT_CHARSET
     Font.Color = clWindowText
     Font.Height = -13
     Font.Name = 'Segoe UI'
     Font.Style = [fsBold]
     ParentFont = False
-    LeftIcon = tiGlyph
-    LeftGlyph = #59149
-    IconColor = clRed
   end
 end
