@@ -346,6 +346,7 @@ type
     procedure Paint; override;
     procedure Resize; override;
     procedure Loaded; override;
+    procedure DoEnter; override;
     procedure SetName(const Value: TComponentName); override;
     procedure SetParent(AParent: TWinControl); override;
     procedure SetEnabled(Value: Boolean); override;
@@ -2545,12 +2546,6 @@ procedure TCWSComboBox.EditEnter(Sender: TObject);
 begin
   FFocused := True;
   Invalidate;
-  { PopupMenu shortcuts fire without the menu ever being shown, so its
-    PopupComponent must point at the focused control, not the last one
-    right-clicked (or nil). }
-  if Assigned(PopupMenu) then
-    PopupMenu.PopupComponent := Self;
-  if Assigned(OnEnter) then OnEnter(Self);
 end;
 
 procedure TCWSComboBox.EditExit(Sender: TObject);
@@ -2558,7 +2553,6 @@ begin
   FFocused := False;
   if FDroppedDown then CloseDropdown;
   Invalidate;
-  if Assigned(OnExit) then OnExit(Self);
 end;
 
 procedure TCWSComboBox.EditKeyDown(Sender: TObject; var Key: Word;
@@ -2877,6 +2871,20 @@ end;
 
 { ─── Focus ────────────────────────────────────────────────────────────────── }
 
+{ OnEnter / OnExit are the inherited TWinControl events: the form sends CM_ENTER
+  / CM_EXIT to the combo whenever the focus enters or leaves it or its inner
+  edit, so the VCL fires them exactly once. The focus handlers below must not
+  call them again. }
+procedure TCWSComboBox.DoEnter;
+begin
+  { PopupMenu shortcuts fire without the menu ever being shown, so its
+    PopupComponent must point at the focused control, not the last one
+    right-clicked (or nil). Here it covers csDropDown and csDropDownList. }
+  if Assigned(PopupMenu) then
+    PopupMenu.PopupComponent := Self;
+  inherited;
+end;
+
 procedure TCWSComboBox.WMSetFocus(var Msg: TWMSetFocus);
 begin
   inherited;
@@ -2885,7 +2893,6 @@ begin
     FInternalEdit.SetFocus
   else
     Invalidate;
-  if Assigned(OnEnter) then OnEnter(Self);
 end;
 
 procedure TCWSComboBox.WMKillFocus(var Msg: TWMKillFocus);
@@ -2898,7 +2905,6 @@ begin
   FFocused := False;
   if FDroppedDown then CloseDropdown;
   Invalidate;
-  if Assigned(OnExit) then OnExit(Self);
 end;
 
 { ─── Keyboard (csDropDownList — focus on combo) ─────────────────────────── }

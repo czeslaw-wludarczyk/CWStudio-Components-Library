@@ -222,8 +222,9 @@ type
     { Give the inner edit the focus WITHOUT any select-all: TCustomMaskEdit's
       CMEnter calls SelectAll and our EditEnter posts EM_SETSEL(0, -1). Both would
       select the whole password when the reveal button hands the focus back,
-      instead of keeping the caret where the user left it. Tab-in keeps the normal
-      AutoSelect behaviour — the flags are only muted for our own SetFocus. }
+      instead of keeping the caret where the user left it. Used only for the
+      button: a click on the frame, padding or label focuses the edit normally,
+      so AutoSelect works as on Tab-in. }
     procedure FocusEditKeepCaret;
     function Scale(Value: Integer): Integer;
     function ScaleF(Value: Single): Single;
@@ -1330,9 +1331,10 @@ begin
     Exit;
   end;
   inherited;
-  // Pass focus to the inner edit after a click anywhere on the component
+  { Pass focus to the inner edit after a click on the frame, padding or label.
+    A plain SetFocus, so AutoSelect selects the text like on Tab-in. }
   if (Button = mbLeft) and (FEdit <> nil) and FEdit.CanFocus then
-    FocusEditKeepCaret;
+    FEdit.SetFocus;
 end;
 
 procedure TCWSEditMask.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
@@ -1372,7 +1374,7 @@ begin
      PtInRect(GetButtonRect, Point(Msg.XPos, Msg.YPos)) then
     Exit;
   if (FEdit <> nil) and FEdit.CanFocus and not FEdit.Focused then
-    FocusEditKeepCaret;
+    FEdit.SetFocus;
 end;
 
 // Capture can be cancelled without a MouseUp (modal dialog, Alt+Tab, ESC).

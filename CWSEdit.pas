@@ -201,12 +201,11 @@ type
     procedure SetPasswordReveal(Reveal: Boolean);
     { Give the inner edit the focus WITHOUT TCustomEdit's AutoSelect kicking in.
       CM_ENTER calls SelectAll whenever a non-multiline edit becomes the active
-      control, so every SetFocus we issue from our own chrome (the button, the
-      padding around the edit) would select the whole text — on the ebsPassword
-      reveal button that meant the password ended up fully selected instead of
-      keeping the caret where the user left it. Tab-in keeps the standard
-      AutoSelect behaviour: the flag is only suppressed for the duration of our
-      own SetFocus call. }
+      control, so a SetFocus issued from the button would select the whole
+      text — on the ebsPassword reveal button that meant the password ended up
+      fully selected instead of keeping the caret where the user left it. Used
+      only for the button: a click on the frame, padding or label focuses the
+      edit normally, so AutoSelect works as on Tab-in. }
     procedure FocusEditKeepCaret;
     function Scale(Value: Integer): Integer;
     function ScaleF(Value: Single): Single;
@@ -1260,9 +1259,10 @@ begin
     Exit;
   end;
   inherited;
-  // Pass focus to the inner edit after a click anywhere on the component
+  { Pass focus to the inner edit after a click on the frame, padding or label.
+    A plain SetFocus, so AutoSelect selects the text like on Tab-in. }
   if (Button = mbLeft) and (FEdit <> nil) and FEdit.CanFocus then
-    FocusEditKeepCaret;
+    FEdit.SetFocus;
 end;
 
 procedure TCWSEdit.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
@@ -1302,7 +1302,7 @@ begin
      PtInRect(GetButtonRect, Point(Msg.XPos, Msg.YPos)) then
     Exit;
   if (FEdit <> nil) and FEdit.CanFocus and not FEdit.Focused then
-    FocusEditKeepCaret;
+    FEdit.SetFocus;
 end;
 
 // Capture can be cancelled without a MouseUp (modal dialog, Alt+Tab, ESC).

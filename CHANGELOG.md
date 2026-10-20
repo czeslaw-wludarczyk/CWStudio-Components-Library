@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.28] — 2026-10-20
+
+- **Fix** `TCWSEdit`, `TCWSEditMask`: **a click on the frame, padding or label selects the text when `AutoSelect` is on, as on Tab-in.** The click focused the inner edit through `FocusEditKeepCaret`, which mutes both select-all paths (`TCustomEdit.CMEnter` and the `EM_SETSEL` posted from `EditEnter`) and restores the old caret — meant only for the button (e.g. the `ebsPassword` reveal button must not select the password). `MouseDown` and `WMLButtonDown` now call a plain `FEdit.SetFocus`; the button still uses `FocusEditKeepCaret`. A click on the text itself is unchanged (native caret placement, no selection).
+- **Fix** `TCWSComboBox`: **`OnEnter` and `OnExit` fire once.** They are the inherited `TWinControl` events, which the VCL already fires from `CM_ENTER` / `CM_EXIT` whenever the focus enters or leaves the combo or its inner edit; `EditEnter` / `EditExit` and `WMSetFocus` / `WMKillFocus` called them again, so a focus change fired them two or three times. The extra calls are removed. `PopupMenu.PopupComponent` is now assigned in a `DoEnter` override, so it is set in `csDropDownList` too (the inner edit never gets the focus there).
+
 ## [1.9.27] — 2026-10-20
 
 - **Fix** `TCWSEdit`, `TCWSEditMask`, `TCWSComboBox`, `TCWSDatePicker`, `TCWSMemo`, `TCWSListBox`, `TCWSStringGrid`, `TCWSDBGrid`: **`PopupMenu` shortcuts now act on the focused control, also before the menu has been shown for the first time.** Focus sits in the inner control (edit, memo, list box, grid), and `TWinControl.IsMenuKey` walks its parents and runs the item's `OnClick` from `PopupMenu.IsShortCut` without showing the menu. `PopupComponent` was assigned only on a right-click, so until the menu had been opened once it was `nil` — handlers that use it (e.g. `TCWSEdit(PopupMenu.PopupComponent).CopyToClipboard`) did nothing, and the shortcut was still consumed, so the inner control never got the key. With one menu shared by several controls, `PopupComponent` pointed at the control right-clicked last, not the focused one. Each control now sets `PopupMenu.PopupComponent := Self` when it receives focus (before `OnEnter`).

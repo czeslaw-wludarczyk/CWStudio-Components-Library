@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.27](https://img.shields.io/badge/version-1.9.27-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.28](https://img.shields.io/badge/version-1.9.28-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -272,9 +272,10 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.27:**
+**Najnowsza wersja — 1.9.28:**
 
-- **Poprawka** `TCWSEdit`, `TCWSEditMask`, `TCWSComboBox`, `TCWSDatePicker`, `TCWSMemo`, `TCWSListBox`, `TCWSStringGrid`, `TCWSDBGrid`: **skróty klawiszowe z `PopupMenu` działają od razu, bez wcześniejszego pokazania menu.** VCL wykonuje pozycję menu ze skrótem bez pokazywania menu, a `PopupComponent` był ustawiany dopiero przy prawym kliknięciu — do tego czasu był `nil`, więc handlery korzystające z niego nic nie robiły, a skrót i tak był przechwytywany. Przy menu wspólnym dla kilku kontrolek wskazywał ostatnio klikniętą zamiast tej z fokusem. Teraz kontrolka ustawia `PopupMenu.PopupComponent := Self` przy wejściu fokusu.
+- **Poprawka** `TCWSEdit`, `TCWSEditMask`: **kliknięcie w ramkę, padding lub etykietę zaznacza tekst przy włączonym `AutoSelect`**, tak jak wejście Tabem. Wcześniej fokus był przekazywany z pominięciem `AutoSelect` (zachowanie przeznaczone tylko dla przycisku, np. podglądu hasła). Kliknięcie w sam tekst działa bez zmian.
+- **Poprawka** `TCWSComboBox`: **`OnEnter` i `OnExit` wywołują się raz.** VCL wywołuje je sam, a komponent wywoływał je dodatkowo, więc zmiana fokusu odpalała je dwa lub trzy razy. `PopupMenu.PopupComponent` jest teraz ustawiany także w stylu `csDropDownList`.
 
 Pełna historia zmian znajduje się w pliku [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -563,9 +564,10 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.27:**
+**Latest release — 1.9.28:**
 
-- **Fixed** `TCWSEdit`, `TCWSEditMask`, `TCWSComboBox`, `TCWSDatePicker`, `TCWSMemo`, `TCWSListBox`, `TCWSStringGrid`, `TCWSDBGrid`: **`PopupMenu` shortcuts work right away, without showing the menu first.** The VCL runs a menu item's shortcut without showing the menu, but `PopupComponent` was assigned only on a right-click — until then it was `nil`, so handlers that use it did nothing while the shortcut was still consumed. With a menu shared by several controls it pointed at the control right-clicked last instead of the focused one. Each control now sets `PopupMenu.PopupComponent := Self` when it receives focus.
+- **Fixed** `TCWSEdit`, `TCWSEditMask`: **a click on the frame, padding or label selects the text when `AutoSelect` is on**, as on Tab-in. The focus used to be handed over with `AutoSelect` muted (behaviour meant only for the button, e.g. the password reveal). A click on the text itself is unchanged.
+- **Fixed** `TCWSComboBox`: **`OnEnter` and `OnExit` fire once.** The VCL fires them itself and the component fired them again, so a focus change fired them two or three times. `PopupMenu.PopupComponent` is now also set in `csDropDownList`.
 
 The full change history is kept in [`CHANGELOG.md`](CHANGELOG.md).
 
