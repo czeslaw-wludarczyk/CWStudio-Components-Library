@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.25](https://img.shields.io/badge/version-1.9.25-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.26](https://img.shields.io/badge/version-1.9.26-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -272,9 +272,10 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.25:**
+**Najnowsza wersja — 1.9.26:**
 
-- **Zmiana** `CWStudio_demo`: **aplikacja demo nie zależy już od komponentów ErrorSoft (EsVclComponents).** `TEsShape` w oknie głównym zastąpił `TCWSSettingsPanel`, a nieużywane moduły `ES.*` usunięto z `uses`. Demo wymaga teraz tylko RTL/VCL, pakietów CWStudio i `SVGIconImageList`. Opis demo — sekcja [🖥️ Aplikacja demo](#️-aplikacja-demo).
+- **Poprawka** `TCWSEdit`, `TCWSEditMask`: **odczyt `PopupMenu.PopupComponent` nie powoduje już Access Violation.** Obie kontrolki pokazywały menu kontekstowe z własnych handlerów i nie ustawiały `PopupComponent`, więc było `nil` (np. `PopupComponent.ClassName` w `OnPopup` kończyło się AV). Teraz wskazuje kontrolkę, tak jak w `TCWSMemo` i `TCWSListBox`.
+- **Poprawka** `TCWSComboBox` (`csDropDown`): **prawy klik na tekście pokazuje `PopupMenu` ComboBoxa** zamiast systemowego menu Cofnij/Wytnij/Kopiuj/Wklej, z ustawionym `PopupComponent`. Bez przypisanego `PopupMenu` nadal pojawia się menu systemowe. `OnContextPopup` uruchamia się teraz także nad polem tekstowym.
 
 Pełna historia zmian znajduje się w pliku [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -563,9 +564,10 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.25:**
+**Latest release — 1.9.26:**
 
-- **Changed** `CWStudio_demo`: **the demo application no longer depends on ErrorSoft components (EsVclComponents).** `TEsShape` on the main form was replaced by a `TCWSSettingsPanel`, and the unused `ES.*` units were removed from the uses clauses. The demo now needs only the RTL/VCL, the CWStudio packages and `SVGIconImageList`. See [🖥️ Demo application](#️-demo-application).
+- **Fixed** `TCWSEdit`, `TCWSEditMask`: **reading `PopupMenu.PopupComponent` no longer raises an access violation.** Both controls showed their context menu from their own handlers and never set `PopupComponent`, so it was `nil` (e.g. `PopupComponent.ClassName` in `OnPopup` crashed). It now points at the control, as in `TCWSMemo` and `TCWSListBox`.
+- **Fixed** `TCWSComboBox` (`csDropDown`): **a right-click on the text shows the combo's `PopupMenu`** instead of the native Undo/Cut/Copy/Paste menu, with `PopupComponent` set. Without a `PopupMenu` the native menu is still shown. `OnContextPopup` now also fires over the text field.
 
 The full change history is kept in [`CHANGELOG.md`](CHANGELOG.md).
 

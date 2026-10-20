@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.26] — 2026-10-20
+
+- **Fix** `TCWSEdit`, `TCWSEditMask`: **`PopupMenu.PopupComponent` was not set, so reading it in `OnPopup` or in an item's `OnClick` raised an access violation.** Both controls show their `PopupMenu` from their own handlers (`EditContextPopup` for a right-click on the text, `WMContextMenu` for the frame and Shift+F10) and called `PopupMenu.Popup` directly, bypassing `TControl.WMContextMenu` — the only place where the VCL assigns `PopupComponent`. It stayed `nil` (or pointed at the control the menu was last shown for), so e.g. `PopupMenu.PopupComponent.ClassName` crashed. Both handlers now set `PopupComponent := Self` before `Popup`, as `TCWSMemo`, `TCWSListBox` and `TCWSDatePicker` already did.
+- **Fix** `TCWSComboBox` (`csDropDown`): **a right-click on the text shows the combo's `PopupMenu` instead of the native Undo/Cut/Copy/Paste menu.** The inner edit has no `PopupMenu` of its own and nothing forwarded the right-click, so the combo's menu appeared only outside the text area. A new `EditContextPopup` fires the combo's `OnContextPopup` (in combo coordinates), and if it is not handled closes an open dropdown, sets `PopupComponent := Self` and shows `PopupMenu`. Without a `PopupMenu` the native edit menu is still shown. `OnContextPopup` now also fires for a right-click on the text.
+
 ## [1.9.25] — 2026-10-17
 
 - **Change** `CWStudio_demo`: **the demo application no longer depends on ErrorSoft components (EsVclComponents).** `main` used `TEsShape` (`ES.BaseControls`, `ES.Shapes`) as the rounded frame around the content area; it is replaced by a `TCWSSettingsPanel` (`FillColor` / `BorderColor` follow the theme in `ApplyTheme`). `grids` no longer lists the unused `ES.BaseControls` and `ES.Switch` units. The demo now builds with only the RTL/VCL, the CWStudio packages and `SVGIconImageList` (used for the icons in the demo forms). The `EsCore` / `EsVclCore` / `EsVclComponents` names that are still in `DCC_UsePackage` of `demo.dproj` are the IDE's list of installed packages; they are not used, because the demo does not link with runtime packages.

@@ -1537,6 +1537,7 @@ begin
   if not Handled and Assigned(PopupMenu) then
   begin
     ScreenPos := FEdit.ClientToScreen(MousePos);
+    PopupMenu.PopupComponent := Self;
     PopupMenu.Popup(ScreenPos.X, ScreenPos.Y);
     Handled := True;
   end;
@@ -1839,6 +1840,7 @@ begin
     FOnContextPopup(Self, MousePos, Handled);
   if not Handled and Assigned(PopupMenu) then
   begin
+    PopupMenu.PopupComponent := Self;
     if Msg.XPos = -1 then
     begin
       MousePos := ClientToScreen(Point(0, 0));

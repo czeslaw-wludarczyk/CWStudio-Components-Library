@@ -37,7 +37,7 @@ uses
   Winapi.Windows, Winapi.Messages, Winapi.GDIPAPI, Winapi.GDIPOBJ,
   Winapi.MultiMon, System.SysUtils, System.StrUtils, System.Classes,
   System.Types, System.Math, Vcl.Controls, Vcl.Graphics, Vcl.StdCtrls,
-  Vcl.Forms, Vcl.ExtCtrls, CWSEdit, System.UITypes;
+  Vcl.Forms, Vcl.ExtCtrls, Vcl.Menus, CWSEdit, System.UITypes;
 
 const
   WM_CWS_CLOSEDROPDOWN = WM_USER + 201;
@@ -319,6 +319,9 @@ type
     procedure EditKeyPress(Sender: TObject; var Key: Char);
     procedure EditMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
+    { The inner edit has no PopupMenu of its own, so without this a right-click
+      on the text shows the native EDIT menu instead of the combo's PopupMenu. }
+    procedure EditContextPopup(Sender: TObject; MousePos: TPoint; var Handled: Boolean);
     procedure EditSubclassProc(var Message: TMessage);
 
     { Messages }
@@ -1923,6 +1926,7 @@ begin
   FInternalEdit.OnKeyUp     := EditKeyUp;
   FInternalEdit.OnKeyPress  := EditKeyPress;
   FInternalEdit.OnMouseDown := EditMouseDown;
+  FInternalEdit.OnContextPopup := EditContextPopup;
   { Hook WindowProc so ESC can close the dropdown *before* the parent form's
     KeyPreview sees it (otherwise an ESC=Close form would fire first). }
   FEditWndProc := FInternalEdit.WindowProc;
@@ -2652,6 +2656,38 @@ procedure TCWSComboBox.EditMouseDown(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 begin
   if (Button = mbLeft) and FDroppedDown then CloseDropdown;
+end;
+
+procedure TCWSComboBox.EditContextPopup(Sender: TObject; MousePos: TPoint;
+  var Handled: Boolean);
+var
+  Pt, ScreenPos: TPoint;
+  Menu: TPopupMenu;
+begin
+  { (-1,-1) — invoked from the keyboard (Shift+F10 / context key). }
+  if InvalidPoint(MousePos) then
+  begin
+    Pt := MousePos;
+    ScreenPos := ClientToScreen(Point(0, 0));
+  end
+  else
+  begin
+    ScreenPos := FInternalEdit.ClientToScreen(MousePos);
+    Pt := ScreenToClient(ScreenPos);
+  end;
+
+  { Fires the combo's OnContextPopup with combo coordinates. }
+  DoContextPopup(Pt, Handled);
+  if Handled then Exit;
+
+  Menu := PopupMenu;
+  if (Menu = nil) or not Menu.AutoPopup then Exit;
+
+  if FDroppedDown then CloseDropdown;
+  SendCancelMode(nil);
+  Menu.PopupComponent := Self;
+  Menu.Popup(ScreenPos.X, ScreenPos.Y);
+  Handled := True;
 end;
 
 { ─── Paint ────────────────────────────────────────────────────────────────── }
