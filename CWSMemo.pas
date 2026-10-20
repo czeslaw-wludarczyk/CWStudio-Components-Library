@@ -1217,6 +1217,11 @@ procedure TCWSMemo.MemoEnter(Sender: TObject);
 begin
   FFocused := True;
   ApplyStateChange;
+  { PopupMenu shortcuts fire without the menu ever being shown, so its
+    PopupComponent must point at the focused control, not the last one
+    right-clicked (or nil). }
+  if Assigned(PopupMenu) then
+    PopupMenu.PopupComponent := Self;
   if Assigned(FOnEnter) then
     FOnEnter(Self);
 end;

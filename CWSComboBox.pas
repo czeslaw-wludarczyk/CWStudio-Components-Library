@@ -2545,6 +2545,11 @@ procedure TCWSComboBox.EditEnter(Sender: TObject);
 begin
   FFocused := True;
   Invalidate;
+  { PopupMenu shortcuts fire without the menu ever being shown, so its
+    PopupComponent must point at the focused control, not the last one
+    right-clicked (or nil). }
+  if Assigned(PopupMenu) then
+    PopupMenu.PopupComponent := Self;
   if Assigned(OnEnter) then OnEnter(Self);
 end;
 

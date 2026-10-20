@@ -1906,6 +1906,11 @@ procedure TCWSStringGrid.GridEnter;
 begin
   { The internal grid is the control that actually receives focus (SetFocus
     redirects to it), so surface its focus transitions as the owner's. }
+  { PopupMenu shortcuts fire without the menu ever being shown, so its
+    PopupComponent must point at the focused control, not the last one
+    right-clicked (or nil). }
+  if Assigned(PopupMenu) then
+    PopupMenu.PopupComponent := Self;
   if Assigned(FOnEnter) then
     FOnEnter(Self);
 end;

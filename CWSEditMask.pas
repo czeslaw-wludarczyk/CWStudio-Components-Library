@@ -1532,6 +1532,11 @@ begin
   ApplyStateChange;
   if FAutoSelect and not FReadOnly then
     PostMessage(FEdit.Handle, EM_SETSEL, 0, -1);
+  { PopupMenu shortcuts fire without the menu ever being shown, so its
+    PopupComponent must point at the focused control, not the last one
+    right-clicked (or nil). }
+  if Assigned(PopupMenu) then
+    PopupMenu.PopupComponent := Self;
   if Assigned(FOnEnter) then
     FOnEnter(Self);
 end;

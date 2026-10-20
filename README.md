@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.26](https://img.shields.io/badge/version-1.9.26-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.27](https://img.shields.io/badge/version-1.9.27-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -272,10 +272,9 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.26:**
+**Najnowsza wersja — 1.9.27:**
 
-- **Poprawka** `TCWSEdit`, `TCWSEditMask`: **odczyt `PopupMenu.PopupComponent` nie powoduje już Access Violation.** Obie kontrolki pokazywały menu kontekstowe z własnych handlerów i nie ustawiały `PopupComponent`, więc było `nil` (np. `PopupComponent.ClassName` w `OnPopup` kończyło się AV). Teraz wskazuje kontrolkę, tak jak w `TCWSMemo` i `TCWSListBox`.
-- **Poprawka** `TCWSComboBox` (`csDropDown`): **prawy klik na tekście pokazuje `PopupMenu` ComboBoxa** zamiast systemowego menu Cofnij/Wytnij/Kopiuj/Wklej, z ustawionym `PopupComponent`. Bez przypisanego `PopupMenu` nadal pojawia się menu systemowe. `OnContextPopup` uruchamia się teraz także nad polem tekstowym.
+- **Poprawka** `TCWSEdit`, `TCWSEditMask`, `TCWSComboBox`, `TCWSDatePicker`, `TCWSMemo`, `TCWSListBox`, `TCWSStringGrid`, `TCWSDBGrid`: **skróty klawiszowe z `PopupMenu` działają od razu, bez wcześniejszego pokazania menu.** VCL wykonuje pozycję menu ze skrótem bez pokazywania menu, a `PopupComponent` był ustawiany dopiero przy prawym kliknięciu — do tego czasu był `nil`, więc handlery korzystające z niego nic nie robiły, a skrót i tak był przechwytywany. Przy menu wspólnym dla kilku kontrolek wskazywał ostatnio klikniętą zamiast tej z fokusem. Teraz kontrolka ustawia `PopupMenu.PopupComponent := Self` przy wejściu fokusu.
 
 Pełna historia zmian znajduje się w pliku [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -564,10 +563,9 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.26:**
+**Latest release — 1.9.27:**
 
-- **Fixed** `TCWSEdit`, `TCWSEditMask`: **reading `PopupMenu.PopupComponent` no longer raises an access violation.** Both controls showed their context menu from their own handlers and never set `PopupComponent`, so it was `nil` (e.g. `PopupComponent.ClassName` in `OnPopup` crashed). It now points at the control, as in `TCWSMemo` and `TCWSListBox`.
-- **Fixed** `TCWSComboBox` (`csDropDown`): **a right-click on the text shows the combo's `PopupMenu`** instead of the native Undo/Cut/Copy/Paste menu, with `PopupComponent` set. Without a `PopupMenu` the native menu is still shown. `OnContextPopup` now also fires over the text field.
+- **Fixed** `TCWSEdit`, `TCWSEditMask`, `TCWSComboBox`, `TCWSDatePicker`, `TCWSMemo`, `TCWSListBox`, `TCWSStringGrid`, `TCWSDBGrid`: **`PopupMenu` shortcuts work right away, without showing the menu first.** The VCL runs a menu item's shortcut without showing the menu, but `PopupComponent` was assigned only on a right-click — until then it was `nil`, so handlers that use it did nothing while the shortcut was still consumed. With a menu shared by several controls it pointed at the control right-clicked last instead of the focused one. Each control now sets `PopupMenu.PopupComponent := Self` when it receives focus.
 
 The full change history is kept in [`CHANGELOG.md`](CHANGELOG.md).
 

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.27] — 2026-10-20
+
+- **Fix** `TCWSEdit`, `TCWSEditMask`, `TCWSComboBox`, `TCWSDatePicker`, `TCWSMemo`, `TCWSListBox`, `TCWSStringGrid`, `TCWSDBGrid`: **`PopupMenu` shortcuts now act on the focused control, also before the menu has been shown for the first time.** Focus sits in the inner control (edit, memo, list box, grid), and `TWinControl.IsMenuKey` walks its parents and runs the item's `OnClick` from `PopupMenu.IsShortCut` without showing the menu. `PopupComponent` was assigned only on a right-click, so until the menu had been opened once it was `nil` — handlers that use it (e.g. `TCWSEdit(PopupMenu.PopupComponent).CopyToClipboard`) did nothing, and the shortcut was still consumed, so the inner control never got the key. With one menu shared by several controls, `PopupComponent` pointed at the control right-clicked last, not the focused one. Each control now sets `PopupMenu.PopupComponent := Self` when it receives focus (before `OnEnter`).
+
 ## [1.9.26] — 2026-10-20
 
 - **Fix** `TCWSEdit`, `TCWSEditMask`: **`PopupMenu.PopupComponent` was not set, so reading it in `OnPopup` or in an item's `OnClick` raised an access violation.** Both controls show their `PopupMenu` from their own handlers (`EditContextPopup` for a right-click on the text, `WMContextMenu` for the frame and Shift+F10) and called `PopupMenu.Popup` directly, bypassing `TControl.WMContextMenu` — the only place where the VCL assigns `PopupComponent`. It stayed `nil` (or pointed at the control the menu was last shown for), so e.g. `PopupMenu.PopupComponent.ClassName` crashed. Both handlers now set `PopupComponent := Self` before `Popup`, as `TCWSMemo`, `TCWSListBox` and `TCWSDatePicker` already did.
