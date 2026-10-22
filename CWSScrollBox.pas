@@ -405,7 +405,6 @@ type
       time, where the user's controls are its own children. }
     FPainting: Boolean;
     function GetChildParent: TComponent; override;
-    procedure GetChildren(Proc: TGetChildProc; Root: TComponent); override;
     procedure CreateParams(var Params: TCreateParams); override;
     procedure PaintWindow(DC: HDC); override;
     procedure CreateWnd; override;
@@ -419,6 +418,7 @@ type
       MousePos: TPoint): Boolean; override;
   public
     constructor Create(AOwner: TComponent); override;
+    procedure GetChildren(Proc: TGetChildProc; Root: TComponent); override;
 
     function Scale(V: Integer): Integer;
     function ViewWidth: Integer;

@@ -237,6 +237,9 @@
     <span class="mode-label">Page background:</span>
     <button id="btn-light" class="active">Light</button>
     <button id="btn-dark">Dark</button>
+    <span class="mode-label">Copy as:</span>
+    <button id="btn-fmt-hex" class="active">HEX</button>
+    <button id="btn-fmt-delphi">Delphi TColor</button>
   </div>
 </header>
 
@@ -885,7 +888,7 @@
 <div class="toast" id="toast">Copied</div>
 
 <footer>
-  Click a swatch to copy its hex value. Click a token name to copy the variable name.
+  Click a swatch to copy its color in the selected format (HEX or Delphi TColor, e.g. $00BD6C0F). Right-click a swatch to always copy the Delphi TColor value. Click a token name to copy the variable name.
 </footer>
 
 <script>
@@ -913,11 +916,45 @@
     toastTimer = setTimeout(() => toast.classList.remove('show'), 1400);
   }
 
-  // Copy hex on swatch click
+  // Copy format (HEX or Delphi TColor)
+  const btnFmtHex = document.getElementById('btn-fmt-hex');
+  const btnFmtDelphi = document.getElementById('btn-fmt-delphi');
+  let copyFormat = 'hex';
+  function setCopyFormat(fmt) {
+    copyFormat = fmt;
+    btnFmtHex.classList.toggle('active', fmt === 'hex');
+    btnFmtDelphi.classList.toggle('active', fmt === 'delphi');
+    // Show swatch values in the selected format
+    document.querySelectorAll('.swatch[data-hex] .hex').forEach(span => {
+      const hex = span.parentElement.dataset.hex;
+      span.textContent = fmt === 'delphi' ? hexToDelphi(hex) : hex;
+    });
+    try { localStorage.setItem('cwsPaletteCopyFormat', fmt); } catch (e) {}
+  }
+  btnFmtHex.onclick = () => setCopyFormat('hex');
+  btnFmtDelphi.onclick = () => setCopyFormat('delphi');
+  try {
+    if (localStorage.getItem('cwsPaletteCopyFormat') === 'delphi') setCopyFormat('delphi');
+  } catch (e) {}
+
+  // #RRGGBB -> Delphi TColor literal $00BBGGRR
+  function hexToDelphi(hex) {
+    const h = hex.replace('#', '').toUpperCase();
+    return '$00' + h.substr(4, 2) + h.substr(2, 2) + h.substr(0, 2);
+  }
+
+  function copySwatch(el, fmt) {
+    const value = fmt === 'delphi' ? hexToDelphi(el.dataset.hex) : el.dataset.hex;
+    navigator.clipboard.writeText(value).then(() => showToast('Copied: ' + value));
+  }
+
+  // Click copies in selected format, right-click always copies Delphi TColor
   document.querySelectorAll('.swatch[data-hex]').forEach(el => {
-    el.addEventListener('click', () => {
-      const hex = el.dataset.hex;
-      navigator.clipboard.writeText(hex).then(() => showToast('Copied: ' + hex));
+    el.title = 'Click to copy (right-click: Delphi TColor ' + hexToDelphi(el.dataset.hex) + ')';
+    el.addEventListener('click', () => copySwatch(el, copyFormat));
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      copySwatch(el, 'delphi');
     });
   });
 

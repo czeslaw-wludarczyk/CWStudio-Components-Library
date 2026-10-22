@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.30] — 2026-10-22
+
+- **Fix** `TCWSListBox`: **`SetDragMode` overrides the virtual `TControl.SetDragMode` instead of hiding it (W1010).** It was declared as a new `SetDragMode(const Value: TDragMode)`, so a call through the virtual method (`TControl.DragMode` on a `TControl` reference) set only the outer control and never reached the inner list box. It is now `procedure SetDragMode(Value: TDragMode); override;` and still forwards the value to the inner list box without calling `inherited` — the outer control stays `dmManual`, only the inner list box drags, as before.
+- **Cleanup** compiler hints — the packages now build with no warnings or hints:
+  - `TCWSFlayoutPopupMenu`: removed the unused private `TCWSFlyWindow.HasSecondary` (H2219) and a dead `TxtH := 0` assignment in `Measure` (H2077).
+  - `TCWSScrollBox`: `GetChildren` moved from `protected` to `public`, matching `TComponent` (H2269).
+  - `TCWSListBox`: `TCWSInternalListBox.DragDrop` moved from `protected` to `public`, matching `TControl` (H2269).
+
+## [1.9.29] — 2026-10-22
+
+- **Change** `TCWSButton`: **default height 32 px, the same as `TCWSComboBox` / `TCWSEdit`.** The constructor default `Height` changed from `MulDiv(35, CurrentPPI, 96)` to `MulDiv(32, CurrentPPI, 96)`, so a button next to a combo box or an edit has the same height. Only newly dropped buttons are affected; existing ones keep the `Height` stored in the DFM.
+- **New** `CWSFluentColors_palette.html`: **copy colors as Delphi `TColor`.** A **Copy as: HEX / Delphi TColor** toggle in the header selects the format copied by a click on a swatch — `#RRGGBB` or the `TColor` literal `$00BBGGRR` (e.g. `#0f6cbd` → `$00BD6C0F`, the same form as the constants in `CWSFluentColors.pas`) — and switches the values shown on the swatches. A right-click on a swatch always copies the Delphi value. The selected format is remembered in the browser. For tokens with alpha only the color is copied (`TColor` has no alpha channel).
+
 ## [1.9.28] — 2026-10-20
 
 - **Fix** `TCWSEdit`, `TCWSEditMask`: **a click on the frame, padding or label selects the text when `AutoSelect` is on, as on Tab-in.** The click focused the inner edit through `FocusEditKeepCaret`, which mutes both select-all paths (`TCustomEdit.CMEnter` and the `EM_SETSEL` posted from `EditEnter`) and restores the old caret — meant only for the button (e.g. the `ebsPassword` reveal button must not select the password). `MouseDown` and `WMLButtonDown` now call a plain `FEdit.SetFocus`; the button still uses `FocusEditKeepCaret`. A click on the text itself is unchanged (native caret placement, no selection).

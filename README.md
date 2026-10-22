@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.28](https://img.shields.io/badge/version-1.9.28-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.30](https://img.shields.io/badge/version-1.9.30-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -184,7 +184,8 @@ W repozytorium znajduje się interaktywny **wzornik kolorów** [`CWSFluentColors
 
 - filtrować tokeny po nazwie (np. `Brand`, `Background`, `Hover`),
 - podejrzeć paletę na jasnym i ciemnym tle (przełącznik **Light / Dark**),
-- kliknięciem **próbki** skopiować kod HEX, a kliknięciem **nazwy** — nazwę tokena do schowka.
+- kliknięciem **próbki** skopiować kolor jako HEX (`#0f6cbd`) lub Delphi `TColor` (`$00BD6C0F`) — format wybiera przełącznik **Copy as**, który zmienia też wartości wyświetlane na próbkach; prawy klik zawsze kopiuje wartość Delphi,
+- kliknięciem **nazwy** skopiować nazwę tokena do schowka.
 
 Dzięki temu łatwo dobrać i dopasować kolory ustawiane we właściwościach komponentów (np. `BorderColor`, `CellHighlightColor`, `BckHoverColor`, `FillColor`).
 
@@ -272,10 +273,10 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.28:**
+**Najnowsza wersja — 1.9.30:**
 
-- **Poprawka** `TCWSEdit`, `TCWSEditMask`: **kliknięcie w ramkę, padding lub etykietę zaznacza tekst przy włączonym `AutoSelect`**, tak jak wejście Tabem. Wcześniej fokus był przekazywany z pominięciem `AutoSelect` (zachowanie przeznaczone tylko dla przycisku, np. podglądu hasła). Kliknięcie w sam tekst działa bez zmian.
-- **Poprawka** `TCWSComboBox`: **`OnEnter` i `OnExit` wywołują się raz.** VCL wywołuje je sam, a komponent wywoływał je dodatkowo, więc zmiana fokusu odpalała je dwa lub trzy razy. `PopupMenu.PopupComponent` jest teraz ustawiany także w stylu `csDropDownList`.
+- **Poprawka** `TCWSListBox`: **`SetDragMode` nadpisuje teraz wirtualną metodę `TControl.SetDragMode`** zamiast ją zasłaniać, więc `DragMode` zawsze trafia do wewnętrznej listy, także gdy VCL ustawia go przez metodę wirtualną.
+- **Porządki** `TCWSFlayoutPopupMenu`, `TCWSScrollBox`, `TCWSListBox`: **pakiety kompilują się bez ostrzeżeń i hintów** — usunięty nieużywany kod, `GetChildren` i `DragDrop` przeniesione do sekcji `public`, zgodnie z klasą bazową.
 
 Pełna historia zmian znajduje się w pliku [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -475,7 +476,8 @@ The repository ships an interactive **color swatch** [`CWSFluentColors_palette.h
 
 - filter tokens by name (e.g. `Brand`, `Background`, `Hover`),
 - preview the palette on a light or dark page background (**Light / Dark** toggle),
-- click a **swatch** to copy its HEX, or click a **token name** to copy the token name to the clipboard.
+- click a **swatch** to copy its color as HEX (`#0f6cbd`) or Delphi `TColor` (`$00BD6C0F`) — the **Copy as** toggle picks the format and also switches the values shown on the swatches; a right-click always copies the Delphi value,
+- click a **token name** to copy the token name to the clipboard.
 
 This makes it easy to pick and match the colors you set on component properties (e.g. `BorderColor`, `CellHighlightColor`, `BckHoverColor`, `FillColor`).
 
@@ -564,10 +566,10 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.28:**
+**Latest release — 1.9.30:**
 
-- **Fixed** `TCWSEdit`, `TCWSEditMask`: **a click on the frame, padding or label selects the text when `AutoSelect` is on**, as on Tab-in. The focus used to be handed over with `AutoSelect` muted (behaviour meant only for the button, e.g. the password reveal). A click on the text itself is unchanged.
-- **Fixed** `TCWSComboBox`: **`OnEnter` and `OnExit` fire once.** The VCL fires them itself and the component fired them again, so a focus change fired them two or three times. `PopupMenu.PopupComponent` is now also set in `csDropDownList`.
+- **Fixed** `TCWSListBox`: **`SetDragMode` now overrides the virtual `TControl.SetDragMode`** instead of hiding it, so `DragMode` always reaches the inner list box, also when the VCL sets it through the virtual method.
+- **Cleanup** `TCWSFlayoutPopupMenu`, `TCWSScrollBox`, `TCWSListBox`: **the packages compile without warnings or hints** — unused code removed, `GetChildren` and `DragDrop` moved to `public` to match the base class.
 
 The full change history is kept in [`CHANGELOG.md`](CHANGELOG.md).
 

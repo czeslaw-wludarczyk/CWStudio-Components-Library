@@ -106,9 +106,9 @@ type
     procedure DoStartDrag(var DragObject: TDragObject); override;
     procedure DoEndDrag(Target: TObject; X, Y: Integer); override;
     procedure DragOver(Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean); override;
-    procedure DragDrop(Source: TObject; X, Y: Integer); override;
   public
     constructor Create(AOwner: TComponent); override;
+    procedure DragDrop(Source: TObject; X, Y: Integer); override;
     function GetItemHeight: Integer;
     function GetVisibleItems: Integer;
     function GetTotalItems: Integer;
@@ -236,7 +236,6 @@ type
 
     { ADDED: Accessors for DragMode from the inner ListBox }
     function GetDragMode: TDragMode;
-    procedure SetDragMode(const Value: TDragMode);
 
     { Color and behavior setters }
     procedure SetAccentColor(const Value: TColor);
@@ -302,6 +301,8 @@ type
     procedure WMSetFocus(var Msg: TWMSetFocus); message WM_SETFOCUS;
     function GetListCanvas: TCanvas;
   protected
+    { Overrides TControl.SetDragMode so the value always goes to the inner ListBox }
+    procedure SetDragMode(Value: TDragMode); override;
     procedure Paint; override;
     procedure Resize; override;
     procedure CreateWnd; override;
@@ -1192,8 +1193,9 @@ begin
   Result := FListBox.DragMode;
 end;
 
-procedure TCWSListBox.SetDragMode(const Value: TDragMode);
+procedure TCWSListBox.SetDragMode(Value: TDragMode);
 begin
+  { No inherited: the outer control stays dmManual, only the inner ListBox drags }
   FListBox.DragMode := Value;
 end;
 

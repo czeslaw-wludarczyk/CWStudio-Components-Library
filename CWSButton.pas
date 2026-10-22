@@ -357,7 +357,7 @@ begin
   FIconFontSize := 11;
 
   Width  := MulDiv(150, CurrentPPI, 96);
-  Height := MulDiv(35,  CurrentPPI, 96);
+  Height := MulDiv(32,  CurrentPPI, 96);
 
   // 1. Background
   FbckShape              := TCWSShape.Create(Self);

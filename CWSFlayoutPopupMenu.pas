@@ -150,7 +150,6 @@ type
     function MeasureTextW(ADC: HDC; const S: string): Integer;
     function MeasureTextH(ADC: HDC): Integer;
     function ShortCutOf(AItem: TMenuItem): string;
-    function HasSecondary: Boolean;
     procedure BuildEntries;
     procedure Measure;
     procedure Render;
@@ -711,11 +710,6 @@ begin
   else Result := '';
 end;
 
-function TCWSFlyWindow.HasSecondary: Boolean;
-begin
-  Result := Length(FSec) > 0;
-end;
-
 procedure TCWSFlyWindow.BuildEntries;
 var
   Prim, Sec: TList<TMenuItem>;
@@ -817,7 +811,7 @@ begin
 
   BuildEntries;
 
-  MaxCap := 0; MaxSc := 0; HasSub := False; HasSc := False; TxtH := 0;
+  MaxCap := 0; MaxSc := 0; HasSub := False; HasSc := False;
   ScreenDC := GetDC(0);
   MemDC := CreateCompatibleDC(ScreenDC);
   GdiFont := MakeGdiFont;
