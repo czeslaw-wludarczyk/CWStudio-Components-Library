@@ -165,6 +165,7 @@ type
     function DataRowNumber: Integer;
     function MultiSelectActive: Boolean;
     procedure SelectRangeToCurrent;
+    procedure SelectionChanged;
   protected
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure TitleClick(Column: TColumn); override;
@@ -343,6 +344,7 @@ type
     FOnMouseWheelUp: TMouseWheelUpDownEvent;
     FOnSortChanged: TNotifyEvent;
     FOnSortApply: TCWSSortApplyEvent;
+    FOnSelectionChange: TNotifyEvent;
 
     { Sorting — state }
     function IndexOfSortColumn(const AFieldName: string): Integer;
@@ -533,6 +535,7 @@ type
     procedure GridEnter;
     procedure GridExit;
     procedure GridMouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+    procedure GridSelectionChanged;
     procedure GridMouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure GridMouseMove(Shift: TShiftState; X, Y: Integer);
     procedure GridMouseWheelDown(Shift: TShiftState; MousePos: TPoint; var Handled: Boolean);
@@ -745,6 +748,11 @@ type
     { Fires *before* the grid touches the dataset; set AHandled to take over
       (re-run the query with your own ORDER BY). See TCWSSortApplyEvent. }
     property OnSortApply: TCWSSortApplyEvent read FOnSortApply write FOnSortApply;
+    { dgMultiSelect: fires after a click, Ctrl/Shift+click, keyboard navigation
+      or Ctrl+A has finished updating SelectedRows. Read SelectedRows.Count here —
+      DataSet.AfterScroll, DataSource.OnDataChange and OnKeyDown fire while the
+      cursor moves, before the selection is updated. }
+    property OnSelectionChange: TNotifyEvent read FOnSelectionChange write FOnSelectionChange;
   end;
 
 implementation
@@ -1116,6 +1124,12 @@ begin
   Invalidate;
 end;
 
+procedure TCWSInternalDBGrid.SelectionChanged;
+begin
+  if FOwner <> nil then
+    FOwner.GridSelectionChanged;
+end;
+
 procedure TCWSInternalDBGrid.KeyDown(var Key: Word; Shift: TShiftState);
 var
   DS: TDataSet;
@@ -1143,16 +1157,35 @@ begin
     Invalidate;
     if FOwner <> nil then
       FOwner.Invalidate;
+    SelectionChanged;
     Key := 0;
     Exit;
   end;
 
   inherited;
 
-  { Plain navigation moves the Shift+click anchor along with the cursor }
-  if MultiSelectActive and not (ssShift in Shift) and
+  { Keyboard navigation keeps SelectedRows in step with the cursor, the same
+    way a mouse click does: Shift extends the range from the anchor, plain
+    navigation selects just the current row and moves the anchor with it.
+    (The base grid only clears the selection here, leaving Count = 0 while
+    the cursor row still looks selected.) }
+  if MultiSelectActive and not EditorMode and
     (Key in [VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT, VK_HOME, VK_END]) then
-    FSelAnchor := DataSource.DataSet.Bookmark;
+  begin
+    DS := DataSource.DataSet;
+    if DS.IsEmpty then
+      Exit;
+    if ssShift in Shift then
+      SelectRangeToCurrent
+    else
+    begin
+      SelectedRows.Clear;
+      SelectedRows.CurrentRowSelected := True;
+      FSelAnchor := DS.Bookmark;
+      Invalidate;
+    end;
+    SelectionChanged;
+  end;
 end;
 
 procedure TCWSInternalDBGrid.UpdateScrollBar;
@@ -1274,6 +1307,7 @@ begin
       SelectRangeToCurrent
     else
       FSelAnchor := DataSource.DataSet.Bookmark;
+    SelectionChanged;
   end;
   if FOwner <> nil then
   begin
@@ -2933,6 +2967,12 @@ begin
     handler sees positions in the composite control's own client space. }
   if Assigned(FOnMouseDown) then
     FOnMouseDown(Self, Button, Shift, X + FGrid.Left, Y + FGrid.Top);
+end;
+
+procedure TCWSDBGrid.GridSelectionChanged;
+begin
+  if Assigned(FOnSelectionChange) then
+    FOnSelectionChange(Self);
 end;
 
 procedure TCWSDBGrid.GridMouseUp(Button: TMouseButton; Shift: TShiftState;

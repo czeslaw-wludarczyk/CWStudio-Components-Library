@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.30](https://img.shields.io/badge/version-1.9.30-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.32](https://img.shields.io/badge/version-1.9.32-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -273,10 +273,9 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.30:**
+**Najnowsza wersja — 1.9.32:**
 
-- **Poprawka** `TCWSListBox`: **`SetDragMode` nadpisuje teraz wirtualną metodę `TControl.SetDragMode`** zamiast ją zasłaniać, więc `DragMode` zawsze trafia do wewnętrznej listy, także gdy VCL ustawia go przez metodę wirtualną.
-- **Porządki** `TCWSFlayoutPopupMenu`, `TCWSScrollBox`, `TCWSListBox`: **pakiety kompilują się bez ostrzeżeń i hintów** — usunięty nieużywany kod, `GetChildren` i `DragDrop` przeniesione do sekcji `public`, zgodnie z klasą bazową.
+- **Nowość** `TCWSDBGrid`: **zdarzenie `OnSelectionChange`** — przy `dgMultiSelect` wywoływane, gdy `SelectedRows` jest już zaktualizowane (kliknięcie, Ctrl+klik, Shift+klik, nawigacja klawiaturą, Ctrl+A). W nim należy odczytywać `SelectedRows.Count`: `DataSet.AfterScroll`, `DataSource.OnDataChange` i `OnKeyDown` są wywoływane w trakcie ruchu kursora, zanim zaznaczenie zostanie zaktualizowane, więc widzą jeszcze poprzednią liczbę zaznaczonych wierszy.
 
 Pełna historia zmian znajduje się w pliku [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -566,10 +565,9 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.30:**
+**Latest release — 1.9.32:**
 
-- **Fixed** `TCWSListBox`: **`SetDragMode` now overrides the virtual `TControl.SetDragMode`** instead of hiding it, so `DragMode` always reaches the inner list box, also when the VCL sets it through the virtual method.
-- **Cleanup** `TCWSFlayoutPopupMenu`, `TCWSScrollBox`, `TCWSListBox`: **the packages compile without warnings or hints** — unused code removed, `GetChildren` and `DragDrop` moved to `public` to match the base class.
+- **New** `TCWSDBGrid`: **`OnSelectionChange` event** — with `dgMultiSelect` it fires once `SelectedRows` has been updated (click, Ctrl+click, Shift+click, keyboard navigation, Ctrl+A). Read `SelectedRows.Count` there: `DataSet.AfterScroll`, `DataSource.OnDataChange` and `OnKeyDown` fire while the cursor moves, before the selection is updated, so they still see the previous count.
 
 The full change history is kept in [`CHANGELOG.md`](CHANGELOG.md).
 

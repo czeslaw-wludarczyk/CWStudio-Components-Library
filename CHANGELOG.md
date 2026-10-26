@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.32] — 2026-10-26
+
+- **New** `TCWSDBGrid`: **`OnSelectionChange` event.** With `dgMultiSelect` the grid updates `SelectedRows` only after the cursor has moved (after `inherited KeyDown` / `MouseDown`), so `SelectedRows.Count` read in `DataSet.AfterScroll`, `DataSource.OnDataChange` or `OnKeyDown` still returned the previous value — e.g. the count did not change after a Shift+click or after moving a multi-row selection with the arrow keys. `OnSelectionChange` fires once the selection is final, after:
+  - a left click on a data row (plain, Ctrl+click, Shift+click);
+  - keyboard navigation (`VK_UP` / `VK_DOWN` / `VK_PRIOR` / `VK_NEXT` / `VK_HOME` / `VK_END`, with or without `Shift`);
+  - Ctrl+A.
+
+  `TCWSInternalDBGrid.SelectionChanged` calls the new owner hook `TCWSDBGrid.GridSelectionChanged`, which raises the event.
+
+## [1.9.31] — 2026-10-23
+
+- **Fix** `TCWSDBGrid`: **with `dgMultiSelect`, keyboard navigation keeps `SelectedRows` in step with the cursor.** The base `TDBGrid` only cleared the selection on a plain arrow key, so `SelectedRows.Count` was 0 while the cursor row was still painted as selected — unlike a mouse click, which selects the clicked row. `TCWSInternalDBGrid.KeyDown` now handles `VK_UP` / `VK_DOWN` / `VK_PRIOR` / `VK_NEXT` / `VK_HOME` / `VK_END` after `inherited`:
+  - without `Shift`: clears `SelectedRows`, selects the current row and moves the Shift+click anchor to it;
+  - with `Shift`: selects the range from the anchor to the current row (`SelectRangeToCurrent`), the same as Shift+click.
+
+  Skipped while the in-place editor is open and when the dataset is empty.
+
 ## [1.9.30] — 2026-10-22
 
 - **Fix** `TCWSListBox`: **`SetDragMode` overrides the virtual `TControl.SetDragMode` instead of hiding it (W1010).** It was declared as a new `SetDragMode(const Value: TDragMode)`, so a call through the virtual method (`TControl.DragMode` on a `TControl` reference) set only the outer control and never reached the inner list box. It is now `procedure SetDragMode(Value: TDragMode); override;` and still forwards the value to the inner list box without calling `inherited` — the outer control stays `dmManual`, only the inner list box drags, as before.
