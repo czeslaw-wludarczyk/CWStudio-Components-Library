@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.32](https://img.shields.io/badge/version-1.9.32-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.33](https://img.shields.io/badge/version-1.9.33-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -108,7 +108,7 @@ CWStudio to zestaw nowoczesnych, wysokiej jakości komponentów VCL dla środowi
 | Komponent | Opis |
 |-----------|------|
 | **`TCWSDimOverlay`** | Warstwa przyciemniająca formularz (layered window) — idealna pod modalne dialogi. Wsparcie zaokrąglonych narożników Win11, animacja fade-in/out, blokowanie kliknięć. Wbudowany wskaźnik aktywności (loader) w 4 stylach (`cisLines`, `cisRing`, `cisSegmented`, `cisArrows`) z płynną, niezależną od FPS animacją — prędkość konfigurowalna przez `IndicatorSpeed` (stopnie/s, domyślnie 300). Animacja działa we własnym wątku, więc kręci się nawet gdy główny wątek jest zajęty. Opcjonalny tekst pod wskaźnikiem. |
-| **`TCWSAfterFormShow`** | Komponent emitujący zdarzenie `OnAfterShow` po pełnym wyrenderowaniu formularza (po `Show` / `ShowModal`, ale **nie** po przywróceniu z minimalizacji). |
+| **`TCWSAfterFormShow`** | Komponent emitujący zdarzenie `OnAfterShow` po pełnym wyrenderowaniu formularza (po `Show` / `ShowModal`, także zmaksymalizowanego, ale **nie** po przywróceniu z minimalizacji). |
 | **`TCWSHint`** | Zastępuje standardowy hint **całej aplikacji** dymkiem w stylu Windows 11 — wystarczy upuścić jeden na formę główną (`Active`). Zaokrąglone rogi (`CornerRadius`), kolory tła i ramki (`Color`, `BorderColor`, `BorderThickness`), czcionka (`Font`), marginesy i maksymalna szerokość, miękki cień (`Shadow`, `ShadowSize`), czasy opóźnienia i wyświetlania (`HintPause`, `HintHidePause`, `HintShortPause`), skróty klawiszowe w treści (`HintShortCuts`) oraz zdarzenie `OnShowHint` (zmiana tekstu, pozycji, czasu lub koloru pojedynczego hintu). Rysowany jak `TCWSPopupMenu` — okno warstwowe z gotową bitmapą, bez migania tła przy pokazywaniu. |
 | **`TCWSShadow`** | Miękki, półprzezroczysty cień (AlphaBlend) dla **dowolnej** kontrolki — wystarczy upuścić na formę i wskazać ją we właściwości `Control`; cień sam ustawia się pod nią na tym samym rodzicu i podąża za jej pozycją, rozmiarem i widocznością (także w IDE). Kierunek (`Direction`, stopnie), odległość (`Distance`), wielkość (`Size`, jak *spread* w CSS), miękkość (`Softness`), krycie (`Opacity`) i kolor (`Color`). Dwa tryby: `smShape` (domyślny) — cień faktycznego kształtu narysowanej kontrolki (tekst, także wielowierszowy `TLabel`, kształty, przezroczysty obraz), jak CSS `drop-shadow()` czy FMX `TShadowEffect`, z rozmyciem Gaussa; `smBox` — cień zaokrąglonego prostokąta (`CornerRadius`), jak CSS `box-shadow`; `IgnoreChildLabels` pomija przy tym podpisy (np. przełącznik rzuca cień samym wskaźnikiem). `TGraphicControl` — rysowany na płótnie rodzica, więc prześwituje przez niego tło i kontrolki graficzne; kliknięcia przechodzą przez cień. |
 
@@ -273,9 +273,9 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.32:**
+**Najnowsza wersja — 1.9.33:**
 
-- **Nowość** `TCWSDBGrid`: **zdarzenie `OnSelectionChange`** — przy `dgMultiSelect` wywoływane, gdy `SelectedRows` jest już zaktualizowane (kliknięcie, Ctrl+klik, Shift+klik, nawigacja klawiaturą, Ctrl+A). W nim należy odczytywać `SelectedRows.Count`: `DataSet.AfterScroll`, `DataSource.OnDataChange` i `OnKeyDown` są wywoływane w trakcie ruchu kursora, zanim zaznaczenie zostanie zaktualizowane, więc widzą jeszcze poprzednią liczbę zaznaczonych wierszy.
+- **Poprawka** `TCWSAfterFormShow`: **wykrywanie pokazania formularza oparte na `CM_SHOWINGCHANGED`** zamiast `WM_SHOWWINDOW` / `WM_SIZE` / `WM_PAINT`. `OnAfterShow` jest teraz wywoływane również dla formularza pokazywanego jako zmaksymalizowany, nadal nie po przywróceniu z minimalizacji. Wątek pomocniczy sprawdza `IsWindow` przed wysłaniem komunikatu, więc formularz zamknięty przed bezczynnością aplikacji nie dostaje komunikatu do nieistniejącego okna.
 
 Pełna historia zmian znajduje się w pliku [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -399,7 +399,7 @@ CWStudio is a library of modern, high-quality VCL components for Delphi, designe
 | Component | Description |
 |-----------|-------------|
 | **`TCWSDimOverlay`** | Dim-the-form layered overlay — perfect under modal dialogs. Supports Win11 rounded corners, fade-in/out animation, click blocking. Built-in activity indicator (loader) in 4 styles (`cisLines`, `cisRing`, `cisSegmented`, `cisArrows`) with smooth, frame-rate-independent animation — speed configurable via `IndicatorSpeed` (degrees/s, default 300). The animation runs on its own thread, so it keeps spinning even while the main thread is busy. Optional caption below the indicator. |
-| **`TCWSAfterFormShow`** | Component that fires an `OnAfterShow` event once the form is fully painted after `Show` / `ShowModal` (but **not** on un-minimize). |
+| **`TCWSAfterFormShow`** | Component that fires an `OnAfterShow` event once the form is fully painted after `Show` / `ShowModal`, also when maximized (but **not** on un-minimize). |
 | **`TCWSHint`** | Replaces the standard hint of the **whole application** with a Windows 11 style bubble — drop one on the main form (`Active`). Rounded corners (`CornerRadius`), background and border colours (`Color`, `BorderColor`, `BorderThickness`), font (`Font`), padding and maximum width, soft shadow (`Shadow`, `ShadowSize`), show delay and display time (`HintPause`, `HintHidePause`, `HintShortPause`), action shortcuts in the text (`HintShortCuts`) and an `OnShowHint` event (change the text, position, timeout or colour of a single hint). Drawn like `TCWSPopupMenu` — a layered window that receives its finished bitmap before it is shown, so no background flash on show. |
 | **`TCWSShadow`** | A soft, alpha-blended shadow for **any** control — drop it on the form and point `Control` at the control; the shadow puts itself under it on the same parent and follows its position, size and visibility (at design time too). Direction (`Direction`, degrees), offset (`Distance`), spread (`Size`, as in CSS), blur (`Softness`), opacity (`Opacity`) and colour (`Color`). Two modes: `smShape` (default) — shadow of the control's actual painted shape (text, a multi-line `TLabel` included, shapes, a transparent image), like CSS `drop-shadow()` or the FMX `TShadowEffect`, with a Gaussian blur; `smBox` — shadow of a rounded rectangle (`CornerRadius`), like CSS `box-shadow`; `IgnoreChildLabels` leaves captions out of it (e.g. a switch casts the shadow of its indicator only). A `TGraphicControl` painted on the parent's canvas, so the background and graphic controls show through it; clicks pass through the shadow. |
 
@@ -565,9 +565,9 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.32:**
+**Latest release — 1.9.33:**
 
-- **New** `TCWSDBGrid`: **`OnSelectionChange` event** — with `dgMultiSelect` it fires once `SelectedRows` has been updated (click, Ctrl+click, Shift+click, keyboard navigation, Ctrl+A). Read `SelectedRows.Count` there: `DataSet.AfterScroll`, `DataSource.OnDataChange` and `OnKeyDown` fire while the cursor moves, before the selection is updated, so they still see the previous count.
+- **Fixed** `TCWSAfterFormShow`: **form show detection now uses `CM_SHOWINGCHANGED`** instead of `WM_SHOWWINDOW` / `WM_SIZE` / `WM_PAINT`. `OnAfterShow` now also fires for a form shown maximized, and still not on un-minimize. The helper thread checks `IsWindow` before posting, so a form closed before the application goes idle is no longer sent a message to a destroyed window.
 
 The full change history is kept in [`CHANGELOG.md`](CHANGELOG.md).
 

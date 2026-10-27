@@ -31,7 +31,6 @@ const
   WM_USER_AFTERSHOW = WM_USER + 200;
 
 type
-  { Helper thread — waits until the application finishes painting, then wakes the form }
   TAfterShowThread = class(TThread)
   private
     FFormHandle: HWND;
@@ -43,11 +42,9 @@ type
 
   TCWSAfterFormShow = class(TComponent)
   private
-    FOwnerForm       : TForm;
-    FOldWndProc      : TWndMethod;
-    FOnAfterShow     : TNotifyEvent;
-    FWasMinimized    : Boolean;
-    FPendingAfterShow: Boolean;
+    FOwnerForm  : TForm;
+    FOldWndProc : TWndMethod;
+    FOnAfterShow: TNotifyEvent;
     procedure HookWndProc(var Msg: TMessage);
     procedure DoAfterShow;
   protected
@@ -56,8 +53,8 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
   published
-    { Fires on every Show/ShowModal after the form and controls are fully painted,
-      but NOT on un-minimize }
+    { Fires on every Show/ShowModal (normal or maximized) after the form
+      is fully painted, but NOT on un-minimize }
     property OnAfterShow: TNotifyEvent read FOnAfterShow write FOnAfterShow;
   end;
 
@@ -74,11 +71,9 @@ end;
 
 procedure TAfterShowThread.Execute;
 begin
-  // Wait until the main GUI thread finishes processing all messages
-  // (including WM_PAINT of all controls) — max 10 seconds
   WaitForInputIdle(GetCurrentProcess, 10000);
-  // Only now wake the form — from a safe thread via PostMessage
-  PostMessage(FFormHandle, WM_USER_AFTERSHOW, 0, 0);
+  if IsWindow(FFormHandle) then
+    PostMessage(FFormHandle, WM_USER_AFTERSHOW, 0, 0);
 end;
 
 { TCWSAfterFormShow }
@@ -86,8 +81,6 @@ end;
 constructor TCWSAfterFormShow.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  FWasMinimized     := False;
-  FPendingAfterShow := False;
   if (AOwner is TForm) and not (csDesigning in ComponentState) then
   begin
     FOwnerForm := TForm(AOwner);
@@ -116,41 +109,16 @@ procedure TCWSAfterFormShow.HookWndProc(var Msg: TMessage);
 begin
   case Msg.Msg of
 
-    WM_SIZE:
+    CM_SHOWINGCHANGED:
     begin
-      if Msg.WParam = SIZE_MINIMIZED then
-        FWasMinimized := True;
+      // VCL actually shows/hides the window here (also SW_SHOWMAXIMIZED)
       FOldWndProc(Msg);
-    end;
-
-    WM_SHOWWINDOW:
-    begin
-      FOldWndProc(Msg);
-      if Msg.WParam = 1 then
-      begin
-        if FWasMinimized then
-          FWasMinimized := False
-        else
-          FPendingAfterShow := True;  // wait for the form's WM_PAINT
-      end;
-    end;
-
-    WM_PAINT:
-    begin
-      FOldWndProc(Msg);
-      if FPendingAfterShow then
-      begin
-        FPendingAfterShow := False;
-        // Start a thread that waits for idle and posts WM_USER_AFTERSHOW
+      if Assigned(FOwnerForm) and FOwnerForm.Showing then
         TAfterShowThread.Create(FOwnerForm.Handle);
-      end;
     end;
 
     WM_USER_AFTERSHOW:
-    begin
-      // Reached here from the helper thread via PostMessage — the GUI is idle
       DoAfterShow;
-    end;
 
   else
     FOldWndProc(Msg);

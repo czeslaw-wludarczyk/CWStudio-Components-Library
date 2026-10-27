@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.33] — 2026-10-27
+
+- **Fix** `TCWSAfterFormShow`: **form show detection rewritten around `CM_SHOWINGCHANGED`.** The previous `WM_SIZE` / `WM_SHOWWINDOW` / `WM_PAINT` state machine (`FWasMinimized`, `FPendingAfterShow`) did not reliably recognise every show — in particular a form shown maximized. `HookWndProc` now lets VCL process `CM_SHOWINGCHANGED` (where the window is actually shown or hidden, including `SW_SHOWMAXIMIZED`) and, when the owner form is `Showing`, starts `TAfterShowThread`. Restoring a minimized form does not change `Showing`, so `OnAfterShow` still does not fire on un-minimize.
+- **Fix** `TAfterShowThread`: checks `IsWindow` before posting `WM_USER_AFTERSHOW`, so a form destroyed while the thread waits in `WaitForInputIdle` is not sent a message.
+
 ## [1.9.32] — 2026-10-26
 
 - **New** `TCWSDBGrid`: **`OnSelectionChange` event.** With `dgMultiSelect` the grid updates `SelectedRows` only after the cursor has moved (after `inherited KeyDown` / `MouseDown`), so `SelectedRows.Count` read in `DataSet.AfterScroll`, `DataSource.OnDataChange` or `OnKeyDown` still returned the previous value — e.g. the count did not change after a Shift+click or after moving a multi-row selection with the arrow keys. `OnSelectionChange` fires once the selection is final, after:
