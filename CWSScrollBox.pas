@@ -1864,8 +1864,8 @@ begin
         axis: the single EnableAlign re-flow below orders each aligned band purely
         by position (alTop by Top, alLeft by Left, alRight by right edge), so once
         the distinct design positions are back, the bands re-flow in exactly the
-        designer order. Bands the box does NOT re-flow (alRight / alBottom are
-        excluded from RecalcBounding to avoid a width/height feedback loop) simply
+        designer order. alRight / alBottom bands are docked to the far edge of
+        the content (RecalcBounding adds their sizes, never their positions) and
         keep their correct design placement — which is why we must NOT re-stamp
         them onto a synthetic left-/top-based scale (that left alRight children
         stuck at the left edge instead of flush right). }
@@ -1968,12 +1968,14 @@ end;
 procedure TCWSScrollBox.RecalcBounding;
 var
   W, H: Integer;
+  BandW, BandH: Integer;
 
   procedure MeasureHost(Host: TWinControl; AddX, AddY: Integer);
   var
     I: Integer;
     C: TControl;
     A: TAnchors;
+    MR, MB: Integer;
   begin
     if Host = nil then
       Exit;
@@ -1984,6 +1986,21 @@ var
         Continue;
       if not C.Visible then
         Continue;
+      { With AlignWithMargins the right/bottom margin belongs to the content too —
+        it is the space the control keeps free after itself, so the last control
+        does not touch the edge of the scrolled area. For alNone controls the VCL
+        ignores margins when placing them, but they still extend the content here:
+        that is how a free-placed last control gets room below/after it. }
+      if C.AlignWithMargins then
+      begin
+        MR := C.Margins.Right;
+        MB := C.Margins.Bottom;
+      end
+      else
+      begin
+        MR := 0;
+        MB := 0;
+      end;
       { AddX/AddY recover the LOGICAL position when the design-time view is
         scrolled (child.Left/Top are physically shifted by -FDesignOffset). }
       { A feedback loop forms ONLY along the axis on which the control
@@ -2014,17 +2031,31 @@ var
             else
               A := C.Anchors;
             if not (akRight in A) then
-              W := Max(W, C.Left + AddX + C.Width);
+              W := Max(W, C.Left + AddX + C.Width + MR);
             if not (akBottom in A) then
-              H := Max(H, C.Top + AddY + C.Height);
+              H := Max(H, C.Top + AddY + C.Height + MB);
           end;
         alLeft:
-          W := Max(W, C.Left + AddX + C.Width);
+          W := Max(W, C.Left + AddX + C.Width + MR);
         alTop:
-          H := Max(H, C.Top + AddY + C.Height);
-        { alRight  — Left depends on parent width  → feedback loop, skip.
-          alBottom — Top depends on parent height → feedback loop, skip.
-          alClient, alCustom — both axes depend on the parent, skip. }
+          H := Max(H, C.Top + AddY + C.Height + MB);
+        { alRight / alBottom — their POSITION depends on the parent size (feedback
+          loop), but their SIZE along the docking axis does not. They dock to the
+          far edge of the content, so the content is everything else PLUS the
+          stacked bands: measured as a sum of their sizes (with margins), added
+          after the loop. The bands then land right after the rest of the content
+          — or at the view edge when the content is shorter than the view. }
+        alRight:
+          if C.AlignWithMargins then
+            Inc(BandW, C.Margins.Left + C.Width + MR)
+          else
+            Inc(BandW, C.Width);
+        alBottom:
+          if C.AlignWithMargins then
+            Inc(BandH, C.Margins.Top + C.Height + MB)
+          else
+            Inc(BandH, C.Height);
+        { alClient, alCustom — both axes depend on the parent, skip. }
       end;
     end;
   end;
@@ -2032,14 +2063,16 @@ var
 begin
   W := 0;
   H := 0;
+  BandW := 0;
+  BandH := 0;
   { Runtime: user controls live in FContent. Design time: they are direct
     children of the scrollbox (see GetChildParent / CMControlChange), scrolled
     by FDesignOffset — add it back to measure the logical content extent. }
   MeasureHost(FContent, 0, 0);
   if csDesigning in ComponentState then
     MeasureHost(Self, FDesignOffsetX, FDesignOffsetY);
-  FBoundW := W;
-  FBoundH := H;
+  FBoundW := W + BandW;
+  FBoundH := H + BandH;
 end;
 
 { --- layout ---------------------------------------------------------------- }
@@ -2076,6 +2109,7 @@ var
   WasVVisible, WasHVisible: Boolean;
   VOldRect, HOldRect: TRect;
   Designing: Boolean;
+  OldContentW, OldContentH: Integer;
 begin
   if (FContent = nil) or (csDestroying in ComponentState) or FUpdatingLayout then
     Exit;
@@ -2088,6 +2122,8 @@ begin
     AllowV := FScrollStyle in [cssVertical, cssBoth];
     AllowH := FScrollStyle in [cssHorizontal, cssBoth];
 
+    OldContentW := FContentW;
+    OldContentH := FContentH;
     RecalcBounding;
     { When scrolling on a given axis is disabled, we clamp ContentSize to
       ViewSize → MaxOffset = 0, the scrollbar never appears, and content
@@ -2116,6 +2152,15 @@ begin
                        Min(FDesignOffsetY, Max(0, FContentH - VH)));
       FContent.Visible := False;
       FContent.SetBounds(0, 0, 0, 0);
+      { AlignControls lays the aligned children out over the content size (see
+        there) — when it changed, re-dock them (alBottom / alRight / alClient) to
+        the new extent. Runtime needs no such step: resizing FContent realigns it.
+        FUpdatingLayout is set, so this realign does not queue another relayout.
+        Safe on removal: a deleted child reaches here only through QueueRelayout
+        (CMControlListChange), i.e. after its destruction has unwound. }
+      if ((FContentW <> OldContentW) or (FContentH <> OldContentH)) and
+         not (csLoading in ComponentState) then
+        Realign;
     end
     else
     begin
@@ -2668,7 +2713,15 @@ begin
     children (alTop / alClient / ...) are positioned relative to the scrolled
     origin and thus scroll together with the free-placed (alNone) children. }
   if csDesigning in ComponentState then
+  begin
     OffsetRect(Rect, -FDesignOffsetX, -FDesignOffsetY);
+    { Lay out over the whole LOGICAL content, not just the visible view — at
+      runtime the aligned children live in FContent, which has the content size.
+      Without this an alBottom child docked to the bottom of the first screen (in
+      the middle of a long content) and alClient stopped at the view height. }
+    Rect.Right := Rect.Left + Max(Rect.Right - Rect.Left, FContentW);
+    Rect.Bottom := Rect.Top + Max(Rect.Bottom - Rect.Top, FContentH);
+  end;
   inherited AlignControls(AControl, Rect);
   { A child was moved/resized/added/removed → refresh the native scrollbar
     ranges. Deferred (posted) so we never run UpdateLayout's BringToFront while a

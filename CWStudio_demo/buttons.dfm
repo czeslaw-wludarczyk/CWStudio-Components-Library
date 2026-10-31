@@ -63,6 +63,14 @@ object frmButtons: TfrmButtons
         Height = 17
         Caption = 'Without GroupInddex'
       end
+      object Label7: TLabel
+        Left = 600
+        Top = 47
+        Width = 139
+        Height = 17
+        Caption = 'CWSFlayoutPopupMenu'
+        PopupMenu = CWSFlayoutPopupMenu1
+      end
       object CWSStoreButton1: TCWSStoreButton
         Left = 23
         Top = 70
@@ -274,6 +282,35 @@ object frmButtons: TfrmButtons
         DescriptionColorHover = clBlack
         DescriptionColorPressed = clGray
         OnClick = CWSStoreButton7Click
+      end
+      object CWSCornerPanel1: TCWSCornerPanel
+        Left = 600
+        Top = 80
+        Width = 139
+        Height = 57
+        BevelOuter = bvNone
+        Color = clBlack
+        ParentBackground = False
+        PopupMenu = CWSFlayoutPopupMenu1
+        TabOrder = 7
+        CornerColor = clYellow
+        CornerSize = 2
+        CornerLineWidth = 2
+        object Label8: TLabel
+          Left = 0
+          Top = 0
+          Width = 139
+          Height = 57
+          Align = alClient
+          Alignment = taCenter
+          Caption = 'Right Click'
+          PopupMenu = CWSFlayoutPopupMenu1
+          Layout = tlCenter
+          ExplicitLeft = 56
+          ExplicitTop = 24
+          ExplicitWidth = 60
+          ExplicitHeight = 17
+        end
       end
     end
     object pnlEdits2: TCWSSettingsPanel
@@ -1024,6 +1061,33 @@ object frmButtons: TfrmButtons
           '.75h2.015a.13.13 0 0 0 .089-.037L4.87 7.446l-.428-.427a.13.13 0 ' +
           '0 0-.088-.037H2.536a.875.875 0 1 1 0-1.75h1.819c.497 0 .974.198 ' +
           '1.325.55z"/></g></svg>'
+      end
+      item
+        IconName = 'cut'
+        SVGText = 
+          '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" v' +
+          'iewBox="0 0 24 24"><path fill="none" stroke="currentColor" strok' +
+          'e-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4' +
+          ' 17a3 3 0 1 0 6 0a3 3 0 1 0-6 0m10 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0' +
+          'm-4.85-2.15L18 4M6 4l8.85 10.85"/></svg>'
+      end
+      item
+        IconName = 'copy'
+        SVGText = 
+          '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" v' +
+          'iewBox="0 0 24 24"><g fill="currentColor"><path d="M13 7H7V5h6zm' +
+          '0 4H7V9h6zm-6 4h6v-2H7z"/><path fill-rule="evenodd" d="M3 19V1h1' +
+          '4v4h4v18H7v-4zm12-2V3H5v14zm2-10v12H9v2h10V7z" clip-rule="evenod' +
+          'd"/></g></svg>'
+      end
+      item
+        IconName = 'paste-sharp'
+        SVGText = 
+          '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" v' +
+          'iewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-l' +
+          'inecap="square" stroke-miterlimit="2" stroke-width="1.5"><path d' +
+          '="M18.75 8.75v-4.5h-3m-7.5 0h-3v16.5H9"/><path d="M8.25 2.75h7.5' +
+          'v3.5h-7.5zm4 9h9v9.5h-9zm2.5 3.5h4m-4 2.75h2.5"/></g></svg>'
       end>
     DisabledGrayScale = False
     Scaled = True
@@ -1083,6 +1147,52 @@ object frmButtons: TfrmButtons
         Caption = 'Radio 2'
         RadioItem = True
       end
+    end
+  end
+  object CWSFlayoutPopupMenu1: TCWSFlayoutPopupMenu
+    Images = SVGIconImageList1
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Style = []
+    MaxVisibleItems = 3
+    PrimaryCount = 3
+    Left = 696
+    Top = 208
+    object Copy1: TMenuItem
+      Caption = 'Copy'
+      ImageIndex = 4
+      ImageName = 'copy'
+    end
+    object N6: TMenuItem
+      Caption = '-'
+    end
+    object Paste1: TMenuItem
+      Caption = 'Paste'
+      ImageIndex = 5
+      ImageName = 'paste-sharp'
+    end
+    object N7: TMenuItem
+      Caption = '-'
+    end
+    object Cut1: TMenuItem
+      Caption = 'Cut'
+      ImageIndex = 3
+      ImageName = 'cut'
+    end
+    object N3: TMenuItem
+      Caption = '-'
+    end
+    object N4: TMenuItem
+      Caption = 'Open...'
+      ShortCut = 16463
+    end
+    object N5: TMenuItem
+      Caption = '-'
+    end
+    object Close1: TMenuItem
+      Caption = 'Close'
     end
   end
 end

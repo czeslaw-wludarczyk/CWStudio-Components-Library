@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.34] — 2026-10-30
+
+- **Fix** `TCWSScrollBox`: **`alBottom` / `alRight` children dock to the end of the content, the same at design time and at runtime.** At design time `AlignControls` laid the aligned children out over the visible view (only shifted by the design scroll offset), so an `alBottom` child landed at the bottom of the first screen — in the middle of a longer content — and `alClient` stopped at the view height. At runtime `RecalcBounding` skipped `alBottom` / `alRight` children, so the content ended at the last other control and the docked child covered it. Now:
+  - `RecalcBounding` adds the sizes of the `alBottom` / `alRight` bands (with margins) after the rest of the content — their positions still do not count, so there is no feedback loop;
+  - design-time `AlignControls` lays out over the whole content size (`FContentW` x `FContentH`), like `FContent` at runtime, and `UpdateLayout` realigns the children when the content size changes.
+- **Fix** `TCWSScrollBox`: **`Margins` extend the scrolled content.** With `AlignWithMargins` the right/bottom margin of a child now counts towards the content size — for `alNone` children too — so the last control can keep free space after it instead of touching the edge of the scrolled area.
+
 ## [1.9.33] — 2026-10-27
 
 - **Fix** `TCWSAfterFormShow`: **form show detection rewritten around `CM_SHOWINGCHANGED`.** The previous `WM_SIZE` / `WM_SHOWWINDOW` / `WM_PAINT` state machine (`FWasMinimized`, `FPendingAfterShow`) did not reliably recognise every show — in particular a form shown maximized. `HookWndProc` now lets VCL process `CM_SHOWINGCHANGED` (where the window is actually shown or hidden, including `SW_SHOWMAXIMIZED`) and, when the owner form is `Showing`, starts `TAfterShowThread`. Restoring a minimized form does not change `Showing`, so `OnAfterShow` still does not fire on un-minimize.

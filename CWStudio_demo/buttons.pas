@@ -28,7 +28,8 @@ uses
   System.ImageList,
   Vcl.ImgList,
   SVGIconImageListBase,
-  SVGIconImageList;
+  SVGIconImageList,
+  CWSFlayoutPopupMenu, Vcl.ExtCtrls, CWSCornerPanel;
 
 type
   TfrmButtons = class(TForm)
@@ -86,6 +87,19 @@ type
     N2: TMenuItem;
     Radio11: TMenuItem;
     Radio21: TMenuItem;
+    Label7: TLabel;
+    CWSFlayoutPopupMenu1: TCWSFlayoutPopupMenu;
+    Copy1: TMenuItem;
+    Paste1: TMenuItem;
+    Cut1: TMenuItem;
+    N3: TMenuItem;
+    N4: TMenuItem;
+    N5: TMenuItem;
+    Close1: TMenuItem;
+    N6: TMenuItem;
+    N7: TMenuItem;
+    CWSCornerPanel1: TCWSCornerPanel;
+    Label8: TLabel;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure CWSStoreButton4Click(Sender: TObject);
@@ -117,6 +131,8 @@ var
 begin
   self.Color := flNeutralBackground2;
   scrbEdits.BackgroundColor := flNeutralBackground2;
+  CWSCornerPanel1.Color := flNeutralBackground1;
+  CWSCornerPanel1.CornerColor := flNeutralStroke2;
 
   pnlEdits1.Color := flNeutralBackground2;
   pnlEdits1.FillColor := flNeutralBackground3;
@@ -136,6 +152,9 @@ begin
   lblTitle3.Font.Color := flNeutralForeground1;
   lblTitle4.Font.Color := flNeutralForeground1;
 
+  SVGIconImageList1.SVGIconItems.Items[3].FixedColor := flNeutralForeground1;
+  SVGIconImageList1.SVGIconItems.Items[4].FixedColor := flNeutralForeground1;
+  SVGIconImageList1.SVGIconItems.Items[5].FixedColor := flNeutralForeground1;
   SVGIconImageList1.SVGIconItems.Items[1].FixedColor := flNeutralForeground1;
 
   CWSPopupMenu1.BackgroundColor := flNeutralBackground1;
@@ -253,6 +272,21 @@ begin
       TCWSButton(Comp).IconColorHover := flNeutralForeground1Hover;
       TCWSButton(Comp).IconColorNormal := flNeutralForeground3;
       TCWSButton(Comp).IconColorPressed := flNeutralForeground2BrandPressed;
+    end;
+
+    if Comp is TCWSFlayoutPopupMenu then
+    begin
+      TCWSFlayoutPopupMenu(Comp).BackgroundColor := flNeutralBackground1;
+      TCWSFlayoutPopupMenu(Comp).SecondaryBackgroundColor := flNeutralBackground2;
+      TCWSFlayoutPopupMenu(Comp).BorderColor := flNeutralStroke2;
+      TCWSFlayoutPopupMenu(Comp).TextColor := flNeutralForeground1;
+      TCWSFlayoutPopupMenu(Comp).HighlightTextColor := flNeutralForeground1;
+      TCWSFlayoutPopupMenu(Comp).SeparatorColor := flNeutralStroke2;
+      if FluentThemeMode = ftmDark then
+        TCWSFlayoutPopupMenu(Comp).HighlightColor := flNeutralBackground1Selected
+      else
+        if FluentThemeMode = ftmLight then
+          TCWSFlayoutPopupMenu(Comp).HighlightColor := flNeutralBackground3Selected;
     end;
 
     CWSButton3.Color := flNeutralBackground3;
