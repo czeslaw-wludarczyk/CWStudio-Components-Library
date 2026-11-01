@@ -212,6 +212,19 @@ Biblioteka jest podzielona na dwa pakiety. Zbudowano w **RAD Studio 13.1 Florenc
 | **Runtime** | `CWStudio_ComponentsRT.dpk` | Win32 + Win64 | Kod komponentów. Dołączany do aplikacji, możliwy do redystrybucji. **Nie** instaluje się w IDE. |
 | **Design-time** | `CWStudio_ComponentsDT.dpk` | Win32 + Win64 | Rejestracja na palecie, ikona + nazwa „CWStudio Component" na splash screenie i w About Box IDE. Wymaga pakietu runtime. |
 
+### 📥 Instalacja przez GetIt (zalecana)
+
+1. Pobierz plik **`CWStudioComponents-github.json`** z [najnowszego wydania](https://github.com/czeslaw-wludarczyk/CWStudio-Components-Library/releases/latest).
+2. W RAD Studio: **Tools → GetIt Package Manager → Load Local Package** i wskaż pobrany plik (wymaga aktywnej subskrypcji Update Subscription).
+3. Zaakceptuj licencję. GetIt sam pobierze paczkę z GitHuba, zbuduje oba pakiety dla Win32 i Win64, doda ścieżki do **Library path** / **Browsing path** i zarejestruje pakiet projektowy w IDE 32- i 64-bitowym.
+4. Zrestartuj IDE, gdy GetIt o to poprosi.
+
+Paczka trafia do `$(BDSCatalogRepository)\CWStudioComponents\<wersja>`. Szczegóły: [`GetIt/README.md`](GetIt/README.md).
+
+> Jeśli wcześniej instalowałeś bibliotekę ręcznie, najpierw usuń stare wpisy z **Library path** oraz stare pliki `CWStudio_Components*.bpl` z `$(BDSCOMMONDIR)\Bpl` i `$(BDSCOMMONDIR)\Bpl\Win64`.
+
+### 🔨 Instalacja ręczna ze źródeł
+
 #### 1. Zbuduj pakiety (runtime przed design-time, dla obu platform)
 
 1. Otwórz grupę projektów **`CWStudio_Components.groupproj`** w RAD Studio.
@@ -275,6 +288,7 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 **Najnowsza wersja — 1.9.34:**
 
+- **Nowość** **pakiet GetIt** — bibliotekę można zainstalować przez **Tools → GetIt Package Manager → Load Local Package**, wskazując `CWStudioComponents-github.json` z wydania na GitHubie (zob. [Instalacja przez GetIt](#-instalacja-przez-getit-zalecana)).
 - **Poprawka** `TCWSScrollBox`: **kontrolki z `alBottom` / `alRight` dokują do końca zawartości — tak samo w designerze i w czasie działania.** W designerze kontrolka `alBottom` lądowała na dole pierwszego ekranu (w środku dłuższej zawartości), a w czasie działania nachodziła na ostatnią kontrolkę. Teraz trafia za resztę zawartości, a przewijany obszar obejmuje jej wysokość.
 - **Poprawka** `TCWSScrollBox`: **marginesy wydłużają przewijany obszar** — przy `AlignWithMargins` dolny i prawy margines kontrolki (także bez wyrównania) jest wliczany do rozmiaru zawartości, więc ostatnia kontrolka nie dotyka krawędzi.
 
@@ -504,6 +518,19 @@ The library is split into two packages (following the standard Delphi architectu
 | **Runtime** | `CWStudio_ComponentsRT.dpk` | Win32 + Win64 | Component code. Linked into applications, redistributable. **Not** installed into the IDE. |
 | **Design-time** | `CWStudio_ComponentsDT.dpk` | Win32 + Win64 | Palette registration, the icon + name "CWStudio Component" on the IDE splash screen and About Box. Requires the runtime package. |
 
+### 📥 Installing through GetIt (recommended)
+
+1. Download **`CWStudioComponents-github.json`** from the [latest release](https://github.com/czeslaw-wludarczyk/CWStudio-Components-Library/releases/latest).
+2. In RAD Studio: **Tools → GetIt Package Manager → Load Local Package** and select the downloaded file (requires an active Update Subscription).
+3. Accept the license. GetIt downloads the payload from GitHub, builds both packages for Win32 and Win64, adds the **Library path** / **Browsing path** entries and registers the design-time package in both the 32-bit and the 64-bit IDE.
+4. Restart the IDE when GetIt asks for it.
+
+The package is installed into `$(BDSCatalogRepository)\CWStudioComponents\<version>`. Details: [`GetIt/README.md`](GetIt/README.md).
+
+> If you installed the library manually before, first remove the old **Library path** entries and the old `CWStudio_Components*.bpl` files from `$(BDSCOMMONDIR)\Bpl` and `$(BDSCOMMONDIR)\Bpl\Win64`.
+
+### 🔨 Manual installation from sources
+
 #### 1. Build the packages (runtime before design-time, for both platforms)
 
 1. Open the **`CWStudio_Components.groupproj`** project group in RAD Studio.
@@ -568,6 +595,7 @@ When using these components, please include appropriate attribution in your appl
 
 **Latest release — 1.9.34:**
 
+- **New** **GetIt package** — install the library with **Tools → GetIt Package Manager → Load Local Package** using `CWStudioComponents-github.json` from the GitHub release (see [Installing through GetIt](#-installing-through-getit-recommended)).
 - **Fixed** `TCWSScrollBox`: **`alBottom` / `alRight` children dock to the end of the content — the same in the designer and at runtime.** In the designer an `alBottom` child landed at the bottom of the first screen (in the middle of a longer content), and at runtime it covered the last control. It now goes after the rest of the content and the scrolled area includes its height.
 - **Fixed** `TCWSScrollBox`: **margins extend the scrolled area** — with `AlignWithMargins` the bottom and right margin of a child (unaligned ones too) counts towards the content size, so the last control does not touch the edge.
 

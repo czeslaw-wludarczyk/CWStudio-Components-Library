@@ -143,9 +143,21 @@ Per release, the three URLs inside the JSON have to be bumped to the new tag.
 ## Installation folder
 
 GetIt unpacks the payload into
-`<Documents>\Embarcadero\Studio\37.0\CatalogRepository\<Id>\<Version>`, so the
-`Id` field must not contain the version: `Id` is `CWStudioComponents` and
-`Version` is `1.9.34`, which gives `CWStudioComponents\1.9.34\`. Keep `Id` stable
-across releases — GetIt uses it to recognize an installed package and to offer
-updates; changing it makes an already installed copy invisible to the new
-definition, so uninstall the old one first.
+`<Documents>\Embarcadero\Studio\37.0\CatalogRepository\<PackageId>\<Version>`
+(`$(BDSCatalogRepository)\<PackageId>\<Version>`). With `"Id":
+"CWStudioComponents-1.9.34"`, `"PackageId": "CWStudioComponents"` and
+`"Version": "1.9.34"` this gives `CWStudioComponents\1.9.34\` — verified with an
+install of the GitHub release on RAD Studio 13. The library and browsing paths
+added by the actions resolve to
+`$(BDSCatalogRepository)\CWStudioComponents\1.9.34\Win32\Release\` (and
+`Win64\Release\`) and `$(BDSCatalogRepository)\CWStudioComponents\1.9.34\.\`.
+
+`Id` changes with every release (`<PackageId>-<Version>`), `PackageId` must stay
+stable — GetIt uses it as the registry key and folder name, to recognize an
+installed package and to offer updates; changing it makes an already installed
+copy invisible to the new definition, so uninstall the old one first.
+
+Before testing an install, remove any manual installation of the library: old
+**Library path** entries pointing at a source folder take precedence over the
+DCUs built by GetIt, and old `CWStudio_Components*.bpl` files in
+`$(BDSCOMMONDIR)\Bpl` / `Bpl\Win64` may be loaded instead of the new ones.
