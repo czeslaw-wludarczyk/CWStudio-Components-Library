@@ -1,0 +1,355 @@
+{
+  "Id": "CWStudioComponents-1.9.34",
+  "PackageId": "CWStudioComponents",
+  "Name": "CWStudio Components",
+  "Version": "1.9.34",
+  "Description": "CWStudio Components Library - a set of Fluent-style VCL controls for Delphi: buttons, edits, combo boxes, date pickers, grids, list boxes, scroll boxes, panels, switches, progress indicators, popup and system menus, plus a Fluent color engine and interactive user themes.",
+  "Vendor": "Czeslaw Wludarczyk (CWStudio)",
+  "VendorUrl": "https:\/\/github.com\/czeslaw-wludarczyk",
+  "ProjectUrl": "https:\/\/github.com\/czeslaw-wludarczyk\/CWStudio-Components-Library",
+  "Image": "https:\/\/raw.githubusercontent.com\/czeslaw-wludarczyk\/CWStudio-Components-Library\/v1.9.34\/GetIt\/CWStudioComponents.png",
+  "LicenseName": "MIT License",
+  "License": "https:\/\/raw.githubusercontent.com\/czeslaw-wludarczyk\/CWStudio-Components-Library\/v1.9.34\/GetIt\/LICENSE.txt",
+  "Url": "https:\/\/github.com\/czeslaw-wludarczyk\/CWStudio-Components-Library\/releases\/download\/v1.9.34\/CWStudioComponents-1.9.34.zip",
+  "Modified": "2026-10-30 22:52:00",
+  "RequireElevation": "0",
+  "AllUsers": "0",
+  "Actions": [
+    {
+      "Id": "1",
+      "ActionId": "6",
+      "ActionName": "CompileProject",
+      "Type": "2",
+      "Description": "Compile CWStudio_ComponentsRT.dproj (runtime package)",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "CWStudio_ComponentsRT.dproj" },
+        { "Parameter": "Win32;Win64" },
+        { "Parameter": "Release" }
+      ]
+    },
+    {
+      "Id": "2",
+      "ActionId": "6",
+      "ActionName": "CompileProject",
+      "Type": "2",
+      "Description": "Compile CWStudio_ComponentsDT.dproj for the 32-bit IDE",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "CWStudio_ComponentsDT.dproj" },
+        { "Parameter": "Win32" },
+        { "Parameter": "Release" }
+      ]
+    },
+    {
+      "Id": "3",
+      "ActionId": "6",
+      "ActionName": "CompileProject",
+      "Type": "2",
+      "Description": "Compile CWStudio_ComponentsDT.dproj for the 64-bit IDE",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "CWStudio_ComponentsDT.dproj" },
+        { "Parameter": "Win64" },
+        { "Parameter": "Release" }
+      ]
+    },
+    {
+      "Id": "4",
+      "ActionId": "1",
+      "ActionName": "AddOptionPath",
+      "Type": "3",
+      "Description": "Add library path for Win32",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "Win32\\Release\\" },
+        { "Parameter": "cPasLibraryPath" },
+        { "Parameter": "Delphi.Personality" },
+        { "Parameter": "Win32" }
+      ]
+    },
+    {
+      "Id": "5",
+      "ActionId": "1",
+      "ActionName": "AddOptionPath",
+      "Type": "3",
+      "Description": "Add library path for Win64",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "Win64\\Release\\" },
+        { "Parameter": "cPasLibraryPath" },
+        { "Parameter": "Delphi.Personality" },
+        { "Parameter": "Win64" }
+      ]
+    },
+    {
+      "Id": "6",
+      "ActionId": "1",
+      "ActionName": "AddOptionPath",
+      "Type": "3",
+      "Description": "Add browsing path (sources) for Win32",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": ".\\" },
+        { "Parameter": "cPasBrowsingPath" },
+        { "Parameter": "Delphi.Personality" },
+        { "Parameter": "Win32" }
+      ]
+    },
+    {
+      "Id": "7",
+      "ActionId": "1",
+      "ActionName": "AddOptionPath",
+      "Type": "3",
+      "Description": "Add browsing path (sources) for Win64",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": ".\\" },
+        { "Parameter": "cPasBrowsingPath" },
+        { "Parameter": "Delphi.Personality" },
+        { "Parameter": "Win64" }
+      ]
+    },
+    {
+      "Id": "8",
+      "ActionId": "7",
+      "ActionName": "InstallPackage",
+      "Type": "3",
+      "Description": "Register CWStudio_ComponentsDT.bpl in the 32-bit IDE",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "$(BDSCOMMONDIR)\\Bpl\\CWStudio_ComponentsDT.bpl" },
+        { "Parameter": "True" },
+        { "Parameter": "False" }
+      ]
+    },
+    {
+      "Id": "9",
+      "ActionId": "7",
+      "ActionName": "InstallPackage",
+      "Type": "3",
+      "Description": "Register CWStudio_ComponentsDT.bpl in the 64-bit IDE",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "$(BDSCOMMONDIR)\\Bpl\\Win64\\CWStudio_ComponentsDT.bpl" },
+        { "Parameter": "True" },
+        { "Parameter": "False" }
+      ]
+    },
+    {
+      "Id": "10",
+      "ActionId": "21",
+      "ActionName": "RestartIDE",
+      "Type": "4",
+      "Description": "Restart RAD Studio to finish the installation",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": []
+    },
+    {
+      "Id": "11",
+      "ActionId": "8",
+      "ActionName": "UninstallPackage",
+      "Type": "5",
+      "Description": "Unregister CWStudio_ComponentsDT.bpl from the 32-bit IDE",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "$(BDSCOMMONDIR)\\Bpl\\CWStudio_ComponentsDT.bpl" },
+        { "Parameter": "True" },
+        { "Parameter": "False" }
+      ]
+    },
+    {
+      "Id": "12",
+      "ActionId": "8",
+      "ActionName": "UninstallPackage",
+      "Type": "5",
+      "Description": "Unregister CWStudio_ComponentsDT.bpl from the 64-bit IDE",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "$(BDSCOMMONDIR)\\Bpl\\Win64\\CWStudio_ComponentsDT.bpl" },
+        { "Parameter": "True" },
+        { "Parameter": "False" }
+      ]
+    },
+    {
+      "Id": "13",
+      "ActionId": "2",
+      "ActionName": "RemoveOptionPath",
+      "Type": "5",
+      "Description": "Remove library path for Win32",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "Win32\\Release\\" },
+        { "Parameter": "cPasLibraryPath" },
+        { "Parameter": "Delphi.Personality" },
+        { "Parameter": "Win32" }
+      ]
+    },
+    {
+      "Id": "14",
+      "ActionId": "2",
+      "ActionName": "RemoveOptionPath",
+      "Type": "5",
+      "Description": "Remove library path for Win64",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "Win64\\Release\\" },
+        { "Parameter": "cPasLibraryPath" },
+        { "Parameter": "Delphi.Personality" },
+        { "Parameter": "Win64" }
+      ]
+    },
+    {
+      "Id": "15",
+      "ActionId": "2",
+      "ActionName": "RemoveOptionPath",
+      "Type": "5",
+      "Description": "Remove browsing path (sources) for Win32",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": ".\\" },
+        { "Parameter": "cPasBrowsingPath" },
+        { "Parameter": "Delphi.Personality" },
+        { "Parameter": "Win32" }
+      ]
+    },
+    {
+      "Id": "16",
+      "ActionId": "2",
+      "ActionName": "RemoveOptionPath",
+      "Type": "5",
+      "Description": "Remove browsing path (sources) for Win64",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": ".\\" },
+        { "Parameter": "cPasBrowsingPath" },
+        { "Parameter": "Delphi.Personality" },
+        { "Parameter": "Win64" }
+      ]
+    },
+    {
+      "Id": "17",
+      "ActionId": "29",
+      "ActionName": "CleanProject",
+      "Type": "5",
+      "Description": "Clean CWStudio_ComponentsDT.dproj output for the 32-bit IDE",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "CWStudio_ComponentsDT.dproj" },
+        { "Parameter": "Win32" },
+        { "Parameter": "Release" }
+      ]
+    },
+    {
+      "Id": "18",
+      "ActionId": "29",
+      "ActionName": "CleanProject",
+      "Type": "5",
+      "Description": "Clean CWStudio_ComponentsDT.dproj output for the 64-bit IDE",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "CWStudio_ComponentsDT.dproj" },
+        { "Parameter": "Win64" },
+        { "Parameter": "Release" }
+      ]
+    },
+    {
+      "Id": "19",
+      "ActionId": "29",
+      "ActionName": "CleanProject",
+      "Type": "5",
+      "Description": "Clean CWStudio_ComponentsRT.dproj output for Win32",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "CWStudio_ComponentsRT.dproj" },
+        { "Parameter": "Win32" },
+        { "Parameter": "Release" }
+      ]
+    },
+    {
+      "Id": "20",
+      "ActionId": "29",
+      "ActionName": "CleanProject",
+      "Type": "5",
+      "Description": "Clean CWStudio_ComponentsRT.dproj output for Win64",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": [
+        { "Parameter": "CWStudio_ComponentsRT.dproj" },
+        { "Parameter": "Win64" },
+        { "Parameter": "Release" }
+      ]
+    },
+    {
+      "Id": "21",
+      "ActionId": "21",
+      "ActionName": "RestartIDE",
+      "Type": "6",
+      "Description": "Restart RAD Studio to finish the uninstallation",
+      "RequireElevation": "0",
+      "Active": "1",
+      "MinPV": "",
+      "MaxPV": "",
+      "Parameter": []
+    }
+  ]
+}
