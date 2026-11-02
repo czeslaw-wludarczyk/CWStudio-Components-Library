@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.34](https://img.shields.io/badge/version-1.9.34-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.35](https://img.shields.io/badge/version-1.9.35-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -286,7 +286,12 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.34:**
+**Najnowsza wersja — 1.9.35:**
+
+- **Poprawka** `TCWSStringGrid`: **brak pustego miejsca pod ostatnim wierszem i za ostatnią kolumną po powiększeniu okna — tak samo jak w `TStringGrid` z VCL.** Gdy siatka jest przewinięta do końca i kontrolka rośnie, wiersze i kolumny przesuwają się tak, żeby ostatni wiersz/kolumna dochodziły do krawędzi. Zakres przewijania (pionowego i poziomego) jest liczony od końca danych, więc suwak zawsze dociera dokładnie do ostatniego wiersza/kolumny.
+- **Zmiana** `TCWSStringGrid`: **kciuk suwaka ma stałą długość** (30 px przy 96 DPI, skalowane z DPI) — jak natywny suwak w `Vcl.Grids`; nie zmienia rozmiaru razem z oknem ani liczbą wierszy/kolumn.
+
+**Wersja 1.9.34:**
 
 - **Nowość** **pakiet GetIt** — bibliotekę można zainstalować przez **Tools → GetIt Package Manager → Load Local Package**, wskazując `CWStudioComponents-github.json` z wydania na GitHubie (zob. [Instalacja przez GetIt](#-instalacja-przez-getit-zalecana)).
 - **Poprawka** `TCWSScrollBox`: **kontrolki z `alBottom` / `alRight` dokują do końca zawartości — tak samo w designerze i w czasie działania.** W designerze kontrolka `alBottom` lądowała na dole pierwszego ekranu (w środku dłuższej zawartości), a w czasie działania nachodziła na ostatnią kontrolkę. Teraz trafia za resztę zawartości, a przewijany obszar obejmuje jej wysokość.
@@ -593,7 +598,12 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.34:**
+**Latest release — 1.9.35:**
+
+- **Fixed** `TCWSStringGrid`: **no empty space below the last row or right of the last column after the window grows — the same as the VCL `TStringGrid`.** When the grid is scrolled to the end and the control gets bigger, rows and columns shift so the last row/column stays at the edge. The scroll range (vertical and horizontal) is computed from the end of the data, so the scrollbar always reaches exactly the last row/column.
+- **Changed** `TCWSStringGrid`: **the scrollbar thumb has a fixed length** (30 px at 96 DPI, scaled with DPI) — like the native `Vcl.Grids` scrollbar; it does not resize with the window or the number of rows/columns.
+
+**Release 1.9.34:**
 
 - **New** **GetIt package** — install the library with **Tools → GetIt Package Manager → Load Local Package** using `CWStudioComponents-github.json` from the GitHub release (see [Installing through GetIt](#-installing-through-getit-recommended)).
 - **Fixed** `TCWSScrollBox`: **`alBottom` / `alRight` children dock to the end of the content — the same in the designer and at runtime.** In the designer an `alBottom` child landed at the bottom of the first screen (in the middle of a longer content), and at runtime it covered the last control. It now goes after the rest of the content and the scrolled area includes its height.

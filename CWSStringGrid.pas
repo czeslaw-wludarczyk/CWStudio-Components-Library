@@ -259,6 +259,9 @@ type
     procedure UpdateScrollbarMetrics;
     procedure GetVMetrics(out Total, Visible, First: Integer);
     procedure GetHMetrics(out Total, Visible, First: Integer);
+    function MaxTopRow: Integer;
+    function MaxLeftCol: Integer;
+    procedure ClampTopLeft;
     function SumColWidths: Integer;
     function SumRowHeights: Integer;
     procedure ScrollVTo(FirstRow: Integer);
@@ -1004,24 +1007,99 @@ end;
 
 { *** Scroll metrics helpers *** }
 
-procedure TCWSStringGrid.GetVMetrics(out Total, Visible, First: Integer);
+function TCWSStringGrid.MaxTopRow: Integer;
+var
+  I, Line, LW: Integer;
 begin
+  { Mirrors Vcl.Grids.TCustomGrid.CalcMaxTopLeft: the largest TopRow at which
+    the last row still ends at (or before) the bottom edge of the grid. The
+    native grid runs with ScrollBars = ssNone, so its own UpdateScrollRange never
+    does this for us. }
+  LW := FGrid.GridLineWidth;
+  Line := FGrid.ClientHeight + LW;
+  for I := 0 to FGrid.FixedRows - 1 do
+    Dec(Line, FGrid.RowHeights[I] + LW);
+  Result := FGrid.RowCount - 1;
+  for I := FGrid.RowCount - 1 downto FGrid.FixedRows do
+  begin
+    if FGrid.RowHeights[I] < 0 then
+      Continue;
+    Dec(Line, FGrid.RowHeights[I] + LW);
+    if Line < 0 then
+      Break;
+    Result := I;
+  end;
+  if Result < FGrid.FixedRows then
+    Result := FGrid.FixedRows;
+end;
+
+function TCWSStringGrid.MaxLeftCol: Integer;
+var
+  I, Line, LW: Integer;
+begin
+  { Horizontal counterpart of MaxTopRow (see CalcMaxTopLeft in Vcl.Grids). }
+  LW := FGrid.GridLineWidth;
+  Line := FGrid.ClientWidth + LW;
+  for I := 0 to FGrid.FixedCols - 1 do
+    Dec(Line, FGrid.ColWidths[I] + LW);
+  Result := FGrid.ColCount - 1;
+  for I := FGrid.ColCount - 1 downto FGrid.FixedCols do
+  begin
+    if FGrid.ColWidths[I] < 0 then
+      Continue;
+    Dec(Line, FGrid.ColWidths[I] + LW);
+    if Line < 0 then
+      Break;
+    Result := I;
+  end;
+  if Result < FGrid.FixedCols then
+    Result := FGrid.FixedCols;
+end;
+
+procedure TCWSStringGrid.ClampTopLeft;
+var
+  MaxRow, MaxCol: Integer;
+begin
+  { Vcl.Grids pulls TopLeft back whenever the grid grows past the end of the
+    content (UpdateScrollRange on WM_SIZE), so no empty space ever opens up
+    below the last row / right of the last column. Do the same here. }
+  if (FGrid = nil) or not FGrid.HandleAllocated then
+    Exit;
+  MaxRow := MaxTopRow;
+  if FGrid.TopRow > MaxRow then
+    FGrid.TopRow := MaxRow;
+  MaxCol := MaxLeftCol;
+  if FGrid.LeftCol > MaxCol then
+    FGrid.LeftCol := MaxCol;
+end;
+
+procedure TCWSStringGrid.GetVMetrics(out Total, Visible, First: Integer);
+var
+  Range: Integer;
+begin
+  { Total - Visible is the scroll range: TopRow runs from FixedRows to
+    MaxTopRow, exactly like the native Vcl.Grids scrollbar. Visible is the page
+    (rows that fit when scrolled to the end), independent of the current TopRow. }
   Total := FGrid.RowCount - FGrid.FixedRows;
-  Visible := FGrid.VisibleRowCount;
+  if Total < 0 then Total := 0;
+  Range := Max(0, MaxTopRow - FGrid.FixedRows);
+  Visible := Max(1, Total - Range);
   First := FGrid.TopRow - FGrid.FixedRows;
   if First < 0 then First := 0;
-  if Total < 0 then Total := 0;
-  if Visible < 1 then Visible := 1;
+  if First > Range then First := Range;
 end;
 
 procedure TCWSStringGrid.GetHMetrics(out Total, Visible, First: Integer);
+var
+  Range: Integer;
 begin
   Total := FGrid.ColCount - FGrid.FixedCols;
-  Visible := FGrid.VisibleColCount;
+  if Total < 0 then Total := 0;
+  Range := Max(0, MaxLeftCol - FGrid.FixedCols);
+  Visible := Max(1, Total - Range);
   First := FGrid.LeftCol - FGrid.FixedCols;
   if First < 0 then First := 0;
-  if Total < 0 then Total := 0;
-  if Visible < 1 then Visible := 1;
+  if First > Range then First := Range;
 end;
 
 function TCWSStringGrid.SumColWidths: Integer;
@@ -1189,6 +1267,7 @@ begin
     GridBottom := Height - Inset;
 
   FGrid.SetBounds(L, T, Max(10, GridRight - L), Max(10, GridBottom - T));
+  ClampTopLeft;
 
   if NeedV then
     FVTrackRect := Rect(GridRight, T, Width - Inset, GridBottom)
@@ -1258,6 +1337,10 @@ begin
   end;
 end;
 
+const
+  { Length of the scrollbar thumb along its track (96 DPI), fixed like Vcl.Grids }
+  CWS_GRID_THUMB_LEN = 30;
+
 procedure TCWSStringGrid.UpdateScrollbarMetrics;
 var
   Total, Visible, First, TrackTop, TrackBottom, TrackH, ThumbH, ThumbP,
@@ -1287,7 +1370,9 @@ begin
       TrackTop := FVTrackRect.Top + Scale(4);
       TrackBottom := FVTrackRect.Bottom - Scale(4);
       TrackH := TrackBottom - TrackTop;
-      ThumbH := Max(Scale(20), Round(TrackH * (Visible / Total)));
+      { Fixed-length thumb, like the native Vcl.Grids scrollbar (range 0..127,
+        no page size) - it never grows or shrinks with the window or row count. }
+      ThumbH := Min(TrackH, Scale(CWS_GRID_THUMB_LEN));
       if Total > Visible then
         ThumbP := TrackTop + Round((First / (Total - Visible)) * (TrackH - ThumbH))
       else
@@ -1321,7 +1406,7 @@ begin
       TrackLeft := FHTrackRect.Left + Scale(4);
       TrackRight := FHTrackRect.Right - Scale(4);
       TrackW := TrackRight - TrackLeft;
-      HThumbW := Max(Scale(20), Round(TrackW * (Visible / Total)));
+      HThumbW := Min(TrackW, Scale(CWS_GRID_THUMB_LEN));
       if Total > Visible then
         HThumbP := TrackLeft + Round((First / (Total - Visible)) * (TrackW - HThumbW))
       else

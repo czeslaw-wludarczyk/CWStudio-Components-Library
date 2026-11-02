@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.35] — 2026-11-02
+
+- **Fix** `TCWSStringGrid`: **no empty space below the last row / right of the last column after the control grows — the same as `Vcl.Grids.TStringGrid`.** The inner grid runs with `ScrollBars = ssNone` (the scrollbars are owner-drawn), and in that mode `TCustomGrid.UpdateScrollRange` exits immediately, so `TopRow` / `LeftCol` were never pulled back when the window was enlarged while scrolled to the end. Now:
+  - new `MaxTopRow` / `MaxLeftCol` compute the largest `TopRow` / `LeftCol` at which the last row / column still ends at the grid edge — the same algorithm as `TCustomGrid.CalcMaxTopLeft`;
+  - `UpdateGridPosition` calls the new `ClampTopLeft` right after `SetBounds`, so `TopRow` / `LeftCol` are clamped on every resize and after changes of `RowCount`, `ColCount`, `RowHeights`, `ColWidths`, `DefaultRowHeight`, `DefaultColWidth`, `FixedRows`, `FixedCols`;
+  - `GetVMetrics` / `GetHMetrics` derive the scroll range from `MaxTopRow` / `MaxLeftCol` instead of `VisibleRowCount` / `VisibleColCount` at the current position, so thumb position, thumb dragging and track paging reach exactly the last row / column.
+- **Change** `TCWSStringGrid`: **the scrollbar thumb has a fixed length (30 px at 96 DPI, scaled with DPI), like the native `Vcl.Grids` scrollbar** (range 0..127 without a page size). It no longer grows or shrinks with the window size or with the number of rows / columns. The length is the `CWS_GRID_THUMB_LEN` constant.
+
 ## [1.9.34] — 2026-10-30
 
 - **New** **GetIt package.** The library can be installed with **Tools → GetIt Package Manager → Load Local Package**: download `CWStudioComponents-github.json` from the GitHub release and select it in the IDE. GetIt fetches `CWStudioComponents-1.9.34.zip` from the release, builds `CWStudio_ComponentsRT` (Win32 + Win64) and `CWStudio_ComponentsDT` (Win32 for `bds.exe`, Win64 for `bds64.exe`), adds the library and browsing paths, registers the design-time package in both IDEs and restarts the IDE. Uninstalling reverses every step and cleans the build output. The package is installed into `$(BDSCatalogRepository)\CWStudioComponents\1.9.34`. The package definition, the payload build script (`BuildPackage.ps1`) and the release procedure are in the `GetIt` folder — see `GetIt/README.md`.
