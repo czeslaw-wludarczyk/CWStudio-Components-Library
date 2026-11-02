@@ -1,6 +1,6 @@
 {
-  "Id": "CWStudioComponents-1.9.35",
-  "PackageId": "CWStudioComponents",
+  "Id": "CWStudio-Components-Library-1.9.35",
+  "PackageId": "CWStudio-Components-Library",
   "Name": "CWStudio Components",
   "Version": "1.9.35",
   "Description": "CWStudio Components Library - a set of Fluent-style VCL controls for Delphi: buttons, edits, combo boxes, date pickers, grids, list boxes, scroll boxes, panels, switches, progress indicators, popup and system menus, plus a Fluent color engine and interactive user themes.",
