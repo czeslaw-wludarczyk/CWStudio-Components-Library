@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.35](https://img.shields.io/badge/version-1.9.35-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.36](https://img.shields.io/badge/version-1.9.36-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -70,7 +70,7 @@ CWStudio to zestaw nowoczesnych, wysokiej jakości komponentów VCL dla środowi
 | Komponent | Opis |
 |-----------|------|
 | **`TCWSListBox`** | Lista (ListBox) w stylu Fluent z dyskretnym, zanikającym paskiem przewijania (tak jak w `TCWSMemo`). |
-| **`TCWSStringGrid`** | Płaska siatka tekstowa (StringGrid) z fluentowymi paskami przewijania (pionowy + poziomy). Konfigurowalne kolory (tło komórek, tło poza komórkami, linie siatki, komórki *fixed*, podświetlenie komórki, ramka), naprzemienne kolorowanie wierszy (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), zaokrąglone narożniki z możliwością wyłączenia każdego z osobna oraz komórki bez efektu 3D. |
+| **`TCWSStringGrid`** | Płaska siatka tekstowa (StringGrid) z fluentowymi paskami przewijania (pionowy + poziomy) — kciuki proporcjonalne do widocznej części zawartości, przewijanie jak w `TCWSDBGrid`. Konfigurowalne kolory (tło komórek, tło poza komórkami, linie siatki, komórki *fixed*, podświetlenie komórki, ramka), naprzemienne kolorowanie wierszy (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), zaokrąglone narożniki z możliwością wyłączenia każdego z osobna oraz komórki bez efektu 3D. |
 | **`TCWSDBGrid`** | Siatka **danych** (DBGrid) w stylu Fluent — opakowuje wewnętrzny `TDBGrid`, więc zachowuje jego pełny interfejs (`DataSource`, `Columns`, `Options`, zdarzenia `OnDrawColumnCell` / `OnCellClick` / `OnTitleClick` itd.). Fluentowe paski przewijania (pionowy + poziomy), konfigurowalne kolory (tło, komórki, tekst, linie siatki, komórki *fixed*, podświetlenie), **sortowanie kliknięciem w nagłówek** z obsługą wielu kolumn i wskaźnikami w tytule (`SortEnabled`, `MultiSortMode`, `MaxSortColumns`, `SortBy` / `ClearSort`, `OnSortApply`), naprzemienne kolorowanie wierszy liczone po rekordach (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), zaokrąglone narożniki z możliwością wyłączenia każdego z osobna, automatyczne dopasowanie szerokości kolumn (`AutoFitColumns`), regulowana wysokość wiersza i nagłówka, pionowe wyśrodkowanie tekstu oraz zaznaczanie wielu rekordów (`dgMultiSelect`, Ctrl+klik, Shift+klik, Ctrl+A). |
 
 ### Wskaźniki postępu
@@ -286,7 +286,12 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.35:**
+**Najnowsza wersja — 1.9.36:**
+
+- **Zmiana** `TCWSStringGrid`: **przewijanie i wielkość kciuków działają tak samo jak w `TCWSDBGrid`** — na pasku pionowym i poziomym. Kciuk jest proporcjonalny do widocznej części zawartości (minimum 20 px przy 96 DPI), więc maleje po dodaniu wierszy/kolumn i rośnie po ich usunięciu. Przewijanie liczone jest w pikselach, dzięki czemu wiersze i kolumny o różnych rozmiarach nie powodują nierównego ruchu kciuka, a kciuk dochodzi do końca toru dokładnie przy ostatnim wierszu/kolumnie. Podczas przeciągania kciuk płynnie podąża za kursorem, a siatka przeskakuje do najbliższego wiersza/kolumny.
+- **Poprawka** `TCWSStringGrid`: **paski przewijania reagują na zmiany wykonane bezpośrednio na wewnętrznej siatce** — zmianę szerokości kolumny/wysokości wiersza myszą, `Grid.RowCount`, `DeleteRow`, `DeleteColumn` itp.
+
+**Wersja 1.9.35:**
 
 - **Poprawka** `TCWSStringGrid`: **brak pustego miejsca pod ostatnim wierszem i za ostatnią kolumną po powiększeniu okna — tak samo jak w `TStringGrid` z VCL.** Gdy siatka jest przewinięta do końca i kontrolka rośnie, wiersze i kolumny przesuwają się tak, żeby ostatni wiersz/kolumna dochodziły do krawędzi. Zakres przewijania (pionowego i poziomego) jest liczony od końca danych, więc suwak zawsze dociera dokładnie do ostatniego wiersza/kolumny.
 - **Zmiana** `TCWSStringGrid`: **kciuk suwaka ma stałą długość** (30 px przy 96 DPI, skalowane z DPI) — jak natywny suwak w `Vcl.Grids`; nie zmienia rozmiaru razem z oknem ani liczbą wierszy/kolumn.
@@ -381,7 +386,7 @@ CWStudio is a library of modern, high-quality VCL components for Delphi, designe
 | Component | Description |
 |-----------|-------------|
 | **`TCWSListBox`** | Fluent-style list box with a subtle auto-hiding scrollbar (same as `TCWSMemo`). |
-| **`TCWSStringGrid`** | Flat text grid (StringGrid) with Fluent scrollbars (vertical + horizontal). Configurable colors (cell background, area-beyond-cells background, grid lines, fixed cells, cell highlight, border), alternating row colors (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), rounded corners with each corner independently switchable, and flat (no 3D) cells. |
+| **`TCWSStringGrid`** | Flat text grid (StringGrid) with Fluent scrollbars (vertical + horizontal) — thumbs proportional to the visible share of the content, scrolling like `TCWSDBGrid`. Configurable colors (cell background, area-beyond-cells background, grid lines, fixed cells, cell highlight, border), alternating row colors (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), rounded corners with each corner independently switchable, and flat (no 3D) cells. |
 | **`TCWSDBGrid`** | Fluent-style **data-aware** grid (DBGrid) — wraps an internal `TDBGrid`, so it keeps the full DBGrid surface (`DataSource`, `Columns`, `Options`, events `OnDrawColumnCell` / `OnCellClick` / `OnTitleClick`, etc.). Fluent scrollbars (vertical + horizontal), configurable colors (background, cells, text, grid lines, fixed cells, highlight), **sorting by clicking a title** with multi-column support and in-title indicators (`SortEnabled`, `MultiSortMode`, `MaxSortColumns`, `SortBy` / `ClearSort`, `OnSortApply`), alternating row colors banded by record (`AlternatingRowColors` + `OddRowColor` / `EvenRowColor`), rounded corners with each corner independently switchable, automatic column-width fitting (`AutoFitColumns`), adjustable row and title height, vertical text centering, and multi-record selection (`dgMultiSelect`, Ctrl+click, Shift+click, Ctrl+A). |
 
 ### Progress indicators
@@ -598,7 +603,12 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.35:**
+**Latest release — 1.9.36:**
+
+- **Changed** `TCWSStringGrid`: **scrolling and thumb size work the same way as in `TCWSDBGrid`** — on both the vertical and the horizontal bar. The thumb is proportional to the visible share of the content (at least 20 px at 96 DPI), so it shrinks when rows/columns are added and grows when they are removed. Scrolling is measured in pixels, so rows and columns of different sizes no longer make the thumb move unevenly, and the thumb reaches the end of the track exactly at the last row/column. While dragged, the thumb follows the cursor smoothly and the grid snaps to the nearest row/column.
+- **Fixed** `TCWSStringGrid`: **the scrollbars follow changes made directly on the inner grid** — resizing a column/row with the mouse, `Grid.RowCount`, `DeleteRow`, `DeleteColumn` and so on.
+
+**Release 1.9.35:**
 
 - **Fixed** `TCWSStringGrid`: **no empty space below the last row or right of the last column after the window grows — the same as the VCL `TStringGrid`.** When the grid is scrolled to the end and the control gets bigger, rows and columns shift so the last row/column stays at the edge. The scroll range (vertical and horizontal) is computed from the end of the data, so the scrollbar always reaches exactly the last row/column.
 - **Changed** `TCWSStringGrid`: **the scrollbar thumb has a fixed length** (30 px at 96 DPI, scaled with DPI) — like the native `Vcl.Grids` scrollbar; it does not resize with the window or the number of rows/columns.

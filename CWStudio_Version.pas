@@ -27,14 +27,14 @@ const
   { Version components — keep in sync with VerInfo in the .dproj files }
   CWStudioVersionMajor   = 1;
   CWStudioVersionMinor   = 9;
-  CWStudioVersionRelease = 35;
+  CWStudioVersionRelease = 36;
   CWStudioVersionBuild   = 0;
 
   { Human-readable version (Major.Minor.Release) }
-  CWStudioVersion = '1.9.35';
+  CWStudioVersion = '1.9.36';
 
   { Full version in VerInfo format (Major.Minor.Release.Build) }
-  CWStudioVersionFull = '1.9.35.0';
+  CWStudioVersionFull = '1.9.36.0';
 
   { Version label shown on the splash screen / in the About Box, e.g. 'V1.6.2.0' }
   CWStudioVersionLabel = 'V' + CWStudioVersionFull;

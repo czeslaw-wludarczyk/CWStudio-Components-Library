@@ -81,6 +81,11 @@ type
     procedure WndProc(var Message: TMessage); override;
     procedure CMMouseEnter(var Message: TMessage); message CM_MOUSEENTER;
     procedure CMMouseLeave(var Message: TMessage); message CM_MOUSELEAVE;
+    { Structure changes made directly on the grid (column/row resizing with the
+      mouse, Grid.RowCount := ..., etc.) must re-flow the owner's scrollbars. }
+    procedure ColWidthsChanged; override;
+    procedure RowHeightsChanged; override;
+    procedure SizeChanged(OldColCount, OldRowCount: Longint); override;
   public
     constructor Create(AOwner: TComponent); override;
     procedure DragDrop(Source: TObject; X, Y: Integer); override;
@@ -133,9 +138,9 @@ type
     FVScrollVisible: Boolean;
     FVAreaHovered: Boolean;
     FVDragging: Boolean;
-    FVDragStartRow: Integer;
+    FVDragStartOff: Integer;  { pixel offset at the moment the thumb was grabbed }
     FVDragStartY: Integer;
-    FVDragPos: Integer;       { pending row while a non-thumb-tracking drag is held }
+    FVDragPos: Integer;       { pixel offset the thumb floats at while dragged }
     FVThumbRect: TRect;
     FVTrackRect: TRect;
 
@@ -143,9 +148,11 @@ type
     FHScrollVisible: Boolean;
     FHAreaHovered: Boolean;
     FHDragging: Boolean;
-    FHDragStartCol: Integer;
+    FHDragStartOff: Integer;  { pixel offset at the moment the thumb was grabbed }
     FHDragStartX: Integer;
-    FHDragPos: Integer;       { pending column while a non-thumb-tracking drag is held }
+    FHDragPos: Integer;       { pixel offset the thumb floats at while dragged }
+
+    FLayoutUpdating: Boolean; { re-entrancy guard for GridLayoutChanged }
     FHThumbRect: TRect;
     FHTrackRect: TRect;
 
@@ -264,8 +271,17 @@ type
     procedure ClampTopLeft;
     function SumColWidths: Integer;
     function SumRowHeights: Integer;
-    procedure ScrollVTo(FirstRow: Integer);
-    procedure ScrollHTo(FirstCol: Integer);
+    function RowPx(Index: Integer): Integer;
+    function ColPx(Index: Integer): Integer;
+    function FixedHeight: Integer;
+    function FixedWidth: Integer;
+    function VScrollMax: Integer;
+    function HScrollMax: Integer;
+    function RowIndexForOffset(TargetPx: Integer): Integer;
+    function ColIndexForOffset(TargetPx: Integer): Integer;
+    procedure ScrollVTo(OffsetPx: Integer);
+    procedure ScrollHTo(OffsetPx: Integer);
+    procedure GridLayoutChanged;
     procedure StartTrackRepeat(Vert: Boolean; Dir: Integer);
     procedure StopTrackRepeat;
     procedure DoTrackPage;
@@ -783,6 +799,27 @@ begin
     FOwner.CompositeMouseCheckLeave;
 end;
 
+procedure TCWSInternalGrid.ColWidthsChanged;
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.GridLayoutChanged;
+end;
+
+procedure TCWSInternalGrid.RowHeightsChanged;
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.GridLayoutChanged;
+end;
+
+procedure TCWSInternalGrid.SizeChanged(OldColCount, OldRowCount: Longint);
+begin
+  inherited;
+  if FOwner <> nil then
+    FOwner.GridLayoutChanged;
+end;
+
 { TCWSStringGrid }
 
 constructor TCWSStringGrid.Create(AOwner: TComponent);
@@ -1073,33 +1110,131 @@ begin
     FGrid.LeftCol := MaxCol;
 end;
 
+{ Both axes are measured in PIXELS, the same model TCWSDBGrid uses for its
+  horizontal bar: Total = height/width of the scrollable rows/columns, Visible =
+  pixels available for them (client size minus the fixed rows/columns), First =
+  pixels currently scrolled off. The thumb is therefore proportional to the
+  visible share of the content (it shrinks as rows/columns are added and grows
+  as they are removed) and its size does not jump when rows/columns of
+  different sizes scroll into view. The grid itself still scrolls by whole
+  rows/columns, so every pixel target is snapped to the nearest row/column. }
+
+function TCWSStringGrid.RowPx(Index: Integer): Integer;
+begin
+  { Hidden rows report a negative height in Vcl.Grids }
+  Result := Max(0, FGrid.RowHeights[Index]) + FGrid.GridLineWidth;
+end;
+
+function TCWSStringGrid.ColPx(Index: Integer): Integer;
+begin
+  Result := Max(0, FGrid.ColWidths[Index]) + FGrid.GridLineWidth;
+end;
+
+function TCWSStringGrid.FixedHeight: Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to FGrid.FixedRows - 1 do
+    Inc(Result, RowPx(I));
+end;
+
+function TCWSStringGrid.FixedWidth: Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to FGrid.FixedCols - 1 do
+    Inc(Result, ColPx(I));
+end;
+
 procedure TCWSStringGrid.GetVMetrics(out Total, Visible, First: Integer);
 var
-  Range: Integer;
+  I: Integer;
 begin
-  { Total - Visible is the scroll range: TopRow runs from FixedRows to
-    MaxTopRow, exactly like the native Vcl.Grids scrollbar. Visible is the page
-    (rows that fit when scrolled to the end), independent of the current TopRow. }
-  Total := FGrid.RowCount - FGrid.FixedRows;
-  if Total < 0 then Total := 0;
-  Range := Max(0, MaxTopRow - FGrid.FixedRows);
-  Visible := Max(1, Total - Range);
-  First := FGrid.TopRow - FGrid.FixedRows;
-  if First < 0 then First := 0;
-  if First > Range then First := Range;
+  Total := 0;
+  for I := FGrid.FixedRows to FGrid.RowCount - 1 do
+    Inc(Total, RowPx(I));
+  Visible := Max(1, FGrid.ClientHeight - FixedHeight);
+  First := 0;
+  for I := FGrid.FixedRows to Min(FGrid.TopRow, FGrid.RowCount) - 1 do
+    Inc(First, RowPx(I));
 end;
 
 procedure TCWSStringGrid.GetHMetrics(out Total, Visible, First: Integer);
 var
-  Range: Integer;
+  I: Integer;
 begin
-  Total := FGrid.ColCount - FGrid.FixedCols;
-  if Total < 0 then Total := 0;
-  Range := Max(0, MaxLeftCol - FGrid.FixedCols);
-  Visible := Max(1, Total - Range);
-  First := FGrid.LeftCol - FGrid.FixedCols;
-  if First < 0 then First := 0;
-  if First > Range then First := Range;
+  Total := 0;
+  for I := FGrid.FixedCols to FGrid.ColCount - 1 do
+    Inc(Total, ColPx(I));
+  Visible := Max(1, FGrid.ClientWidth - FixedWidth);
+  First := 0;
+  for I := FGrid.FixedCols to Min(FGrid.LeftCol, FGrid.ColCount) - 1 do
+    Inc(First, ColPx(I));
+end;
+
+function TCWSStringGrid.VScrollMax: Integer;
+var
+  I: Integer;
+begin
+  { Largest offset the grid can actually reach — the height scrolled off once
+    TopRow sits at MaxTopRow (snapped to a row boundary), NOT Total - Visible.
+    Dividing the thumb position by this lets the thumb touch the bottom rail
+    exactly when the last row is in view (same reasoning as
+    TCWSDBGrid.HScrollMax). }
+  Result := 0;
+  for I := FGrid.FixedRows to MaxTopRow - 1 do
+    Inc(Result, RowPx(I));
+end;
+
+function TCWSStringGrid.HScrollMax: Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := FGrid.FixedCols to MaxLeftCol - 1 do
+    Inc(Result, ColPx(I));
+end;
+
+function TCWSStringGrid.RowIndexForOffset(TargetPx: Integer): Integer;
+var
+  I, Acc, H: Integer;
+begin
+  { Scrollable row whose top edge is nearest to TargetPx, clamped to the
+    reachable range FixedRows .. MaxTopRow. }
+  Acc := 0;
+  Result := FGrid.RowCount - 1;
+  for I := FGrid.FixedRows to FGrid.RowCount - 1 do
+  begin
+    H := RowPx(I);
+    if TargetPx < Acc + (H div 2) then
+    begin
+      Result := I;
+      Break;
+    end;
+    Inc(Acc, H);
+  end;
+  Result := Max(FGrid.FixedRows, Min(MaxTopRow, Result));
+end;
+
+function TCWSStringGrid.ColIndexForOffset(TargetPx: Integer): Integer;
+var
+  I, Acc, W: Integer;
+begin
+  Acc := 0;
+  Result := FGrid.ColCount - 1;
+  for I := FGrid.FixedCols to FGrid.ColCount - 1 do
+  begin
+    W := ColPx(I);
+    if TargetPx < Acc + (W div 2) then
+    begin
+      Result := I;
+      Break;
+    end;
+    Inc(Acc, W);
+  end;
+  Result := Max(FGrid.FixedCols, Min(MaxLeftCol, Result));
 end;
 
 function TCWSStringGrid.SumColWidths: Integer;
@@ -1108,7 +1243,7 @@ var
 begin
   Result := 0;
   for I := 0 to FGrid.ColCount - 1 do
-    Inc(Result, FGrid.ColWidths[I]);
+    Inc(Result, ColPx(I));
 end;
 
 function TCWSStringGrid.SumRowHeights: Integer;
@@ -1117,43 +1252,73 @@ var
 begin
   Result := 0;
   for I := 0 to FGrid.RowCount - 1 do
-    Inc(Result, FGrid.RowHeights[I]);
+    Inc(Result, RowPx(I));
 end;
 
-procedure TCWSStringGrid.ScrollVTo(FirstRow: Integer);
+procedure TCWSStringGrid.ScrollVTo(OffsetPx: Integer);
 var
-  Total, Visible, Dummy: Integer;
+  NewTop: Integer;
 begin
-  GetVMetrics(Total, Visible, Dummy);
-  FirstRow := Max(0, Min(Max(0, Total - Visible), FirstRow));
-  FGrid.TopRow := FGrid.FixedRows + FirstRow;
+  if FGrid.RowCount <= FGrid.FixedRows then
+    Exit;
+  NewTop := RowIndexForOffset(Max(0, Min(VScrollMax, OffsetPx)));
+  if NewTop <> FGrid.TopRow then
+    FGrid.TopRow := NewTop;
 end;
 
-procedure TCWSStringGrid.ScrollHTo(FirstCol: Integer);
+procedure TCWSStringGrid.ScrollHTo(OffsetPx: Integer);
 var
-  Total, Visible, Dummy: Integer;
+  NewLeft: Integer;
 begin
-  GetHMetrics(Total, Visible, Dummy);
-  FirstCol := Max(0, Min(Max(0, Total - Visible), FirstCol));
-  FGrid.LeftCol := FGrid.FixedCols + FirstCol;
+  if FGrid.ColCount <= FGrid.FixedCols then
+    Exit;
+  NewLeft := ColIndexForOffset(Max(0, Min(HScrollMax, OffsetPx)));
+  if NewLeft <> FGrid.LeftCol then
+    FGrid.LeftCol := NewLeft;
+end;
+
+procedure TCWSStringGrid.GridLayoutChanged;
+begin
+  { Rows/columns were added, removed or resized on the inner grid itself —
+    re-decide which scrollbars are needed, re-size the thumbs and pull TopRow /
+    LeftCol back if the content now ends above/left of the viewport. }
+  if FLayoutUpdating or (FGrid = nil) or
+     (csDestroying in ComponentState) or (csLoading in ComponentState) then
+    Exit;
+  FLayoutUpdating := True;
+  try
+    UpdateGridPosition;
+    Invalidate;
+  finally
+    FLayoutUpdating := False;
+  end;
 end;
 
 { *** Track-click auto-repeat *** }
 
 procedure TCWSStringGrid.DoTrackPage;
 var
-  Total, Visible, First: Integer;
+  Total, Visible, First, OldTop, OldLeft: Integer;
 begin
-  { One page step in the stored repeat direction. }
+  { One page step (a visible height/width) in the stored repeat direction.
+    Snapping to the nearest row/column could round a page step back to where
+    we started when a single row/column is taller/wider than the viewport —
+    force at least one row/column of progress so paging never stalls. }
   if FRepeatVert then
   begin
     GetVMetrics(Total, Visible, First);
-    ScrollVTo(First + FRepeatDir * Max(1, Visible));
+    OldTop := FGrid.TopRow;
+    ScrollVTo(First + FRepeatDir * Visible);
+    if FGrid.TopRow = OldTop then
+      FGrid.TopRow := Max(FGrid.FixedRows, Min(MaxTopRow, OldTop + FRepeatDir));
   end
   else
   begin
     GetHMetrics(Total, Visible, First);
-    ScrollHTo(First + FRepeatDir * Max(1, Visible));
+    OldLeft := FGrid.LeftCol;
+    ScrollHTo(First + FRepeatDir * Visible);
+    if FGrid.LeftCol = OldLeft then
+      FGrid.LeftCol := Max(FGrid.FixedCols, Min(MaxLeftCol, OldLeft + FRepeatDir));
   end;
 end;
 
@@ -1338,13 +1503,13 @@ begin
 end;
 
 const
-  { Length of the scrollbar thumb along its track (96 DPI), fixed like Vcl.Grids }
-  CWS_GRID_THUMB_LEN = 30;
+  { Shortest the thumb may get along its track (96 DPI) — same as TCWSDBGrid }
+  CWS_GRID_THUMB_MIN = 20;
 
 procedure TCWSStringGrid.UpdateScrollbarMetrics;
 var
   Total, Visible, First, TrackTop, TrackBottom, TrackH, ThumbH, ThumbP,
-  ThumbW, CenterX: Integer;
+  ThumbW, CenterX, MaxOff: Integer;
   TrackLeft, TrackRight, TrackW, HThumbW, HThumbP, HThumbH, CenterY: Integer;
   WantV, WantH: Boolean;
 begin
@@ -1360,23 +1525,22 @@ begin
   if WantV then
   begin
     GetVMetrics(Total, Visible, First);
-    FVScrollVisible := Total > Visible;
+    MaxOff := VScrollMax;
+    FVScrollVisible := (Total > Visible) and (MaxOff > 0);
     if FVScrollVisible then
     begin
-      { With goThumbTracking off the thumb floats at the cursor (FVDragPos) during
-        the drag and the grid only scrolls on release — matching Vcl.Grids. }
-      if FVDragging and not (goThumbTracking in FGrid.Options) then
+      { While dragging, the thumb follows the cursor smoothly (FVDragPos, in
+        pixels); the grid itself snaps to whole rows — live with
+        goThumbTracking, or on release without it (like Vcl.Grids). }
+      if FVDragging then
         First := FVDragPos;
       TrackTop := FVTrackRect.Top + Scale(4);
       TrackBottom := FVTrackRect.Bottom - Scale(4);
       TrackH := TrackBottom - TrackTop;
-      { Fixed-length thumb, like the native Vcl.Grids scrollbar (range 0..127,
-        no page size) - it never grows or shrinks with the window or row count. }
-      ThumbH := Min(TrackH, Scale(CWS_GRID_THUMB_LEN));
-      if Total > Visible then
-        ThumbP := TrackTop + Round((First / (Total - Visible)) * (TrackH - ThumbH))
-      else
-        ThumbP := TrackTop;
+      { Proportional thumb, like TCWSDBGrid: track * visible share of content }
+      ThumbH := Max(Scale(CWS_GRID_THUMB_MIN), Round(TrackH * (Visible / Total)));
+      ThumbH := Min(TrackH, ThumbH);
+      ThumbP := TrackTop + Round((Min(First, MaxOff) / MaxOff) * (TrackH - ThumbH));
       ThumbP := Max(TrackTop, Min(TrackBottom - ThumbH, ThumbP));
       if FVAreaHovered or FVDragging then
         ThumbW := Scale(FScrollbarThumbHoverWidth)
@@ -1398,19 +1562,18 @@ begin
   if WantH then
   begin
     GetHMetrics(Total, Visible, First);
-    FHScrollVisible := Total > Visible;
+    MaxOff := HScrollMax;
+    FHScrollVisible := (Total > Visible) and (MaxOff > 0);
     if FHScrollVisible then
     begin
-      if FHDragging and not (goThumbTracking in FGrid.Options) then
+      if FHDragging then
         First := FHDragPos;
       TrackLeft := FHTrackRect.Left + Scale(4);
       TrackRight := FHTrackRect.Right - Scale(4);
       TrackW := TrackRight - TrackLeft;
-      HThumbW := Min(TrackW, Scale(CWS_GRID_THUMB_LEN));
-      if Total > Visible then
-        HThumbP := TrackLeft + Round((First / (Total - Visible)) * (TrackW - HThumbW))
-      else
-        HThumbP := TrackLeft;
+      HThumbW := Max(Scale(CWS_GRID_THUMB_MIN), Round(TrackW * (Visible / Total)));
+      HThumbW := Min(TrackW, HThumbW);
+      HThumbP := TrackLeft + Round((Min(First, MaxOff) / MaxOff) * (TrackW - HThumbW));
       HThumbP := Max(TrackLeft, Min(TrackRight - HThumbW, HThumbP));
       if FHAreaHovered or FHDragging then
         HThumbH := Scale(FScrollbarThumbHoverWidth)
@@ -1712,8 +1875,8 @@ begin
       begin
         FVDragging := True;
         FVDragStartY := Y;
-        FVDragStartRow := First;
-        FVDragPos := First;
+        FVDragStartOff := Min(First, VScrollMax);
+        FVDragPos := FVDragStartOff;
       end
       else
         { Clicking the track pages toward the click — by a visible page, like the
@@ -1736,8 +1899,8 @@ begin
       begin
         FHDragging := True;
         FHDragStartX := X;
-        FHDragStartCol := First;
-        FHDragPos := First;
+        FHDragStartOff := Min(First, HScrollMax);
+        FHDragPos := FHDragStartOff;
       end
       else
         if P.X < FHThumbRect.Left then
@@ -1755,7 +1918,7 @@ end;
 procedure TCWSStringGrid.MouseMove(Shift: TShiftState; X, Y: Integer);
 var
   P: TPoint;
-  Total, Visible, First, TrackTop, TrackBottom, TrackH, ThumbH, MaxScroll: Integer;
+  First, TrackTop, TrackBottom, TrackH, ThumbH, MaxScroll: Integer;
   TrackLeft, TrackRight, TrackW, ThumbW: Integer;
   WasV, WasH: Boolean;
 begin
@@ -1790,47 +1953,40 @@ begin
 
   if FVDragging and FVScrollVisible then
   begin
-    GetVMetrics(Total, Visible, First);
-    MaxScroll := Max(0, Total - Visible);
+    { Pixel model: cursor travel along the free track maps linearly onto the
+      reachable pixel range. The thumb follows the cursor exactly; the grid
+      snaps to the nearest row (live with goThumbTracking, else on release). }
+    MaxScroll := VScrollMax;
     TrackTop := FVTrackRect.Top + Scale(4);
     TrackBottom := FVTrackRect.Bottom - Scale(4);
     TrackH := TrackBottom - TrackTop;
     ThumbH := FVThumbRect.Height;
     if (TrackH - ThumbH) > 0 then
     begin
-      First := FVDragStartRow + Round(((Y - FVDragStartY) / (TrackH - ThumbH)) * MaxScroll);
-      First := Max(0, Min(MaxScroll, First));
+      First := FVDragStartOff + Round(((Y - FVDragStartY) / (TrackH - ThumbH)) * MaxScroll);
+      FVDragPos := Max(0, Min(MaxScroll, First));
       if goThumbTracking in FGrid.Options then
-        ScrollVTo(First)            { live — the grid follows the thumb }
-      else
-      begin
-        FVDragPos := First;         { defer — only float the thumb until release }
-        UpdateScrollbarMetrics;
-        Invalidate;
-      end;
+        ScrollVTo(FVDragPos);
+      UpdateScrollbarMetrics;
+      Invalidate;
     end;
   end;
 
   if FHDragging and FHScrollVisible then
   begin
-    GetHMetrics(Total, Visible, First);
-    MaxScroll := Max(0, Total - Visible);
+    MaxScroll := HScrollMax;
     TrackLeft := FHTrackRect.Left + Scale(4);
     TrackRight := FHTrackRect.Right - Scale(4);
     TrackW := TrackRight - TrackLeft;
     ThumbW := FHThumbRect.Width;
     if (TrackW - ThumbW) > 0 then
     begin
-      First := FHDragStartCol + Round(((X - FHDragStartX) / (TrackW - ThumbW)) * MaxScroll);
-      First := Max(0, Min(MaxScroll, First));
+      First := FHDragStartOff + Round(((X - FHDragStartX) / (TrackW - ThumbW)) * MaxScroll);
+      FHDragPos := Max(0, Min(MaxScroll, First));
       if goThumbTracking in FGrid.Options then
-        ScrollHTo(First)
-      else
-      begin
-        FHDragPos := First;
-        UpdateScrollbarMetrics;
-        Invalidate;
-      end;
+        ScrollHTo(FHDragPos);
+      UpdateScrollbarMetrics;
+      Invalidate;
     end;
   end;
 end;

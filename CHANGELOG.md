@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.36] — 2026-11-03
+
+- **Change** `TCWSStringGrid`: **scrolling and scrollbar thumb size work the same way as in `TCWSDBGrid`, on both the vertical and the horizontal bar.** The fixed-length thumb introduced in 1.9.35 (`CWS_GRID_THUMB_LEN`) is gone. Now:
+  - both axes are measured in pixels — `GetVMetrics` / `GetHMetrics` return the height / width of the scrollable rows / columns (`Total`), the space left for them next to the fixed rows / columns (`Visible`) and the part scrolled off (`First`) — the model `TCWSDBGrid` uses for its horizontal bar. Rows / columns of different sizes no longer make the thumb move unevenly;
+  - the thumb is proportional to the visible share of the content (`TrackLength * Visible / Total`, at least 20 px at 96 DPI — the `CWS_GRID_THUMB_MIN` constant, the same minimum as `TCWSDBGrid`), so it shrinks when rows / columns are added and grows when they are removed;
+  - the thumb position is relative to the reachable maximum (new `VScrollMax` / `HScrollMax`, the pixel offset at `MaxTopRow` / `MaxLeftCol`), so the thumb touches the end of the track exactly when the last row / column is in view;
+  - dragging maps cursor travel onto that pixel range: the thumb follows the cursor smoothly and the grid snaps to the nearest row / column (new `RowIndexForOffset` / `ColIndexForOffset`) — live with `goThumbTracking`, on release without it;
+  - clicking the track pages by one visible height / width and always moves at least one row / column, so paging does not stall on a row / column larger than the view.
+- **Fix** `TCWSStringGrid`: **the scrollbars follow changes made directly on the inner grid.** `TCWSInternalGrid` now overrides `ColWidthsChanged`, `RowHeightsChanged` and `SizeChanged` and calls the new owner hook `GridLayoutChanged`, which re-runs `UpdateGridPosition`. Resizing a column / row with the mouse (`goColSizing` / `goRowSizing`), `Grid.RowCount := ...`, `DeleteRow`, `DeleteColumn` and similar calls now show / hide the scrollbars, resize the thumbs and clamp `TopRow` / `LeftCol` straight away.
+
 ## [1.9.35] — 2026-11-02
 
 - **Change** **GetIt package: `PackageId` renamed from `CWStudioComponents` to `CWStudio-Components-Library`** (`Id` is now `CWStudio-Components-Library-1.9.35`), so GetIt installs the library into `$(BDSCatalogRepository)\CWStudio-Components-Library\<version>`, a folder named after the repository. GetIt treats this as a new package: uninstall a copy installed from the 1.9.34 definition through GetIt before loading the new JSON.
