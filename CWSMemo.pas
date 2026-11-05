@@ -80,6 +80,7 @@ type
     FScrollThumbColor: TColor;
     FScrollThumbHoverColor: TColor;
     FDisabledColor: TColor;
+    FReadOnlyColor: TColor;
     FDisabledBorderColor: TColor;
     FScrollbarAreaWidth: Integer;
     FScrollbarThumbWidth: Integer;
@@ -191,6 +192,7 @@ type
     procedure SetScrollThumbColor(const Value: TColor);
     procedure SetScrollThumbHoverColor(const Value: TColor);
     procedure SetDisabledColor(const Value: TColor);
+    procedure SetReadOnlyColor(const Value: TColor);
     procedure SetDisabledBorderColor(const Value: TColor);
     procedure SetScrollbarAreaWidth(const Value: Integer);
     procedure SetScrollbarThumbWidth(const Value: Integer);
@@ -308,6 +310,10 @@ type
     property ScrollThumbColor: TColor read FScrollThumbColor write SetScrollThumbColor default $C0C0C0;
     property ScrollThumbHoverColor: TColor read FScrollThumbHoverColor write SetScrollThumbHoverColor default $909090;
     property DisabledColor: TColor read FDisabledColor write SetDisabledColor default $F7F7F7;
+    { clNone (the default) means a read-only memo keeps using BackgroundColor /
+      BackgroundHoverColor / BackgroundFocusColor, like TCWSEdit does. Set it to a
+      concrete color (e.g. $F5F5F5) to grey the field out while ReadOnly is True. }
+    property ReadOnlyColor: TColor read FReadOnlyColor write SetReadOnlyColor default clNone;
     property DisabledBorderColor: TColor read FDisabledBorderColor write SetDisabledBorderColor default $E0E0E0;
     property ScrollbarAreaWidth: Integer read FScrollbarAreaWidth write SetScrollbarAreaWidth default 14;
     property ScrollbarThumbWidth: Integer read FScrollbarThumbWidth write SetScrollbarThumbWidth default 4;
@@ -570,6 +576,7 @@ begin
   FScrollThumbColor := $C0C0C0;
   FScrollThumbHoverColor := $909090;
   FDisabledColor := $F7F7F7;
+  FReadOnlyColor := clNone;
   FDisabledBorderColor := $E0E0E0;
   FScrollbarAreaWidth := 14;
   FScrollbarThumbWidth := 4;
@@ -628,7 +635,10 @@ end;
 procedure TCWSMemo.SetReadOnly(const Value: Boolean);
 begin
   FMemo.ReadOnly := Value;
-  Invalidate;
+  { ApplyStateChange, not just Invalidate: the inner memo's own Color has to be
+    refreshed too, otherwise toggling ReadOnly at run time leaves the text area
+    painted in the previous state's color. }
+  ApplyStateChange;
 end;
 
 function TCWSMemo.GetWordWrap: Boolean;
@@ -975,6 +985,15 @@ begin
   ApplyStateChange;
 end;
 
+procedure TCWSMemo.SetReadOnlyColor(const Value: TColor);
+begin
+  if FReadOnlyColor <> Value then
+  begin
+    FReadOnlyColor := Value;
+    ApplyStateChange;
+  end;
+end;
+
 procedure TCWSMemo.SetDisabledBorderColor(const Value: TColor);
 begin
   FDisabledBorderColor := Value;
@@ -1317,8 +1336,8 @@ function TCWSMemo.GetCurrentBgColor: TColor;
 begin
   if not Enabled then
     Result := FDisabledColor
-  else if FMemo.ReadOnly then
-    Result := $F5F5F5
+  else if FMemo.ReadOnly and (FReadOnlyColor <> clNone) then
+    Result := FReadOnlyColor
   else if FFocused then
     Result := FBackgroundFocusColor
   else if FHovered then

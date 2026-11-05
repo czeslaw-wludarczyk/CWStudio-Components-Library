@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.36](https://img.shields.io/badge/version-1.9.36-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.37](https://img.shields.io/badge/version-1.9.37-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -219,7 +219,7 @@ Biblioteka jest podzielona na dwa pakiety. Zbudowano w **RAD Studio 13.1 Florenc
 3. Zaakceptuj licencję. GetIt sam pobierze paczkę z GitHuba, zbuduje oba pakiety dla Win32 i Win64, doda ścieżki do **Library path** / **Browsing path** i zarejestruje pakiet projektowy w IDE 32- i 64-bitowym.
 4. Zrestartuj IDE, gdy GetIt o to poprosi.
 
-Paczka trafia do `$(BDSCatalogRepository)\CWStudio-Components-Library\<wersja>`. Szczegóły: [`GetIt/README.md`](GetIt/README.md).
+Paczka trafia do `$(BDSCatalogRepository)\CWStudioComponents\<wersja>`. Szczegóły: [`GetIt/README.md`](GetIt/README.md).
 
 > Jeśli wcześniej instalowałeś bibliotekę ręcznie, najpierw usuń stare wpisy z **Library path** oraz stare pliki `CWStudio_Components*.bpl` z `$(BDSCOMMONDIR)\Bpl` i `$(BDSCOMMONDIR)\Bpl\Win64`.
 
@@ -286,7 +286,12 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.36:**
+**Najnowsza wersja — 1.9.37:**
+
+- **Poprawka** `TCWSMemo`: **`ReadOnly = True` nie blokuje już właściwości kolorów tła.** Dla pola tylko do odczytu kolor był zapisany na sztywno (`$F5F5F5`), więc `BackgroundColor`, `BackgroundHoverColor` i `BackgroundFocusColor` nie miały żadnego wpływu. Teraz o wyglądzie stanu read-only decyduje nowa właściwość **`ReadOnlyColor`** (domyślnie `clNone`): przy `clNone` działa normalny łańcuch tło / hover / focus — tak samo jak w `TCWSEdit`, a ustawienie konkretnego koloru (np. `$F5F5F5`) przywraca poprzedni wyszarzony wygląd.
+- **Poprawka** `TCWSMemo`: **przełączenie `ReadOnly` w czasie działania programu odświeża też obszar tekstu** — `SetReadOnly` odmalowywał tylko ramkę rysowaną przez kontrolkę, zostawiając kolor wewnętrznego memo z poprzedniego stanu.
+
+**Wersja 1.9.36:**
 
 - **Zmiana** `TCWSStringGrid`: **przewijanie i wielkość kciuków działają tak samo jak w `TCWSDBGrid`** — na pasku pionowym i poziomym. Kciuk jest proporcjonalny do widocznej części zawartości (minimum 20 px przy 96 DPI), więc maleje po dodaniu wierszy/kolumn i rośnie po ich usunięciu. Przewijanie liczone jest w pikselach, dzięki czemu wiersze i kolumny o różnych rozmiarach nie powodują nierównego ruchu kciuka, a kciuk dochodzi do końca toru dokładnie przy ostatnim wierszu/kolumnie. Podczas przeciągania kciuk płynnie podąża za kursorem, a siatka przeskakuje do najbliższego wiersza/kolumny.
 - **Poprawka** `TCWSStringGrid`: **paski przewijania reagują na zmiany wykonane bezpośrednio na wewnętrznej siatce** — zmianę szerokości kolumny/wysokości wiersza myszą, `Grid.RowCount`, `DeleteRow`, `DeleteColumn` itp.
@@ -535,7 +540,7 @@ The library is split into two packages (following the standard Delphi architectu
 3. Accept the license. GetIt downloads the payload from GitHub, builds both packages for Win32 and Win64, adds the **Library path** / **Browsing path** entries and registers the design-time package in both the 32-bit and the 64-bit IDE.
 4. Restart the IDE when GetIt asks for it.
 
-The package is installed into `$(BDSCatalogRepository)\CWStudio-Components-Library\<version>`. Details: [`GetIt/README.md`](GetIt/README.md).
+The package is installed into `$(BDSCatalogRepository)\CWStudioComponents\<version>`. Details: [`GetIt/README.md`](GetIt/README.md).
 
 > If you installed the library manually before, first remove the old **Library path** entries and the old `CWStudio_Components*.bpl` files from `$(BDSCOMMONDIR)\Bpl` and `$(BDSCOMMONDIR)\Bpl\Win64`.
 
@@ -603,7 +608,12 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.36:**
+**Latest release — 1.9.37:**
+
+- **Fixed** `TCWSMemo`: **`ReadOnly = True` no longer overrides the background color properties.** A read-only memo used a hard-coded color (`$F5F5F5`), so `BackgroundColor`, `BackgroundHoverColor` and `BackgroundFocusColor` had no effect. The read-only look is now controlled by the new **`ReadOnlyColor`** property (`clNone` by default): with `clNone` the normal background / hover / focus chain applies — the same as in `TCWSEdit` — and setting a concrete color (e.g. `$F5F5F5`) restores the previous greyed-out look.
+- **Fixed** `TCWSMemo`: **toggling `ReadOnly` at run time repaints the text area too** — `SetReadOnly` only repainted the owner-drawn frame and left the inner memo in the previous state’s color.
+
+**Release 1.9.36:**
 
 - **Changed** `TCWSStringGrid`: **scrolling and thumb size work the same way as in `TCWSDBGrid`** — on both the vertical and the horizontal bar. The thumb is proportional to the visible share of the content (at least 20 px at 96 DPI), so it shrinks when rows/columns are added and grows when they are removed. Scrolling is measured in pixels, so rows and columns of different sizes no longer make the thumb move unevenly, and the thumb reaches the end of the track exactly at the last row/column. While dragged, the thumb follows the cursor smoothly and the grid snaps to the nearest row/column.
 - **Fixed** `TCWSStringGrid`: **the scrollbars follow changes made directly on the inner grid** — resizing a column/row with the mouse, `Grid.RowCount`, `DeleteRow`, `DeleteColumn` and so on.

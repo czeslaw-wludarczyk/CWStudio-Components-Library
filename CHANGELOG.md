@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.37] — 2026-11-05
+
+- **Fix** `TCWSMemo`: **`ReadOnly = True` no longer overrides the background color properties.** `GetCurrentBgColor` returned a hard-coded `$F5F5F5` for a read-only memo, so `BackgroundColor`, `BackgroundHoverColor` and `BackgroundFocusColor` had no effect at all. The read-only state now uses the new `ReadOnlyColor` property, `clNone` by default — and with `clNone` the normal background / hover / focus chain applies, the same as in `TCWSEdit`. Set `ReadOnlyColor` to a concrete color (e.g. `$F5F5F5`) to get the previous greyed-out look back.
+- **Fix** `TCWSMemo`: **toggling `ReadOnly` at run time repaints the text area.** `SetReadOnly` only called `Invalidate`, which repaints the owner-drawn frame but leaves the inner memo's own `Color` at the previous state. It now calls `ApplyStateChange`.
+
 ## [1.9.36] — 2026-11-03
 
 - **Change** `TCWSStringGrid`: **scrolling and scrollbar thumb size work the same way as in `TCWSDBGrid`, on both the vertical and the horizontal bar.** The fixed-length thumb introduced in 1.9.35 (`CWS_GRID_THUMB_LEN`) is gone. Now:
@@ -18,7 +23,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [1.9.35] — 2026-11-02
 
-- **Change** **GetIt package: `PackageId` renamed from `CWStudioComponents` to `CWStudio-Components-Library`** (`Id` is now `CWStudio-Components-Library-1.9.35`), so GetIt installs the library into `$(BDSCatalogRepository)\CWStudio-Components-Library\<version>`, a folder named after the repository. GetIt treats this as a new package: uninstall a copy installed from the 1.9.34 definition through GetIt before loading the new JSON.
 - **Fix** `TCWSStringGrid`: **no empty space below the last row / right of the last column after the control grows — the same as `Vcl.Grids.TStringGrid`.** The inner grid runs with `ScrollBars = ssNone` (the scrollbars are owner-drawn), and in that mode `TCustomGrid.UpdateScrollRange` exits immediately, so `TopRow` / `LeftCol` were never pulled back when the window was enlarged while scrolled to the end. Now:
   - new `MaxTopRow` / `MaxLeftCol` compute the largest `TopRow` / `LeftCol` at which the last row / column still ends at the grid edge — the same algorithm as `TCustomGrid.CalcMaxTopLeft`;
   - `UpdateGridPosition` calls the new `ClampTopLeft` right after `SetBounds`, so `TopRow` / `LeftCol` are clamped on every resize and after changes of `RowCount`, `ColCount`, `RowHeights`, `ColWidths`, `DefaultRowHeight`, `DefaultColWidth`, `FixedRows`, `FixedCols`;

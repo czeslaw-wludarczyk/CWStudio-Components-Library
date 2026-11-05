@@ -1,4 +1,4 @@
-# GetIt package definition — CWStudio Components 1.9.36
+# GetIt package definition — CWStudio Components 1.9.37
 
 This folder contains everything needed to install the library through the
 **Load Local Package** button of the GetIt Package Manager, and to submit the
@@ -12,8 +12,8 @@ library to Embarcadero for publication on the online GetIt catalog.
 | `LICENSE.txt` | EULA text shown before the download; must be accepted by the user |
 | `CWStudioComponents.png` | Package image displayed in the GetIt UI |
 | `SetGetItDate.ps1` | Fixes the date GetIt shows for a local install (see below) |
-| `BuildPackage.ps1` | Creates `CWStudioComponents-1.9.36.zip` (the package payload) |
-| `CWStudioComponents-1.9.36.zip` | Payload; produced by the script, not stored in git |
+| `BuildPackage.ps1` | Creates `CWStudioComponents-1.9.37.zip` (the package payload) |
+| `CWStudioComponents-1.9.37.zip` | Payload; produced by the script, not stored in git |
 
 ## Building the payload
 
@@ -118,11 +118,11 @@ everything else is fetched over https.
 
 What the repository has to provide:
 
-1. **A tag and a release**, e.g. `v1.9.36`.
+1. **A tag and a release**, e.g. `v1.9.37`.
 2. **The payload archive attached to the release** as
    `CWStudioComponents-<version>.zip`, built by `BuildPackage.ps1`. Do not use
    the "Source code (zip)" asset GitHub generates automatically: it wraps
-   everything in a `CWStudioComponents-1.9.36/` top-level folder, which breaks
+   everything in a `CWStudioComponents-1.9.37/` top-level folder, which breaks
    every relative path used by the actions.
 3. **`GetIt/LICENSE.txt` and `GetIt/CWStudioComponents.png` committed to the
    tag**, so the raw.githubusercontent.com URLs resolve. Always reference the
@@ -134,8 +134,8 @@ What the repository has to provide:
 The release is created manually with the GitHub CLI:
 
 ```powershell
-git tag v1.9.36; git push origin v1.9.36
-gh release create v1.9.36 .\CWStudioComponents-1.9.36.zip .\CWStudioComponents-github.json --title "CWStudio Components 1.9.36"
+git tag v1.9.37; git push origin v1.9.37
+gh release create v1.9.37 .\CWStudioComponents-1.9.37.zip .\CWStudioComponents-github.json --title "CWStudio Components 1.9.37"
 ```
 
 Per release, the three URLs inside the JSON have to be bumped to the new tag.
@@ -145,27 +145,17 @@ Per release, the three URLs inside the JSON have to be bumped to the new tag.
 GetIt unpacks the payload into
 `<Documents>\Embarcadero\Studio\37.0\CatalogRepository\<PackageId>\<Version>`
 (`$(BDSCatalogRepository)\<PackageId>\<Version>`). With `"Id":
-"CWStudio-Components-Library-1.9.36"`, `"PackageId": "CWStudio-Components-Library"`
-and `"Version": "1.9.36"` this gives `CWStudio-Components-Library\1.9.36\`, a
-folder named after the repository. The library and browsing paths added by the
-actions resolve to
-`$(BDSCatalogRepository)\CWStudio-Components-Library\1.9.36\Win32\Release\` (and
-`Win64\Release\`) and `$(BDSCatalogRepository)\CWStudio-Components-Library\1.9.36\.\`.
-
-On a machine where `Documents` is redirected (for example to OneDrive),
-`$(BDSCatalogRepository)` follows the redirection, e.g.
-`C:\Users\<user>\OneDrive\Documents\Embarcadero\Studio\37.0\CatalogRepository`.
+"CWStudioComponents-1.9.37"`, `"PackageId": "CWStudioComponents"` and
+`"Version": "1.9.37"` this gives `CWStudioComponents\1.9.37\` — verified with an
+install of the GitHub release on RAD Studio 13. The library and browsing paths
+added by the actions resolve to
+`$(BDSCatalogRepository)\CWStudioComponents\1.9.37\Win32\Release\` (and
+`Win64\Release\`) and `$(BDSCatalogRepository)\CWStudioComponents\1.9.37\.\`.
 
 `Id` changes with every release (`<PackageId>-<Version>`), `PackageId` must stay
 stable — GetIt uses it as the registry key and folder name, to recognize an
 installed package and to offer updates; changing it makes an already installed
 copy invisible to the new definition, so uninstall the old one first.
-
-In 1.9.34 and in the first 1.9.35 definition the `PackageId` was `CWStudioComponents`
-and the package went to `$(BDSCatalogRepository)\CWStudioComponents\<Version>`.
-A copy installed with that definition has to be uninstalled through GetIt
-before the current definition is loaded — GetIt treats the two as separate
-packages and will not offer the new one as an update.
 
 Before testing an install, remove any manual installation of the library: old
 **Library path** entries pointing at a source folder take precedence over the
