@@ -145,12 +145,11 @@ Per release, the three URLs inside the JSON have to be bumped to the new tag.
 GetIt unpacks the payload into
 `<Documents>\Embarcadero\Studio\37.0\CatalogRepository\<PackageId>\<Version>`
 (`$(BDSCatalogRepository)\<PackageId>\<Version>`). With `"Id":
-"CWStudioComponents-1.9.37"`, `"PackageId": "CWStudioComponents"` and
-`"Version": "1.9.37"` this gives `CWStudioComponents\1.9.37\` — verified with an
-install of the GitHub release on RAD Studio 13. The library and browsing paths
+"CWStudio-Components-Library-1.9.37"`, `"PackageId": "CWStudio-Components-Library"` and
+`"Version": "1.9.37"` this gives `CWStudio-Components-Library\1.9.37\`. The library and browsing paths
 added by the actions resolve to
-`$(BDSCatalogRepository)\CWStudioComponents\1.9.37\Win32\Release\` (and
-`Win64\Release\`) and `$(BDSCatalogRepository)\CWStudioComponents\1.9.37\.\`.
+`$(BDSCatalogRepository)\CWStudio-Components-Library\1.9.37\Win32\Release\` (and
+`Win64\Release\`) and `$(BDSCatalogRepository)\CWStudio-Components-Library\1.9.37\.\`.
 
 `Id` changes with every release (`<PackageId>-<Version>`), `PackageId` must stay
 stable — GetIt uses it as the registry key and folder name, to recognize an

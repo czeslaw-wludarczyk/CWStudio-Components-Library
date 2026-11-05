@@ -219,7 +219,7 @@ Biblioteka jest podzielona na dwa pakiety. Zbudowano w **RAD Studio 13.1 Florenc
 3. Zaakceptuj licencję. GetIt sam pobierze paczkę z GitHuba, zbuduje oba pakiety dla Win32 i Win64, doda ścieżki do **Library path** / **Browsing path** i zarejestruje pakiet projektowy w IDE 32- i 64-bitowym.
 4. Zrestartuj IDE, gdy GetIt o to poprosi.
 
-Paczka trafia do `$(BDSCatalogRepository)\CWStudioComponents\<wersja>`. Szczegóły: [`GetIt/README.md`](GetIt/README.md).
+Paczka trafia do `$(BDSCatalogRepository)\CWStudio-Components-Library\<wersja>`. Szczegóły: [`GetIt/README.md`](GetIt/README.md).
 
 > Jeśli wcześniej instalowałeś bibliotekę ręcznie, najpierw usuń stare wpisy z **Library path** oraz stare pliki `CWStudio_Components*.bpl` z `$(BDSCOMMONDIR)\Bpl` i `$(BDSCOMMONDIR)\Bpl\Win64`.
 
@@ -540,7 +540,7 @@ The library is split into two packages (following the standard Delphi architectu
 3. Accept the license. GetIt downloads the payload from GitHub, builds both packages for Win32 and Win64, adds the **Library path** / **Browsing path** entries and registers the design-time package in both the 32-bit and the 64-bit IDE.
 4. Restart the IDE when GetIt asks for it.
 
-The package is installed into `$(BDSCatalogRepository)\CWStudioComponents\<version>`. Details: [`GetIt/README.md`](GetIt/README.md).
+The package is installed into `$(BDSCatalogRepository)\CWStudio-Components-Library\<version>`. Details: [`GetIt/README.md`](GetIt/README.md).
 
 > If you installed the library manually before, first remove the old **Library path** entries and the old `CWStudio_Components*.bpl` files from `$(BDSCOMMONDIR)\Bpl` and `$(BDSCOMMONDIR)\Bpl\Win64`.
 
