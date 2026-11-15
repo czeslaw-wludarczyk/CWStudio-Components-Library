@@ -6,7 +6,7 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.37](https://img.shields.io/badge/version-1.9.37-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.38](https://img.shields.io/badge/version-1.9.38-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
@@ -286,7 +286,11 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.37:**
+**Najnowsza wersja — 1.9.38:**
+
+- **Poprawka** **komponenty VCL nie pojawiają się już na palecie w projektach FireMonkey.** Komponenty niewizualne (`TCWSSystemMenu`, `TCWSPopupMenu`, `TCWSFlayoutPopupMenu`, `TCWSAfterFormShow`, `TCWSHint` i inne nie dziedziczące z `TControl`) nie należały do żadnej grupy frameworka, więc IDE pokazywało je także w projektach FMX (np. kategoria `CWStudio_Menus`). Pakiet design-time przypisuje je teraz do grupy VCL (`GroupDescendentsWith(..., Vcl.Controls.TControl)`), tak jak robi to RAD Studio dla `TPopupMenu` czy `TImageList` z VCL.
+
+**Wersja 1.9.37:**
 
 - **Poprawka** `TCWSMemo`: **`ReadOnly = True` nie blokuje już właściwości kolorów tła.** Dla pola tylko do odczytu kolor był zapisany na sztywno (`$F5F5F5`), więc `BackgroundColor`, `BackgroundHoverColor` i `BackgroundFocusColor` nie miały żadnego wpływu. Teraz o wyglądzie stanu read-only decyduje nowa właściwość **`ReadOnlyColor`** (domyślnie `clNone`): przy `clNone` działa normalny łańcuch tło / hover / focus — tak samo jak w `TCWSEdit`, a ustawienie konkretnego koloru (np. `$F5F5F5`) przywraca poprzedni wyszarzony wygląd.
 - **Poprawka** `TCWSMemo`: **przełączenie `ReadOnly` w czasie działania programu odświeża też obszar tekstu** — `SetReadOnly` odmalowywał tylko ramkę rysowaną przez kontrolkę, zostawiając kolor wewnętrznego memo z poprzedniego stanu.
@@ -608,7 +612,11 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.37:**
+**Latest release — 1.9.38:**
+
+- **Fixed** **VCL components no longer appear on the Tool Palette of FireMonkey projects.** Non-visual components (`TCWSSystemMenu`, `TCWSPopupMenu`, `TCWSFlayoutPopupMenu`, `TCWSAfterFormShow`, `TCWSHint` and the others that do not descend from `TControl`) belonged to no framework class group, so the IDE listed them in FMX projects too (e.g. the `CWStudio_Menus` category). The design-time package now groups them with VCL (`GroupDescendentsWith(..., Vcl.Controls.TControl)`), the same way RAD Studio does for the VCL `TPopupMenu` or `TImageList`.
+
+**Release 1.9.37:**
 
 - **Fixed** `TCWSMemo`: **`ReadOnly = True` no longer overrides the background color properties.** A read-only memo used a hard-coded color (`$F5F5F5`), so `BackgroundColor`, `BackgroundHoverColor` and `BackgroundFocusColor` had no effect. The read-only look is now controlled by the new **`ReadOnlyColor`** property (`clNone` by default): with `clNone` the normal background / hover / focus chain applies — the same as in `TCWSEdit` — and setting a concrete color (e.g. `$F5F5F5`) restores the previous greyed-out look.
 - **Fixed** `TCWSMemo`: **toggling `ReadOnly` at run time repaints the text area too** — `SetReadOnly` only repainted the owner-drawn frame and left the inner memo in the previous state’s color.

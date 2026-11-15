@@ -443,37 +443,56 @@ const
 { ──────────────────────────────────────────────────────────────────────────
     Register components on the palette
   ────────────────────────────────────────────────────────────────────────── }
+{ Non-visual components (TComponent, not TControl) belong to no framework
+  class group, so the IDE shows them on the palette of FMX projects too.
+  Grouping them with Vcl.Controls.TControl limits them to VCL projects, like
+  the VCL TPopupMenu / TImageList / TActionList of RAD Studio. }
+procedure GroupWithVcl(const AClasses: array of TComponentClass);
+var
+  Cls: TComponentClass;
+begin
+  for Cls in AClasses do
+    if not Cls.InheritsFrom(TControl) then
+      GroupDescendentsWith(Cls, TControl);
+end;
+
+procedure RegisterVclComponents(const APage: string; const AClasses: array of TComponentClass);
+begin
+  GroupWithVcl(AClasses);
+  RegisterComponents(APage, AClasses);
+end;
 procedure Register;
 var
   Cls: TClass;
 begin
-  RegisterComponents('CWStudio_Shapes',
+  RegisterVclComponents('CWStudio_Shapes',
     [TCWSShape, TCWSAvatar]);
-  RegisterComponents('CWStudio_Panels',
+  RegisterVclComponents('CWStudio_Panels',
     [TCWSCornerPanel, TCWSSettingsPanel, TCWSOptionsPanel]);
   { Sections are created through the panel's editor / AddSection, not dropped
     from the palette, but must be registered so they stream to/from the DFM. }
+  GroupWithVcl([TCWSOptionsSection]);
   RegisterNoIcon([TCWSOptionsSection]);
   RegisterComponentEditor(TCWSOptionsPanel, TCWSOptionsPanelEditor);
-  RegisterComponents('CWStudio_Buttons',
+  RegisterVclComponents('CWStudio_Buttons',
     [TCWSButton, TCWSStoreButton, TCWSMenuButton, TCWSRadioButton, TCWSCheckBox, TCWSSwitch]);
-  RegisterComponents('CWStudio_Edits',
+  RegisterVclComponents('CWStudio_Edits',
     [TCWSEdit, TCWSEditMask, TCWSComboBox, TCWSMemo, TCWSDatePicker]);
-  RegisterComponents('CWStudio_ProgressBars',
+  RegisterVclComponents('CWStudio_ProgressBars',
     [TCWSProgressCircle, TCWSProgressBar, TCWSIndicatorLoading]);
-  RegisterComponents('CWStudio_Menus',
+  RegisterVclComponents('CWStudio_Menus',
     [TCWSPopupMenu, TCWSFlayoutPopupMenu, TCWSSystemMenu]);
-  RegisterComponents('CWStudio_ScrollBoxes',
+  RegisterVclComponents('CWStudio_ScrollBoxes',
     [TCWSScrollBox]);
-  RegisterComponents('CWStudio_Forms',
+  RegisterVclComponents('CWStudio_Forms',
     [TCWSDimOverlay, TCWSAfterFormShow, TCWSHint]);
-  RegisterComponents('CWStudio_ListBoxes',
+  RegisterVclComponents('CWStudio_ListBoxes',
     [TCWSListBox]);
-  RegisterComponents('CWStudio_Grids',
+  RegisterVclComponents('CWStudio_Grids',
     [TCWSStringGrid, TCWSDBGrid]);
-  RegisterComponents('CWStudio_Labels',
+  RegisterVclComponents('CWStudio_Labels',
     [TCWSLabelColumn, TCWSLabelTrend]);
-  RegisterComponents('CWStudio_Miscellaneous',
+  RegisterVclComponents('CWStudio_Miscellaneous',
     [TCWSShadow]);
 
   { The same columns editor as in the real TDBGrid — see TCWSDBGridColumnsProperty }

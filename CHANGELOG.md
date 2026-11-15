@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ---
 
+## [1.9.38] — 2026-11-15
+
+- **Fix** **VCL components no longer appear on the Tool Palette of FireMonkey projects.** The IDE filters the palette by framework through class groups. Controls (descendants of `Vcl.Controls.TControl`) fall into the VCL group automatically, but the non-visual components — `TCWSSystemMenu`, `TCWSPopupMenu`, `TCWSFlayoutPopupMenu`, `TCWSAfterFormShow`, `TCWSHint` and every other registered class that is not a `TControl` — belonged to no group, so they were listed in FMX projects too (e.g. the `CWStudio_Menus` category). `CWStudio_Reg.Register` now registers every palette page through the new `RegisterVclComponents`, which calls `GroupDescendentsWith(Cls, Vcl.Controls.TControl)` for each non-control class before `RegisterComponents` — the same as RAD Studio does for the VCL `TPopupMenu`, `TImageList` or `TActionList`. `TCWSOptionsSection` (registered with `RegisterNoIcon`) is grouped as well. Components added to the lists later are grouped automatically.
+
 ## [1.9.37] — 2026-11-05
 
 - **Fix** `TCWSMemo`: **`ReadOnly = True` no longer overrides the background color properties.** `GetCurrentBgColor` returned a hard-coded `$F5F5F5` for a read-only memo, so `BackgroundColor`, `BackgroundHoverColor` and `BackgroundFocusColor` had no effect at all. The read-only state now uses the new `ReadOnlyColor` property, `clNone` by default — and with `clNone` the normal background / hover / focus chain applies, the same as in `TCWSEdit`. Set `ReadOnlyColor` to a concrete color (e.g. `$F5F5F5`) to get the previous greyed-out look back.
