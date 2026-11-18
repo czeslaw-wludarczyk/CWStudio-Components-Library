@@ -16,6 +16,21 @@
 
 ---
 
+## 📸 Zrzuty ekranu / Screenshots
+
+Wszystkie komponenty w jednym oknie — motyw jasny i ciemny.
+*Every component in a single window — light and dark theme.*
+
+**Motyw jasny / Light theme**
+
+![CWStudio Components — light theme](Gfx/Screenshots/demo-light.png)
+
+**Motyw ciemny / Dark theme**
+
+![CWStudio Components — dark theme](Gfx/Screenshots/demo-dark.png)
+
+---
+
 ## 🇵🇱 Wersja polska
 
 CWStudio to zestaw nowoczesnych, wysokiej jakości komponentów VCL dla środowiska Delphi, zaprojektowanych w celu nadania aplikacjom desktopowym wyglądu znanego z systemu Windows 11 / WinUI 3. Komponenty bazują na oficjalnych tokenach kolorystycznych Fluent UI v9 i wspierają motyw jasny oraz ciemny — z automatyczną detekcją ustawień Windows.
@@ -219,7 +234,7 @@ Biblioteka jest podzielona na dwa pakiety. Zbudowano w **RAD Studio 13.1 Florenc
 3. Zaakceptuj licencję. GetIt sam pobierze paczkę z GitHuba, zbuduje oba pakiety dla Win32 i Win64, doda ścieżki do **Library path** / **Browsing path** i zarejestruje pakiet projektowy w IDE 32- i 64-bitowym.
 4. Zrestartuj IDE, gdy GetIt o to poprosi.
 
-Paczka trafia do `$(BDSCatalogRepository)\CWStudio-Components-Library\<wersja>`. Szczegóły: [`GetIt/README.md`](GetIt/README.md).
+Paczka trafia do `$(BDSCatalogRepository)\CWStudioComponents\<wersja>`. Szczegóły: [`GetIt/README.md`](GetIt/README.md).
 
 > Jeśli wcześniej instalowałeś bibliotekę ręcznie, najpierw usuń stare wpisy z **Library path** oraz stare pliki `CWStudio_Components*.bpl` z `$(BDSCOMMONDIR)\Bpl` i `$(BDSCOMMONDIR)\Bpl\Win64`.
 
@@ -273,6 +288,7 @@ W folderze [`CWStudio_demo`](CWStudio_demo) znajduje się przykładowa aplikacja
 Od wersji 1.9.25 demo **nie zależy od komponentów ErrorSoft** (EsVclComponents) — `TEsShape` w oknie głównym zastąpił `TCWSSettingsPanel`, a nieużywane moduły `ES.*` zostały usunięte z `uses`.
 
 Otwórz `CWStudio_demo\demo.dproj`, wybierz platformę Win32 lub Win64 i uruchom (**F9**).
+
 
 ---
 
@@ -544,7 +560,7 @@ The library is split into two packages (following the standard Delphi architectu
 3. Accept the license. GetIt downloads the payload from GitHub, builds both packages for Win32 and Win64, adds the **Library path** / **Browsing path** entries and registers the design-time package in both the 32-bit and the 64-bit IDE.
 4. Restart the IDE when GetIt asks for it.
 
-The package is installed into `$(BDSCatalogRepository)\CWStudio-Components-Library\<version>`. Details: [`GetIt/README.md`](GetIt/README.md).
+The package is installed into `$(BDSCatalogRepository)\CWStudioComponents\<version>`. Details: [`GetIt/README.md`](GetIt/README.md).
 
 > If you installed the library manually before, first remove the old **Library path** entries and the old `CWStudio_Components*.bpl` files from `$(BDSCOMMONDIR)\Bpl` and `$(BDSCOMMONDIR)\Bpl\Win64`.
 
@@ -599,6 +615,7 @@ The [`CWStudio_demo`](CWStudio_demo) folder contains a sample VCL application (`
 Since version 1.9.25 the demo **no longer depends on ErrorSoft components** (EsVclComponents) — `TEsShape` on the main form was replaced by a `TCWSSettingsPanel`, and the unused `ES.*` units were removed from the uses clauses.
 
 Open `CWStudio_demo\demo.dproj`, pick the Win32 or Win64 platform and run it (**F9**).
+
 
 ---
 
