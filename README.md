@@ -6,28 +6,13 @@
 
 *Modern Windows 11 / WinUI 3 styled VCL components for Delphi*
 
-[![Version: 1.9.38](https://img.shields.io/badge/version-1.9.38-blue.svg)](CHANGELOG.md)
+[![Version: 1.9.40](https://img.shields.io/badge/version-1.9.40-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Platform: VCL](https://img.shields.io/badge/platform-VCL%20%7C%20Delphi-red.svg)](#-wymagania-systemowe)
 [![Windows 11](https://img.shields.io/badge/style-Windows%2011%20%7C%20WinUI%203-0078D4.svg)](#-wymagania-systemowe)
 [![Donate: PayPal](https://img.shields.io/badge/donate-PayPal-00457C.svg?logo=paypal)](https://paypal.me/czeslaw80)
 
 </div>
-
----
-
-## 📸 Zrzuty ekranu / Screenshots
-
-Wszystkie komponenty w jednym oknie — motyw jasny i ciemny.
-*Every component in a single window — light and dark theme.*
-
-**Motyw jasny / Light theme**
-
-![CWStudio Components — light theme](Gfx/Screenshots/demo-light.png)
-
-**Motyw ciemny / Dark theme**
-
-![CWStudio Components — dark theme](Gfx/Screenshots/demo-dark.png)
 
 ---
 
@@ -289,7 +274,6 @@ Od wersji 1.9.25 demo **nie zależy od komponentów ErrorSoft** (EsVclComponents
 
 Otwórz `CWStudio_demo\demo.dproj`, wybierz platformę Win32 lub Win64 i uruchom (**F9**).
 
-
 ---
 
 ## ⚖️ Wymagane przypisanie autorstwa
@@ -302,7 +286,17 @@ Używając tych komponentów, proszę o umieszczenie odpowiedniej informacji w s
 
 ## 🗓️ Co nowego
 
-**Najnowsza wersja — 1.9.38:**
+**Najnowsza wersja — 1.9.40:**
+
+- **Poprawka** `TCWSDBGrid`: **przy `dgRowSelect` przeciąganie pionowego paska przewijania nie cofa już widoku do pierwszej kolumny.** Gdy grid był przewinięty w poziomie (np. poziomy pasek przesunięty na koniec w prawo), przeciąganie suwaka pionowego przeskakiwało do 1. kolumny — kółko myszy działało poprawnie. Teraz pozycja pozioma zostaje zachowana, bez migania.
+- **Poprawka** `TCWSDBGrid`: **paski przewijania nie znikają już po ukryciu formularza i powrocie do niego.** Gdy formularz osadzony w panelu był ukrywany (z odpięciem `Parent` i datasetu), a potem pokazywany ponownie, grid po wczytaniu danych nie pokazywał pionowego (ani poziomego) paska przewijania.
+
+**Wersja 1.9.39:**
+
+- **Poprawka** `TCWSDBGrid`: **przy `dgMultiSelect` podświetlony wiersz podąża za rekordem podczas przewijania kółkiem myszy i paskiem przewijania.** Wcześniej kliknięty wiersz pozostawał podświetlony, a kółko/pasek po cichu przesuwały kursor bazy na inny rekord. Teraz pojedyncze zaznaczenie przesuwa się razem z kursorem (tak jak przy strzałkach), **Shift + kółko** rozszerza zaznaczenie, a zaznaczenie kilku wierszy (Ctrl/Shift) nie jest kasowane przez przewijanie.
+- **Nowość** `TCWSDBGrid`: **właściwość `CursorRowColor`** — gdy zaznaczonych jest kilka wierszy, a kursor stoi poza zaznaczeniem, bieżący rekord jest wyróżniony tym kolorem (jak ramka fokusu w Eksploratorze), więc nigdy nie jest niewidoczny. `clNone` (domyślnie) = jaśniejszy odcień `CellHighlightColor` dopasowany do tła wiersza.
+
+**Wersja 1.9.38:**
 
 - **Poprawka** **komponenty VCL nie pojawiają się już na palecie w projektach FireMonkey.** Komponenty niewizualne (`TCWSSystemMenu`, `TCWSPopupMenu`, `TCWSFlayoutPopupMenu`, `TCWSAfterFormShow`, `TCWSHint` i inne nie dziedziczące z `TControl`) nie należały do żadnej grupy frameworka, więc IDE pokazywało je także w projektach FMX (np. kategoria `CWStudio_Menus`). Pakiet design-time przypisuje je teraz do grupy VCL (`GroupDescendentsWith(..., Vcl.Controls.TControl)`), tak jak robi to RAD Studio dla `TPopupMenu` czy `TImageList` z VCL.
 
@@ -616,7 +610,6 @@ Since version 1.9.25 the demo **no longer depends on ErrorSoft components** (EsV
 
 Open `CWStudio_demo\demo.dproj`, pick the Win32 or Win64 platform and run it (**F9**).
 
-
 ---
 
 ## ⚖️ Attribution
@@ -629,7 +622,17 @@ When using these components, please include appropriate attribution in your appl
 
 ## 🗓️ What's new
 
-**Latest release — 1.9.38:**
+**Latest release — 1.9.40:**
+
+- **Fixed** `TCWSDBGrid`: **with `dgRowSelect` dragging the vertical scrollbar thumb no longer scrolls the view back to the first column.** With the grid scrolled horizontally (e.g. the horizontal bar at the right end), dragging the vertical thumb jumped to column 1 — the mouse wheel was fine. The horizontal position is now kept, without flicker.
+- **Fixed** `TCWSDBGrid`: **the scrollbars no longer disappear after leaving the form and coming back.** When a form hosted in a panel was hidden (with its `Parent` and dataset detached) and shown again, the grid did not show its vertical (or horizontal) scrollbar once the data was loaded.
+
+**Release 1.9.39:**
+
+- **Fixed** `TCWSDBGrid`: **with `dgMultiSelect` the highlighted row follows the record when scrolling with the mouse wheel or the scrollbar.** Previously the clicked row stayed highlighted while the wheel / scrollbar silently moved the dataset to another record. A single selected row now moves with the cursor (like the arrow keys), **Shift + wheel** extends the selection, and a multi-row selection (Ctrl/Shift) is not dropped by scrolling.
+- **New** `TCWSDBGrid`: **`CursorRowColor` property** — while several rows are selected and the cursor sits outside the selection, the current record is painted in this color (like Explorer's focus frame), so it is never invisible. `clNone` (default) = a lighter tint of `CellHighlightColor` matched to the row background.
+
+**Release 1.9.38:**
 
 - **Fixed** **VCL components no longer appear on the Tool Palette of FireMonkey projects.** Non-visual components (`TCWSSystemMenu`, `TCWSPopupMenu`, `TCWSFlayoutPopupMenu`, `TCWSAfterFormShow`, `TCWSHint` and the others that do not descend from `TControl`) belonged to no framework class group, so the IDE listed them in FMX projects too (e.g. the `CWStudio_Menus` category). The design-time package now groups them with VCL (`GroupDescendentsWith(..., Vcl.Controls.TControl)`), the same way RAD Studio does for the VCL `TPopupMenu` or `TImageList`.
 

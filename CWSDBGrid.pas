@@ -166,6 +166,7 @@ type
     function MultiSelectActive: Boolean;
     procedure SelectRangeToCurrent;
     procedure SelectionChanged;
+    procedure SyncSelectionToCursor(Extend, KeepMulti: Boolean);
   protected
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure TitleClick(Column: TColumn); override;
@@ -233,6 +234,7 @@ type
     FBuffer: TBitmap;
     FFocused: Boolean;
     FRefreshPosted: Boolean;
+    FKeepingLeftCol: Boolean;   { ScrollVToRec is navigating — ignore the transient LeftCol reset }
     FUpdatingLayout: Boolean;
     FAutoFitColumns: Boolean;
     FFittingColumns: Boolean;
@@ -259,6 +261,7 @@ type
     FFixedTextColor: TColor;
     FCellHighlightColor: TColor;
     FHighlightTextColor: TColor;
+    FCursorRowColor: TColor;
     FAlternatingRowColors: Boolean;
     FOddRowColor: TColor;
     FEvenRowColor: TColor;
@@ -422,6 +425,7 @@ type
     procedure SetFixedTextColor(const Value: TColor);
     procedure SetCellHighlightColor(const Value: TColor);
     procedure SetHighlightTextColor(const Value: TColor);
+    procedure SetCursorRowColor(const Value: TColor);
     procedure SetAlternatingRowColors(const Value: Boolean);
     procedure SetOddRowColor(const Value: TColor);
     procedure SetEvenRowColor(const Value: TColor);
@@ -639,6 +643,11 @@ type
     property FixedTextColor: TColor read FFixedTextColor write SetFixedTextColor default $202020;
     property CellHighlightColor: TColor read FCellHighlightColor write SetCellHighlightColor default $F0D9BE;
     property HighlightTextColor: TColor read FHighlightTextColor write SetHighlightTextColor default $202020;
+    { dgMultiSelect: background of the current (cursor) record while it is not
+      part of the selection, so the dataset cursor never moves invisibly when
+      several rows are selected. clNone (default) = a lighter tint derived from
+      CellHighlightColor and the row's own background. Text uses CellTextColor. }
+    property CursorRowColor: TColor read FCursorRowColor write SetCursorRowColor default clNone;
 
     { Zebra striping. Off by default — every data cell then uses CellColor.
       Rows are numbered by record, from 1, so the first record is the odd one
@@ -1035,8 +1044,22 @@ procedure TCWSInternalDBGrid.DrawColumnCell(const Rect: TRect; DataCol: Integer;
   Column: TColumn; State: TGridDrawState);
 var
   Bg, Tx: TColor;
-  CursorShown, Highlight: Boolean;
+  CursorShown, Highlight, CursorRowOnly: Boolean;
+
+  function MixColor(A, B: TColor; PctA: Integer): TColor;
+  var
+    CA, CB: Longint;
+  begin
+    CA := ColorToRGB(A);
+    CB := ColorToRGB(B);
+    Result := RGB(
+      (GetRValue(CA) * PctA + GetRValue(CB) * (100 - PctA)) div 100,
+      (GetGValue(CA) * PctA + GetGValue(CB) * (100 - PctA)) div 100,
+      (GetBValue(CA) * PctA + GetBValue(CB) * (100 - PctA)) div 100);
+  end;
+
 begin
+  CursorRowOnly := False;
   if FOwner <> nil then
   begin
     { Vcl.Grids flags the cursor cell gdSelected whether or not the grid has
@@ -1046,7 +1069,15 @@ begin
     CursorShown := (gdSelected in State) and
       ((dgAlwaysShowSelection in Options) or Focused);
     if MultiSelectActive and (SelectedRows.Count > 0) then
-      Highlight := SelectedRows.CurrentRowSelected
+    begin
+      Highlight := SelectedRows.CurrentRowSelected;
+      { The dataset cursor must never move invisibly: when it sits on a row
+        that is not part of the selection, give that row a lighter tint of
+        the highlight (like Explorer's focus frame) so it stays visible
+        alongside the selected rows. Row = the grid row of the active record. }
+      CursorRowOnly := not Highlight and (FDrawRow = Row) and
+        ((dgAlwaysShowSelection in Options) or Focused);
+    end
     else
       Highlight := CursorShown;
     if Highlight then
@@ -1057,6 +1088,15 @@ begin
     begin
       Bg := FOwner.FCellHighlightColor;
       Tx := FOwner.FHighlightTextColor;
+    end
+    else if CursorRowOnly then
+    begin
+      if FOwner.FCursorRowColor <> clNone then
+        Bg := FOwner.FCursorRowColor
+      else
+        Bg := MixColor(FOwner.FCellHighlightColor,
+          FOwner.RowBackColor(DataRowNumber), 45);
+      Tx := FOwner.FCellTextColor;
     end
     else
     begin
@@ -1130,6 +1170,36 @@ begin
     FOwner.GridSelectionChanged;
 end;
 
+procedure TCWSInternalDBGrid.SyncSelectionToCursor(Extend, KeepMulti: Boolean);
+var
+  DS: TDataSet;
+begin
+  { Keeps SelectedRows in step with the dataset cursor after a navigation that
+    the base grid does not track (keyboard, mouse wheel, scrollbar). With
+    dgMultiSelect the highlight is painted from SelectedRows, so without this
+    the clicked row stays highlighted while the cursor silently moves on.
+      Extend    – Shift held: select the range from the anchor to the cursor.
+      KeepMulti – leave a deliberate multi-row selection (Count > 1) alone;
+                  only a single selected row follows the cursor. }
+  if not MultiSelectActive or EditorMode then
+    Exit;
+  DS := DataSource.DataSet;
+  if DS.IsEmpty then
+    Exit;
+  if Extend then
+    SelectRangeToCurrent
+  else
+  begin
+    if KeepMulti and ((SelectedRows.Count = 0) or (SelectedRows.Count > 1)) then
+      Exit;
+    SelectedRows.Clear;
+    SelectedRows.CurrentRowSelected := True;
+    FSelAnchor := DS.Bookmark;
+    Invalidate;
+  end;
+  SelectionChanged;
+end;
+
 procedure TCWSInternalDBGrid.KeyDown(var Key: Word; Shift: TShiftState);
 var
   DS: TDataSet;
@@ -1169,23 +1239,8 @@ begin
     navigation selects just the current row and moves the anchor with it.
     (The base grid only clears the selection here, leaving Count = 0 while
     the cursor row still looks selected.) }
-  if MultiSelectActive and not EditorMode and
-    (Key in [VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT, VK_HOME, VK_END]) then
-  begin
-    DS := DataSource.DataSet;
-    if DS.IsEmpty then
-      Exit;
-    if ssShift in Shift then
-      SelectRangeToCurrent
-    else
-    begin
-      SelectedRows.Clear;
-      SelectedRows.CurrentRowSelected := True;
-      FSelAnchor := DS.Bookmark;
-      Invalidate;
-    end;
-    SelectionChanged;
-  end;
+  if Key in [VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT, VK_HOME, VK_END] then
+    SyncSelectionToCursor(ssShift in Shift, False);
 end;
 
 procedure TCWSInternalDBGrid.UpdateScrollBar;
@@ -1367,8 +1422,22 @@ end;
 
 function TCWSInternalDBGrid.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
   MousePos: TPoint): Boolean;
+var
+  Before: TBookmark;
+  DS: TDataSet;
 begin
+  DS := nil;
+  if MultiSelectActive then
+  begin
+    DS := DataSource.DataSet;
+    Before := DS.Bookmark;
+  end;
   Result := inherited DoMouseWheel(Shift, WheelDelta, MousePos);
+  { The wheel moves the dataset cursor (MoveBy) — let a single selected row
+    follow it, like the arrow keys do, so the highlight matches the record. }
+  if (DS <> nil) and MultiSelectActive and
+    (DS.CompareBookmarks(Before, DS.Bookmark) <> 0) then
+    SyncSelectionToCursor(ssShift in Shift, True);
   if FOwner <> nil then
   begin
     FOwner.UpdateScrollbarMetrics;
@@ -1462,6 +1531,7 @@ begin
   FFixedTextColor := $202020;
   FCellHighlightColor := $F0D9BE;
   FHighlightTextColor := $202020;
+  FCursorRowColor := clNone;
   FAlternatingRowColors := False;
   FOddRowColor := clNone;
   FEvenRowColor := clNone;
@@ -1943,6 +2013,7 @@ procedure TCWSDBGrid.ScrollVToRec(RecIndex: Integer);
 var
   Total: Integer;
   DS: TDataSet;
+  Before: TBookmark;
 begin
   { Absolute positioning for the scrollbar thumb — mirrors the stock Vcl.DBGrid
     WMVScroll thumb handler exactly:
@@ -1961,15 +2032,54 @@ begin
   if (DS = nil) or not DS.Active or not DS.IsSequenced then
     Exit;
   Total := DS.RecordCount;
+  Before := DS.Bookmark;
+  { RecNo / First / Last fire deDataSetChange (a full DataChanged), not the
+    deDataSetScroll that MoveBy does. DataChanged -> UpdateRowCount -> ChangeSize
+    can call MoveCurrent(..., Show = True); with goRowSelect MoveCurrent forces
+    FCurrent.X := FixedCols, so ClampInView physically scrolls (ScrollWindowEx)
+    the grid back to the first column. None of that is virtual, so it cannot be
+    skipped — instead freeze the grid's painting for the navigation, put LeftCol
+    back, and only then let it repaint once. The user never sees column 1. }
+  var SavedLeft := -1;
+  var Locked := False;
+  if (FGrid <> nil) and FGrid.HandleAllocated then
+  begin
+    SavedLeft := FGrid.LeftColumn;
+    SendMessage(FGrid.Handle, WM_SETREDRAW, WPARAM(False), 0);
+    Locked := True;
+  end;
+  FKeepingLeftCol := True;
   try
-    if RecIndex + 1 <= 1 then
-      DS.First
-    else if RecIndex + 1 >= Total then
-      DS.Last
-    else
-      DS.RecNo := RecIndex + 1;
-  except
-    { datasets that misreport IsSequenced — ignore the navigation request }
+    try
+      if RecIndex + 1 <= 1 then
+        DS.First
+      else if RecIndex + 1 >= Total then
+        DS.Last
+      else
+        DS.RecNo := RecIndex + 1;
+    except
+      { datasets that misreport IsSequenced — ignore the navigation request }
+    end;
+    if (SavedLeft >= 0) and (FGrid.LeftColumn <> SavedLeft) then
+      FGrid.SetLeftColumn(Min(SavedLeft, MaxLeftColumn));
+  finally
+    FKeepingLeftCol := False;
+    if Locked then
+    begin
+      SendMessage(FGrid.Handle, WM_SETREDRAW, WPARAM(True), 0);
+      RedrawWindow(FGrid.Handle, nil, 0,
+        RDW_INVALIDATE or RDW_ALLCHILDREN or RDW_UPDATENOW);
+    end;
+  end;
+  UpdateScrollbarMetrics;
+  Invalidate;
+  if (FGrid <> nil) and (DS.CompareBookmarks(Before, DS.Bookmark) <> 0) then
+  begin
+    FGrid.SyncSelectionToCursor(False, True);
+    { GridScrolled was muted during the navigation — report the (vertical)
+      move once now that LeftCol is back where it was. }
+    if Assigned(FOnTopLeftChanged) then
+      FOnTopLeftChanged(Self);
   end;
 end;
 
@@ -1986,7 +2096,8 @@ begin
     Exit;
   if Delta <> 0 then
     try
-      DS.MoveBy(Delta);
+      if (DS.MoveBy(Delta) <> 0) and (FGrid <> nil) then
+        FGrid.SyncSelectionToCursor(False, True);
     except
       { datasets that misreport IsSequenced — ignore the navigation request }
     end;
@@ -2309,6 +2420,10 @@ end;
 
 procedure TCWSDBGrid.GridScrolled;
 begin
+  { ScrollVToRec restores LeftCol itself — don't report the transient jump to
+    column 1 (and back) through OnTopLeftChanged. }
+  if FKeepingLeftCol then
+    Exit;
   UpdateScrollbarMetrics;
   Invalidate;
   if Assigned(FOnTopLeftChanged) then
@@ -2847,6 +2962,12 @@ end;
 procedure TCWSDBGrid.CreateWnd;
 begin
   inherited;
+  { A CM_DBGRID_REFRESH posted to the previous window handle is lost when that
+    handle is destroyed (e.g. the form is hidden and its Parent set to nil, then
+    re-parented). FRefreshPosted would then stay True for good and every later
+    relayout request — data arriving, columns resized — would be swallowed, so
+    the scrollbars never re-appear. A fresh handle has no pending refresh. }
+  FRefreshPosted := False;
   UpdateGridPosition;
   SyncGridFont;
 end;
@@ -4453,6 +4574,9 @@ begin if FCellHighlightColor <> Value then begin FCellHighlightColor := Value; A
 
 procedure TCWSDBGrid.SetHighlightTextColor(const Value: TColor);
 begin if FHighlightTextColor <> Value then begin FHighlightTextColor := Value; ApplyColors; end; end;
+
+procedure TCWSDBGrid.SetCursorRowColor(const Value: TColor);
+begin if FCursorRowColor <> Value then begin FCursorRowColor := Value; ApplyColors; end; end;
 
 procedure TCWSDBGrid.SetAlternatingRowColors(const Value: Boolean);
 begin if FAlternatingRowColors <> Value then begin FAlternatingRowColors := Value; ApplyColors; end; end;

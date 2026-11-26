@@ -5,7 +5,7 @@
 
 [CmdletBinding()]
 param(
-    [string] $Version = '1.9.38'
+    [string] $Version = '1.9.40'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,7 +31,27 @@ foreach ($pattern in $files) {
 Copy-Item -Path (Join-Path $repoRoot 'Gfx') -Destination (Join-Path $staging 'Gfx') -Recurse
 
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zipPath
+
+# Compress-Archive of Windows PowerShell 5.1 stores entry names with backslashes
+# ("Gfx\ButtonIcon.bmp"). The ZIP specification requires forward slashes; an extractor
+# that follows it creates files literally named "Gfx\ButtonIcon.bmp" in the package root
+# instead of a Gfx folder, so CWStudio_Splash.rc cannot find Gfx\CWStudioSplash.bmp.
+# The archive is therefore written entry by entry with "/" as the separator.
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+$stagingFull = (Resolve-Path $staging).Path.TrimEnd('\') + '\'
+$zip = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)
+try {
+    Get-ChildItem -Path $staging -Recurse -File | Sort-Object FullName | ForEach-Object {
+        $entryName = $_.FullName.Substring($stagingFull.Length).Replace('\', '/')
+        [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $zip, $_.FullName, $entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+    }
+}
+finally {
+    $zip.Dispose()
+}
 
 Remove-Item $staging -Recurse -Force
 
