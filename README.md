@@ -16,6 +16,21 @@
 
 ---
 
+## 📸 Zrzuty ekranu / Screenshots
+
+Wszystkie komponenty w jednym oknie — motyw jasny i ciemny.
+*Every component in a single window — light and dark theme.*
+
+**Motyw jasny / Light theme**
+
+![CWStudio Components — light theme](Gfx/Screenshots/demo-light.png)
+
+**Motyw ciemny / Dark theme**
+
+![CWStudio Components — dark theme](Gfx/Screenshots/demo-dark.png)
+
+---
+
 ## 🇵🇱 Wersja polska
 
 CWStudio to zestaw nowoczesnych, wysokiej jakości komponentów VCL dla środowiska Delphi, zaprojektowanych w celu nadania aplikacjom desktopowym wyglądu znanego z systemu Windows 11 / WinUI 3. Komponenty bazują na oficjalnych tokenach kolorystycznych Fluent UI v9 i wspierają motyw jasny oraz ciemny — z automatyczną detekcją ustawień Windows.
